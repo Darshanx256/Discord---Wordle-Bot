@@ -17,8 +17,8 @@ if not TOKEN:
     print("❌ FATAL: DISCORD_TOKEN not found in .env file.")
     exit(1)
 
-SECRET_FILE = "word.txt"
-VALID_FILE = "all_word.txt"
+SECRET_FILE = "words.txt"
+VALID_FILE = "all_words.txt"
 DB_NAME = 'wordle_leaderboard.db'
 KEYBOARD_LAYOUT = [
     "QWERTYUIOP",
