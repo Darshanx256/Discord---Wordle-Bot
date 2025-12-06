@@ -1,0 +1,10 @@
+# Python dependencies
+__pycache__/
+.venv/
+*.pyc
+
+# Sensitive Files (NEVER commit your token or keys!)
+.env
+
+# SQLite Database File
+wordle_leaderboard.db
