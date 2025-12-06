@@ -6,6 +6,8 @@ import sqlite3
 from dotenv import load_dotenv
 import threading
 from flask import Flask
+import asyncio  # Required for smart rate limit delay
+import sys      # Required for clean process exit
 
 # --- 1. CONFIGURATION AND ENVIRONMENT SETUP ---
 load_dotenv()
@@ -59,7 +61,6 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, win: bool):
     """Updates the user's score in the SQLite database for a specific guild."""
     
-    # Select scores for the specific user AND guild
     bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", 
                           (user_id, guild_id))
     row = bot.db_cursor.fetchone()
@@ -73,7 +74,6 @@ def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, win: bool
     new_wins = current_wins + 1 if win else current_wins
     new_games = current_games + 1
 
-    # Insert or Update the record using the composite key (user_id, guild_id)
     bot.db_cursor.execute("""
         INSERT OR REPLACE INTO scores (user_id, guild_id, wins, total_games)
         VALUES (?, ?, ?, ?)
@@ -170,14 +170,12 @@ class WordleBot(commands.Bot):
         self.db_cursor = None
 
     async def setup_hook(self):
-        print("🚀 Starting up... Reading local files...")
         self.load_local_data()
         self.setup_db()
         await self.tree.sync()
         print(f"✅ Ready! Loaded {len(self.secrets)} secrets and {len(self.valid_set)} dictionary words.")
         
     async def close(self):
-        """Cleanly close the database connection on shutdown."""
         if self.db_conn:
             self.db_conn.close()
             print(f"🗄️ Database '{DB_NAME}' connection closed.")
@@ -199,11 +197,9 @@ class WordleBot(commands.Bot):
         self.valid_set.update(self.secrets)
 
     def setup_db(self):
-        """Initializes and connects to the SQLite database with the Guild ID."""
         self.db_conn = sqlite3.connect(DB_NAME)
         self.db_cursor = self.db_conn.cursor()
         
-        # Create table with composite primary key (user_id, guild_id)
         self.db_cursor.execute("""
             CREATE TABLE IF NOT EXISTS scores (
                 user_id INTEGER NOT NULL,
@@ -219,7 +215,38 @@ class WordleBot(commands.Bot):
 bot = WordleBot()
 
 
-# ========= 5. COMMANDS (Guild-Specific Leaderboard Logic) =========
+# ========= 5. COMMANDS & EVENT HANDLERS (With Rate Limit Logic) =========
+
+@bot.event
+async def on_error(event_method, *args, **kwargs):
+    """
+    Catches unhandled errors, specifically critical HTTPExceptions (like 429 rate limits),
+    and initiates a delayed exit/restart.
+    """
+    
+    exc_type, exc_value, _ = sys.exc_info()
+    
+    # Check for the primary HTTP Exception type that indicates a persistent block
+    if exc_type is not None and issubclass(exc_type, discord.HTTPException):
+        
+        if hasattr(exc_value, 'status') and exc_value.status == 429:
+            print(f"\n🛑🛑 CRITICAL RATE LIMIT (429) DETECTED 🛑🛑")
+            print("Action: Initiating safe shutdown and forced restart after 10 minutes to clear IP ban.")
+            
+            # 1. Wait a long time (10 minutes) to clear the temporary ban.
+            await asyncio.sleep(600)  
+            
+            # 2. Exit the Python process. Render will detect the exit and restart the worker.
+            await bot.close()
+            sys.exit(0)
+        
+        else:
+            print(f"⚠️ Unhandled API Error in {event_method}: {exc_value}")
+            
+    else:
+        # Default behavior for non-API errors
+        print(f"❌ Unhandled error in {event_method}: {exc_type}: {exc_value}") 
+
 
 @bot.tree.command(name="wordle", description="Start a game with a Simple Secret Word.")
 async def start(interaction: discord.Interaction):
@@ -267,7 +294,6 @@ async def guess(interaction: discord.Interaction, word: str):
     pattern, win, game_over = game.process_turn(guess_word, interaction.user)
     
     hint_message = ""
-
     keypad_status = get_markdown_keypad_status(game.used_letters)
     
     # ... (Embed generation remains the same) ...
@@ -303,33 +329,10 @@ async def guess(interaction: discord.Interaction, word: str):
         bot.games.pop(cid, None)
 
 
-@bot.tree.command(name="wordle_board", description="View history and keyboard status.")
-async def board(interaction: discord.Interaction):
-    game = bot.games.get(interaction.channel_id)
-    if not game:
-        return await interaction.response.send_message("❌ No game active.", ephemeral=True)
-
-    history_lines = [f"**{i}.** {x['pattern']} **{x['word'].upper()}**" for i, x in enumerate(game.history, 1)]
-    
-    embed = discord.Embed(
-        title="📊 Current Game Board", 
-        description="\n".join(history_lines) or "No guesses yet! Be the first.", 
-        color=discord.Color.blurple()
-    )
-    
-    keypad_status = get_markdown_keypad_status(game.used_letters)
-    embed.add_field(name="Keyboard Status", value=keypad_status, inline=False)
-        
-    embed.set_footer(text=f"Attempts Used: {game.attempts_used}/6")
-    
-    await interaction.response.send_message(embed=embed)
-
-
 @bot.tree.command(name="leaderboard", description="Displays the top Wordle players on the server.")
 async def leaderboard(interaction: discord.Interaction):
-    guild_id = interaction.guild_id # Get the ID of the current server
+    guild_id = interaction.guild_id 
     
-    # Query only the scores for the current guild_id
     bot.db_cursor.execute("""
         SELECT user_id, wins, total_games 
         FROM scores 
@@ -378,6 +381,29 @@ async def leaderboard(interaction: discord.Interaction):
         color=discord.Color.gold()
     )
     embed.set_footer(text=f"Check out your rank with /leaderboard!")
+    
+    await interaction.response.send_message(embed=embed)
+
+
+# (Rest of the commands: /wordle_board)
+@bot.tree.command(name="wordle_board", description="View history and keyboard status.")
+async def board(interaction: discord.Interaction):
+    game = bot.games.get(interaction.channel_id)
+    if not game:
+        return await interaction.response.send_message("❌ No game active.", ephemeral=True)
+
+    history_lines = [f"**{i}.** {x['pattern']} **{x['word'].upper()}**" for i, x in enumerate(game.history, 1)]
+    
+    embed = discord.Embed(
+        title="📊 Current Game Board", 
+        description="\n".join(history_lines) or "No guesses yet! Be the first.", 
+        color=discord.Color.blurple()
+    )
+    
+    keypad_status = get_markdown_keypad_status(game.used_letters)
+    embed.add_field(name="Keyboard Status", value=keypad_status, inline=False)
+        
+    embed.set_footer(text=f"Attempts Used: {game.attempts_used}/6")
     
     await interaction.response.send_message(embed=embed)
 
