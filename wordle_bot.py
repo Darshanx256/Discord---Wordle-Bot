@@ -5,7 +5,7 @@ from discord.ext import commands
 import sqlite3
 from dotenv import load_dotenv
 import threading
-from flask import Flask # <--- NEW IMPORT
+from flask import Flask
 
 # --- 1. CONFIGURATION AND ENVIRONMENT SETUP ---
 load_dotenv()
@@ -15,8 +15,8 @@ if not TOKEN:
     print("❌ FATAL: DISCORD_TOKEN not found in .env file.")
     exit(1)
 
-SECRET_FILE = "words.txt"
-VALID_FILE = "all_words.txt"
+SECRET_FILE = "word.txt"
+VALID_FILE = "all_word.txt"
 DB_NAME = 'wordle_leaderboard.db'
 KEYBOARD_LAYOUT = [
     "QWERTYUIOP",
@@ -27,8 +27,7 @@ KEYBOARD_LAYOUT = [
 # ========= 2. UTILITY FUNCTIONS (Frontend & Database) =========
 
 def get_markdown_keypad_status(used_letters: dict) -> str:
-    """Generates the stylized keypad using Discord Markdown (Bold, Underline, Strikeout)
-    for universal PC/Mobile compatibility."""
+    """Generates the stylized keypad using Discord Markdown."""
     
     output_lines = []
     
@@ -57,10 +56,12 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
     return "\n".join(output_lines) + legend
 
 
-def update_leaderboard(bot: commands.Bot, user_id: int, win: bool):
-    """Updates the user's score in the SQLite database."""
+def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, win: bool):
+    """Updates the user's score in the SQLite database for a specific guild."""
     
-    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ?", (user_id,))
+    # Select scores for the specific user AND guild
+    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", 
+                          (user_id, guild_id))
     row = bot.db_cursor.fetchone()
     
     current_wins = 0
@@ -72,10 +73,11 @@ def update_leaderboard(bot: commands.Bot, user_id: int, win: bool):
     new_wins = current_wins + 1 if win else current_wins
     new_games = current_games + 1
 
+    # Insert or Update the record using the composite key (user_id, guild_id)
     bot.db_cursor.execute("""
-        INSERT OR REPLACE INTO scores (user_id, wins, total_games)
-        VALUES (?, ?, ?)
-    """, (user_id, new_wins, new_games))
+        INSERT OR REPLACE INTO scores (user_id, guild_id, wins, total_games)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, guild_id, new_wins, new_games))
     
     bot.db_conn.commit()
 
@@ -89,7 +91,6 @@ def run_flask_server():
     def home():
         return "Discord Bot is Running!", 200
 
-    # Render sets the PORT environment variable, usually 10000.
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
 
@@ -198,15 +199,18 @@ class WordleBot(commands.Bot):
         self.valid_set.update(self.secrets)
 
     def setup_db(self):
-        """Initializes and connects to the SQLite database."""
+        """Initializes and connects to the SQLite database with the Guild ID."""
         self.db_conn = sqlite3.connect(DB_NAME)
         self.db_cursor = self.db_conn.cursor()
         
+        # Create table with composite primary key (user_id, guild_id)
         self.db_cursor.execute("""
             CREATE TABLE IF NOT EXISTS scores (
-                user_id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL,  
                 wins INTEGER DEFAULT 0,
-                total_games INTEGER DEFAULT 0
+                total_games INTEGER DEFAULT 0,
+                PRIMARY KEY (user_id, guild_id) 
             )
         """)
         self.db_conn.commit()
@@ -215,7 +219,7 @@ class WordleBot(commands.Bot):
 bot = WordleBot()
 
 
-# ========= 5. COMMANDS (Integrated Leaderboard Logic) =========
+# ========= 5. COMMANDS (Guild-Specific Leaderboard Logic) =========
 
 @bot.tree.command(name="wordle", description="Start a game with a Simple Secret Word.")
 async def start(interaction: discord.Interaction):
@@ -262,11 +266,12 @@ async def guess(interaction: discord.Interaction, word: str):
 
     pattern, win, game_over = game.process_turn(guess_word, interaction.user)
     
-    # Hint Logic (removed for brevity and focus, but keep in your final version)
     hint_message = ""
 
     keypad_status = get_markdown_keypad_status(game.used_letters)
     
+    # ... (Embed generation remains the same) ...
+
     if win:
         embed = discord.Embed(title="🏆 VICTORY!", color=discord.Color.green())
         embed.description = f"**{interaction.user.mention}** found the word: **{game.secret.upper()}**!"
@@ -288,12 +293,13 @@ async def guess(interaction: discord.Interaction, word: str):
         )
         embed.add_field(name="Keyboard Status", value=keypad_status, inline=False)
         embed.set_footer(text=f"{6 - game.attempts_used} tries left!")
-
+        
     await interaction.response.send_message(embed=embed)
 
     if game_over or win:
-        # LEADERBOARD UPDATE
-        update_leaderboard(bot, interaction.user.id, win) 
+        # LEADERBOARD UPDATE - NOW REQUIRES GUILD_ID
+        guild_id = interaction.guild_id
+        update_leaderboard(bot, interaction.user.id, guild_id, win) 
         bot.games.pop(cid, None)
 
 
@@ -321,18 +327,22 @@ async def board(interaction: discord.Interaction):
 
 @bot.tree.command(name="leaderboard", description="Displays the top Wordle players on the server.")
 async def leaderboard(interaction: discord.Interaction):
+    guild_id = interaction.guild_id # Get the ID of the current server
+    
+    # Query only the scores for the current guild_id
     bot.db_cursor.execute("""
         SELECT user_id, wins, total_games 
         FROM scores 
+        WHERE guild_id = ?
         ORDER BY wins DESC, total_games ASC 
         LIMIT 10
-    """)
+    """, (guild_id,))
     results = bot.db_cursor.fetchall()
 
     if not results:
         embed = discord.Embed(
-            title="🥇 Wordle Leaderboard",
-            description="No games have been finished yet! Be the first to win.",
+            title="🥇 Server Wordle Leaderboard",
+            description="No games have been finished yet on this server! Be the first to win.",
             color=discord.Color.gold()
         )
         await interaction.response.send_message(embed=embed)
@@ -363,7 +373,7 @@ async def leaderboard(interaction: discord.Interaction):
         )
 
     embed = discord.Embed(
-        title="🏆 Top Wordle Players",
+        title="🏆 Top Wordle Players on This Server",
         description="\n".join(rankings),
         color=discord.Color.gold()
     )
@@ -372,7 +382,7 @@ async def leaderboard(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
-# ========= 6. RUN BOT AND WEB SERVER (New Threading Logic) =========
+# ========= 6. RUN BOT AND WEB SERVER (Threading Logic) =========
 if __name__ == "__main__":
     # 1. Start Flask in a background thread to open the required port (10000)
     server_thread = threading.Thread(target=run_flask_server)
