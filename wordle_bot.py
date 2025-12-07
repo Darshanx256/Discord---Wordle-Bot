@@ -19,18 +19,18 @@ if not TOKEN:
     print("❌ FATAL: DISCORD_TOKEN not found.")
     exit(1)
 
-SECRET_FILE = "word.txt"
-VALID_FILE = "all_word.txt"
+SECRET_FILE = "words.txt"
+VALID_FILE = "all_words.txt"
 DB_NAME = 'wordle_leaderboard.db'
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 
 # TIER CONFIGURATION (Text-based Ranks)
 # Threshold (0-1), Icon, Name
 TIERS = [
-    (0.90, "【Ｓ】", "Grandmaster"), 
-    (0.65, "【Ａ】", "Master"),      
-    (0.40, "【Ｂ】", "Elite"),       
-    (0.00, "【Ｃ】", "Challenger")   
+    (0.90, "【Ｓ】", "Master"), 
+    (0.65, "【Ａ】", "Elite"),      
+    (0.40, "【Ｂ】", "Challenger"),       
+    (0.00, "【Ｃ】", "Beginner")   
 ]
 
 C_GAMES = 10  # Bayesian constant (Games)
