@@ -42,7 +42,7 @@ def calculate_score(wins: int, games: int) -> float:
     """Calculates Bayesian average score for ranking."""
     if games == 0: return 0.0
     # Score = (Wins + Prior_Wins) / (Games + Prior_Games)
-    return (wins + (C_GAMES * C_WINRATE)) / (games + C_GAMES)
+    return 10 * ((wins + (C_GAMES * C_WINRATE)) / (games + C_GAMES))
 
 def get_tier_display(percentile: float) -> str:
     """Returns the Tier Icon and Name based on percentile rank."""
@@ -51,6 +51,14 @@ def get_tier_display(percentile: float) -> str:
     return TIERS[-1][1], TIERS[-1][2] # Default to lowest
 
 def get_markdown_keypad_status(used_letters: dict) -> str:
+
+     #egg start
+    extra_line = ""
+    if random.randint(1,50) == 1:
+        extra_line = "\n\n🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\nHave a nice day!"
+    #egg end
+
+    
     """Generates the stylized keypad using Discord Markdown."""
     output_lines = []
     for row in KEYBOARD_LAYOUT:
@@ -66,7 +74,7 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
 
     output_lines[1] = u"\u2007" + output_lines[1]
     output_lines[2] = u"\u2007\u2007" + output_lines[2] 
-    return "\n".join(output_lines) + "\n\nLegend: **Correct** | __Misplaced__ | ~~Absent~~"
+    return "\n".join(output_lines) + extra_line + "\n\n`Legend: **Bold** = Correct | __Underline__ = Misplaced | ~~Strikeout~~ = Absent`"
 
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
     """Updates score."""
@@ -422,7 +430,7 @@ async def guess(interaction: discord.Interaction, word: str):
 
     if win:
         flavor = get_win_flavor(game.attempts_used)
-        embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
+        embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
         embed.description = f"**{interaction.user.mention}** found the word: **{game.secret.upper()}** in {game.attempts_used}/6 attempts!"
         embed.add_field(name="Final Board", value=board_display, inline=False)
         embed.add_field(name="Keyboard Status", value=keypad, inline=False)
