@@ -2,6 +2,7 @@ import os
 import random
 import discord
 from discord.ext import commands, tasks
+from discord import ui
 import sqlite3
 from dotenv import load_dotenv
 import threading
@@ -18,445 +19,368 @@ if not TOKEN:
     print("❌ FATAL: DISCORD_TOKEN not found.")
     exit(1)
 
-SECRET_FILE = "words.txt"
-VALID_FILE = "all_words.txt"
+SECRET_FILE = "word.txt"
+VALID_FILE = "all_word.txt"
 DB_NAME = 'wordle_leaderboard.db'
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 
+# TIER CONFIGURATION (Text-based Ranks)
+# Threshold (0-1), Icon, Name
+TIERS = [
+    (0.90, "【Ｓ】", "Grandmaster"), 
+    (0.65, "【Ａ】", "Master"),      
+    (0.40, "【Ｂ】", "Elite"),       
+    (0.00, "【Ｃ】", "Challenger")   
+]
+
+C_GAMES = 10  # Bayesian constant (Games)
+C_WINRATE = 0.40 # Bayesian constant (Win Rate)
+
 # ========= 2. UTILITY FUNCTIONS =========
 
-def get_markdown_keypad_status(used_letters: dict) -> str:
-    """Generates the stylized keypad using Discord Markdown."""
-    output_lines = []
+def get_keyboard_visual(used_letters: dict) -> str:
+    """Generates a clean, text-based keyboard visualization."""
+    lines = []
     for row in KEYBOARD_LAYOUT:
-        line = ""
-        for char_key in row:
-            char = char_key.lower()
-            formatting = ""
-            if char in used_letters['correct']: formatting = "**"
-            elif char in used_letters['present']: formatting = "__"
-            elif char in used_letters['absent']: formatting = "~~"
-            line += f"{formatting}{char_key}{formatting} "
-        output_lines.append(line.strip())
+        r_line = ""
+        for char in row:
+            c = char.lower()
+            if c in used_letters['correct']: r_line += f"**{char}** "   # Bold
+            elif c in used_letters['present']: r_line += f"__{char}__ " # Underline
+            elif c in used_letters['absent']: r_line += f"~~{char}~~ " # Strike
+            else: r_line += f"{char} "                                  # Normal
+        lines.append(r_line.strip())
+    
+    # Visual indentation for QWERTY look
+    lines[1] = u"\u2007" + lines[1]
+    lines[2] = u"\u2007\u2007" + lines[2]
+    return "\n".join(lines)
 
-    output_lines[1] = u"\u2007" + output_lines[1]
-    output_lines[2] = u"\u2007\u2007" + output_lines[2] 
-    return "\n".join(output_lines) + "\n\nLegend:\n**BOLD** = Correct | __UNDERLINE__ = Misplaced | ~~STRIKEOUT~~ = Absent"
+def calculate_score(wins, games):
+    if games == 0: return 0.0
+    return (wins + (C_GAMES * C_WINRATE)) / (games + C_GAMES)
 
-def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
-    """Updates score. Uses existing (user_id, guild_id) schema."""
-    if not guild_id: return 
+def get_tier_info(percentile):
+    for thresh, icon, name in TIERS:
+        if percentile >= thresh: return icon, name
+    return "【Ｃ】", "Challenger"
 
+def update_db_score(bot, user_id, guild_id, won):
+    if not guild_id: return
     bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
     row = bot.db_cursor.fetchone()
-    
     cur_w, cur_g = row if row else (0, 0)
-    new_w = cur_w + 1 if won_game else cur_w
-    new_g = cur_g + 1
-
-    bot.db_cursor.execute("""
-        INSERT OR REPLACE INTO scores (user_id, guild_id, wins, total_games)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, guild_id, new_w, new_g))
+    new_w = cur_w + 1 if won else cur_w
+    bot.db_cursor.execute("INSERT OR REPLACE INTO scores (user_id, guild_id, wins, total_games) VALUES (?, ?, ?, ?)", 
+                          (user_id, guild_id, new_w, cur_g + 1))
     bot.db_conn.commit()
 
-def get_win_flavor(attempts: int) -> str:
-    """Returns a fun message based on how quickly they won."""
-    if attempts == 1: return "🤯 IMPOSSIBLE! Pure luck or genius?"
-    if attempts == 2: return "🔥 Insane! You read my mind."
-    if attempts == 3: return "⚡ Blazing fast! Great job."
-    if attempts == 4: return "👏 Solid performance."
-    if attempts == 5: return "😅 Cutting it close..."
-    return "💀 CLUTCH! That was stressful."
+def get_user_rank_display(bot, user_id, guild_id):
+    """Efficiently determines user rank string."""
+    # Local Rank
+    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
+    row = bot.db_cursor.fetchone()
+    if not row: return "Unranked"
+    
+    my_s = calculate_score(row[0], row[1])
+    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE guild_id = ?", (guild_id,))
+    all_s = sorted([calculate_score(r[0], r[1]) for r in bot.db_cursor.fetchall()])
+    
+    rank_idx = sum(1 for s in all_s if s < my_s)
+    perc = rank_idx / len(all_s) if all_s else 0
+    icon, _ = get_tier_info(perc)
+    return icon
 
-# --- PAGINATION VIEW CLASS ---
-class LeaderboardView(discord.ui.View):
-    def __init__(self, bot, data, title, color, interaction_user):
-        super().__init__(timeout=60)
-        self.bot = bot
-        self.data = data 
-        self.title = title
-        self.color = color
-        self.user = interaction_user
-        self.current_page = 0
-        self.items_per_page = 10
-        self.total_pages = max(1, (len(data) - 1) // self.items_per_page + 1)
-        self.update_buttons()
+def get_next_secret(bot, guild_id):
+    bot.db_cursor.execute("SELECT word FROM guild_history WHERE guild_id = ?", (guild_id,))
+    used = {r[0] for r in bot.db_cursor.fetchall()}
+    avail = [w for w in bot.secrets if w not in used]
+    if not avail:
+        bot.db_cursor.execute("DELETE FROM guild_history WHERE guild_id = ?", (guild_id,))
+        bot.db_conn.commit()
+        avail = bot.secrets
+    pick = random.choice(avail)
+    bot.db_cursor.execute("INSERT INTO guild_history (guild_id, word) VALUES (?, ?)", (guild_id, pick))
+    bot.db_conn.commit()
+    return pick
 
-    def update_buttons(self):
-        self.first_page.disabled = (self.current_page == 0)
-        self.prev_page.disabled = (self.current_page == 0)
-        self.next_page.disabled = (self.current_page == self.total_pages - 1)
-        self.last_page.disabled = (self.current_page == self.total_pages - 1)
+# ========= 3. GAME LOGIC =========
 
-    def create_embed(self):
-        start = self.current_page * self.items_per_page
-        end = start + self.items_per_page
-        page_data = self.data[start:end]
-
-        description_lines = []
-        if not page_data: description_lines.append("No data available.")
-        else:
-            for rank, name, w, g, rate in page_data:
-                medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"**{rank}.**")
-                description_lines.append(f"{medal} **{name}**\n   > Wins: **{w}** | Games: {g} | Rate: {rate:.1f}%")
-
-        embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)}")
-        return embed
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user != self.user:
-            await interaction.response.send_message("❌ This is not your menu.", ephemeral=True)
-            return False
-        return True
-
-    @discord.ui.button(label="<<", style=discord.ButtonStyle.grey)
-    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = 0
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
-
-    @discord.ui.button(label="<", style=discord.ButtonStyle.blurple)
-    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page -= 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
-
-    @discord.ui.button(label=">", style=discord.ButtonStyle.blurple)
-    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page += 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
-
-    @discord.ui.button(label=">>", style=discord.ButtonStyle.grey)
-    async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page = self.total_pages - 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
-
-
-# --- FLASK SERVER ---
-def run_flask_server():
-    app = Flask(__name__)
-    @app.route('/')
-    def home(): return "Bot OK", 200
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False)
-
-
-# ========= 3. GAME CLASS =========
 class WordleGame:
-    __slots__ = ('secret', 'channel_id', 'started_by', 'max_attempts', 'history', 
-                 'used_letters', 'participants', 'guessed_words', 'last_interaction')
+    __slots__ = ('secret', 'channel_id', 'started_by', 'history', 'used_letters', 
+                 'participants', 'guessed_words', 'last_interaction', 'message_id')
 
-    def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User):
+    def __init__(self, secret, channel_id, started_by):
         self.secret = secret
         self.channel_id = channel_id
         self.started_by = started_by
-        self.max_attempts = 6
-        self.history = [] 
-        self.participants = set() 
+        self.history = []
+        self.participants = set()
         self.guessed_words = set()
         self.used_letters = {'correct': set(), 'present': set(), 'absent': set()}
-        self.last_interaction = datetime.datetime.now() # Track time for timeout
+        self.last_interaction = datetime.datetime.now()
+        self.message_id = None # Track the main dashboard message
 
     @property
-    def attempts_used(self): return len(self.history)
+    def attempts(self): return len(self.history)
+    @property
+    def is_over(self): return self.attempts >= 6 or (self.history and self.history[-1]['correct'])
 
-    def is_duplicate(self, word: str) -> bool: return word in self.guessed_words
+    def process_guess(self, guess, user):
+        self.last_interaction = datetime.datetime.now()
+        
+        s_list = list(self.secret); g_list = list(guess)
+        res = ["⬜"] * 5; cur_abs = set(guess) - set(s_list)
 
-    def evaluate_guess(self, guess: str) -> str:
-        s_list = list(self.secret)
-        g_list = list(guess)
-        res = ["⬜"] * 5
-        cur_abs = set(guess) - set(s_list)
-
+        # Greens
         for i in range(5):
             if g_list[i] == s_list[i]:
-                res[i] = "🟩"
-                s_list[i] = None; g_list[i] = None
+                res[i] = "🟩"; s_list[i] = None; g_list[i] = None
                 self.used_letters['correct'].add(guess[i])
                 self.used_letters['present'].discard(guess[i])
-
+        
+        # Yellows
         for i in range(5):
             if res[i] == "🟩": continue
             ch = g_list[i]
             if ch is not None and ch in s_list:
-                res[i] = "🟨"
-                s_list[s_list.index(ch)] = None
+                res[i] = "🟨"; s_list[s_list.index(ch)] = None
                 if ch not in self.used_letters['correct']: self.used_letters['present'].add(ch)
             elif ch is not None: cur_abs.add(ch)
 
         self.used_letters['absent'].update(cur_abs - self.used_letters['correct'] - self.used_letters['present'])
-        return "".join(res)
-
-    def process_turn(self, guess: str, user):
-        self.last_interaction = datetime.datetime.now() # Reset timeout timer
-        pat = self.evaluate_guess(guess)
-        self.history.append({'word': guess, 'pattern': pat, 'user': user})
+        
+        pat_str = "".join(res)
+        is_win = (guess == self.secret)
+        self.history.append({'word': guess, 'pattern': pat_str, 'user': user, 'correct': is_win})
         self.participants.add(user.id)
         self.guessed_words.add(guess)
-        return pat, (guess == self.secret), ((guess == self.secret) or (self.attempts_used >= self.max_attempts))
+        return is_win
+
+# ========= 4. UI MODALS & VIEWS (The Mind-Blowing Part) =========
+
+class GuessModal(ui.Modal, title="Enter Your Guess"):
+    word_input = ui.TextInput(label="5-Letter Word", placeholder="e.g. APPLE", min_length=5, max_length=5)
+
+    def __init__(self, bot, game_view):
+        super().__init__()
+        self.bot = bot
+        self.view = game_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # 1. Validation
+        guess = self.word_input.value.lower().strip()
+        cid = interaction.channel_id
+        game = self.bot.games.get(cid)
+
+        if not game:
+            return await interaction.response.send_message("❌ Game is over or expired.", ephemeral=True)
+        
+        if not guess.isalpha():
+            return await interaction.response.send_message("❌ Letters only.", ephemeral=True)
+        if guess in game.guessed_words:
+            return await interaction.response.send_message(f"⚠️ **{guess.upper()}** already used!", ephemeral=True)
+        if guess not in self.bot.valid_set:
+            return await interaction.response.send_message(f"❌ **{guess.upper()}** not in dictionary.", ephemeral=True)
+
+        # 2. Process
+        won = game.process_guess(guess, interaction.user)
+        
+        # 3. Update UI
+        embed = self.view.generate_embed(game, interaction.guild)
+        
+        if game.is_over:
+            # Handle End Game
+            self.view.clear_items() # Remove buttons
+            winner_id = interaction.user.id if won else None
+            for pid in game.participants:
+                update_db_score(self.bot, pid, interaction.guild_id, (pid == winner_id))
+            self.bot.games.pop(cid, None)
+            await interaction.response.edit_message(embed=embed, view=None)
+        else:
+            await interaction.response.edit_message(embed=embed, view=self.view)
 
 
-# ========= 4. BOT SETUP =========
+class GameDashboardView(ui.View):
+    def __init__(self, bot):
+        super().__init__(timeout=None) # Persistent view logic handled by bot cache
+        self.bot = bot
+
+    def generate_embed(self, game, guild):
+        # Dynamic Header
+        status = "🟢 Active"
+        color = discord.Color.blue()
+        
+        if game.is_over:
+            if game.history[-1]['correct']:
+                status = "🏆 VICTORY"
+                color = discord.Color.green()
+            else:
+                status = "💀 DEFEAT"
+                color = discord.Color.red()
+
+        embed = discord.Embed(title=f"Wordle  |  {status}", color=color)
+        
+        # Board Generation
+        board_text = ""
+        for turn in game.history:
+            # Use Rank Icon instead of plain text if possible
+            rank = get_user_rank_display(self.bot, turn['user'].id, guild.id)
+            board_text += f"`{turn['word'].upper()}` {turn['pattern']} {rank} **{turn['user'].display_name}**\n"
+        
+        # Fill remaining slots
+        attempts_left = 6 - len(game.history)
+        if attempts_left > 0 and not game.is_over:
+            board_text += ("`_____` ⬜⬜⬜⬜⬜\n" * attempts_left)
+
+        embed.description = board_text
+        
+        # Footer / Keyboard
+        kb_visual = get_keyboard_visual(game.used_letters)
+        embed.add_field(name="Keyboard", value=kb_visual, inline=False)
+        
+        # Progress Bar
+        bar = "🟩" * (6 - attempts_left) + "⬛" * attempts_left
+        embed.set_footer(text=f"Turn {len(game.history)+1}/6  {bar}  •  Mini: {game.history[-1]['pattern'] if game.history else 'Start'}")
+        
+        if game.is_over and not game.history[-1]['correct']:
+             embed.add_field(name="Secret Word", value=f"||**{game.secret.upper()}**||", inline=False)
+        
+        return embed
+
+    @ui.button(label="📝 Make a Guess", style=discord.ButtonStyle.primary)
+    async def guess_button(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.send_modal(GuessModal(self.bot, self))
+
+    @ui.button(label="🛑 End", style=discord.ButtonStyle.danger)
+    async def stop_button(self, interaction: discord.Interaction, button: ui.Button):
+        cid = interaction.channel_id
+        game = self.bot.games.get(cid)
+        if not game: return
+        
+        # Perms Check
+        if interaction.user == game.started_by or interaction.permissions.manage_messages:
+            self.bot.games.pop(cid, None)
+            embed = discord.Embed(title="🛑 Game Stopped", description=f"Word was **{game.secret.upper()}**", color=discord.Color.dark_grey())
+            await interaction.response.edit_message(embed=embed, view=None)
+        else:
+            await interaction.response.send_message("❌ Only Admin/Starter can stop.", ephemeral=True)
+
+
+# ========= 5. BOT SETUP =========
+
 class WordleBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
-        self.games = {}      
-        self.secrets = []; self.valid_set = set() 
+        self.games = {}; self.secrets = []; self.valid_set = set() 
         self.db_conn = None; self.db_cursor = None
 
     async def setup_hook(self):
-        self.load_local_data()
-        self.setup_db()
+        self.load_data(); self.setup_db()
         await self.tree.sync()
-        self.cleanup_task.start() # Start the timeout loop
-        print(f"✅ Ready! {len(self.secrets)} secrets.")
+        self.cleanup.start()
+        print(f"✅ Ready! {len(self.secrets)} words.")
         
     async def close(self):
         if self.db_conn: self.db_conn.close()
         await super().close()
 
-    def load_local_data(self):
+    def load_data(self):
         if os.path.exists(SECRET_FILE):
-            with open(SECRET_FILE, "r", encoding="utf-8") as f:
-                self.secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
-        else: self.secrets = []
-
+            with open(SECRET_FILE, "r") as f: self.secrets = [w.strip().lower() for w in f if len(w.strip())==5]
         if os.path.exists(VALID_FILE):
-            with open(VALID_FILE, "r", encoding="utf-8") as f:
-                self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
-        else: self.valid_set = set()
+            with open(VALID_FILE, "r") as f: self.valid_set = {w.strip().lower() for w in f if len(w.strip())==5}
         self.valid_set.update(self.secrets)
 
     def setup_db(self):
         self.db_conn = sqlite3.connect(DB_NAME, check_same_thread=False)
         self.db_cursor = self.db_conn.cursor()
-        self.db_cursor.execute("""
-            CREATE TABLE IF NOT EXISTS scores (
-                user_id INTEGER NOT NULL,
-                guild_id INTEGER NOT NULL,  
-                wins INTEGER DEFAULT 0,
-                total_games INTEGER DEFAULT 0,
-                PRIMARY KEY (user_id, guild_id) 
-            )
-        """)
+        self.db_cursor.execute("CREATE TABLE IF NOT EXISTS scores (user_id INTEGER, guild_id INTEGER, wins INTEGER, total_games INTEGER, PRIMARY KEY (user_id, guild_id))")
+        self.db_cursor.execute("CREATE TABLE IF NOT EXISTS guild_history (guild_id INTEGER, word TEXT)")
         self.db_conn.commit()
-        print(f"🗄️ Database connected.")
 
-    # --- 24H TIMEOUT TASK ---
-    @tasks.loop(minutes=60) # Check every hour
-    async def cleanup_task(self):
+    @tasks.loop(hours=1)
+    async def cleanup(self):
         now = datetime.datetime.now()
-        to_remove = []
-        for cid, game in self.games.items():
-            delta = now - game.last_interaction
-            if delta.total_seconds() > 86400: # 24 Hours
-                to_remove.append(cid)
-                try:
-                    # Attempt to fetch channel and send timeout message
-                    channel = self.get_channel(cid)
-                    if channel:
-                        embed = discord.Embed(title="⏰ Time's Up!", description=f"Game timed out due to inactivity.\nThe word was **{game.secret.upper()}**.", color=discord.Color.dark_grey())
-                        await channel.send(embed=embed)
-                except:
-                    pass # Channel might be deleted or bot kicked
-        
-        for cid in to_remove:
-            self.games.pop(cid, None)
-            print(f"🧹 Cleaned up inactive game in channel {cid}")
+        rem = [cid for cid, g in self.games.items() if (now - g.last_interaction).total_seconds() > 86400]
+        for cid in rem: self.games.pop(cid, None)
 
 bot = WordleBot()
 
+# ========= 6. COMMANDS =========
 
-# ========= 5. EVENTS & COMMANDS =========
-
-@bot.event
-async def on_error(event_method, *args, **kwargs):
-    exc_type, exc_value, _ = sys.exc_info()
-    if exc_type and issubclass(exc_type, discord.HTTPException):
-        if hasattr(exc_value, 'status') and exc_value.status == 429:
-            print(f"🛑 CRITICAL 429 RATE LIMIT. Restarting...")
-            await asyncio.sleep(600)  
-            await bot.close()
-            sys.exit(0)
-    print(f"⚠️ Error in {event_method}: {exc_value}")
-
-@bot.tree.command(name="wordle", description="Start a new game.")
-async def start(interaction: discord.Interaction):
-    if not interaction.guild: return
-    
-    if not bot.secrets:
-        return await interaction.response.send_message("❌ Word list missing.", ephemeral=True)
-
-    cid = interaction.channel_id
-    if cid in bot.games:
-        # Ask to stop previous first? No, simplified override for now.
-        bot.games.pop(cid, None) 
-        
-    secret = random.choice(bot.secrets)
-    bot.games[cid] = WordleGame(secret, cid, interaction.user)
-
-    embed = discord.Embed(title="✨ Wordle Started!", color=discord.Color.blue())
-    embed.description = "A **simple 5-letter word** has been chosen. **6 attempts** total."
-    embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
-    embed.add_field(name="⚠️ Note", value="Stats are only recorded for players who make a guess!", inline=False)
-    
-    await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="stop_game", description="Force stop the current game (Manage Messages only).")
-@commands.has_permissions(manage_messages=True)
-async def stop_game(interaction: discord.Interaction):
-    cid = interaction.channel_id
-    if cid in bot.games:
-        game = bot.games.pop(cid)
-        await interaction.response.send_message(f"🛑 Game stopped by {interaction.user.mention}. The word was **{game.secret.upper()}**.")
-    else:
-        await interaction.response.send_message("No active game to stop.", ephemeral=True)
-
-@bot.tree.command(name="guess", description="Guess a 5-letter word.")
-async def guess(interaction: discord.Interaction, word: str):
+@bot.tree.command(name="wordle", description="Start a new game console.")
+async def wordle(interaction: discord.Interaction):
     if not interaction.guild: return
     cid = interaction.channel_id
-    g_word = word.lower().strip()
-    game = bot.games.get(cid)
+    if cid in bot.games: bot.games.pop(cid, None)
 
-    if not game:
-        return await interaction.response.send_message("⚠️ No active game. Start with `/wordle`.", ephemeral=True)
+    if not bot.secrets: return await interaction.response.send_message("❌ Database error.", ephemeral=True)
 
-    if game.is_duplicate(g_word):
-        return await interaction.response.send_message(f"⚠️ **{g_word.upper()}** was already guessed!", ephemeral=True)
-
-    if len(g_word) != 5 or not g_word.isalpha():
-        return await interaction.response.send_message("⚠️ 5 letters only.", ephemeral=True)
-    if g_word not in bot.valid_set:
-        return await interaction.response.send_message(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
-
-    pattern, win, game_over = game.process_turn(g_word, interaction.user)
+    secret = get_next_secret(bot, interaction.guild_id)
+    game = WordleGame(secret, cid, interaction.user)
+    bot.games[cid] = game
     
-    hint_msg = ""
-    if game.attempts_used == 3 and all('🟩' not in x['pattern'] and '🟨' not in x['pattern'] for x in game.history):
-        cands = [c for c in game.secret if c not in {h['word'][i] for h in game.history for i in range(5) if h['pattern'][i] == '🟩'}]
-        if cands: hint_msg = f"\n\n**💡 HINT!** The letter **{random.choice(cands).upper()}** is in the word."
-
-    keypad = get_markdown_keypad_status(game.used_letters)
+    view = GameDashboardView(bot)
+    embed = view.generate_embed(game, interaction.guild)
     
-    # Progress Bar Logic
-    filled = "●" * game.attempts_used
-    empty = "○" * (6 - game.attempts_used)
-    progress_bar = f"[{filled}{empty}]"
+    await interaction.response.send_message(embed=embed, view=view)
+    msg = await interaction.original_response()
+    game.message_id = msg.id
 
-    if win:
-        flavor = get_win_flavor(game.attempts_used)
-        embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
-        embed.description = f"**{interaction.user.mention}** found the word: **{game.secret.upper()}**!"
-        embed.add_field(name="Final Result", value=f"{pattern} {g_word.upper()}")
-        embed.add_field(name="Keyboard", value=keypad, inline=False)
-    elif game_over:
-        embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
-        embed.description = f"The word was **{game.secret.upper()}**."
-        embed.add_field(name="Last Guess", value=f"{pattern} {g_word.upper()}")
-        embed.add_field(name="Keyboard", value=keypad, inline=False)
-    else:
-        embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
-        embed.description = f"**{interaction.user.display_name}**: `{g_word.upper()}`"
-        embed.add_field(name="Result", value=f"{pattern} {g_word.upper()}{hint_msg}", inline=False)
-        embed.add_field(name="Keyboard", value=keypad, inline=False)
-        embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
-        
-    await interaction.response.send_message(embed=embed)
 
-    if game_over or win:
-        winner_id = interaction.user.id if win else None
-        for pid in game.participants:
-            update_leaderboard(bot, pid, interaction.guild_id, (pid == winner_id))
-        bot.games.pop(cid, None)
-
-@bot.tree.command(name="wordle_board", description="View board.")
-async def board(interaction: discord.Interaction):
-    game = bot.games.get(interaction.channel_id)
-    if not game: return await interaction.response.send_message("❌ No active game.", ephemeral=True)
-    
-    lines = [f"**{i}.** {x['pattern']} **{x['word'].upper()}**" for i, x in enumerate(game.history, 1)]
-    embed = discord.Embed(title="📊 Board", description="\n".join(lines), color=discord.Color.blurple())
-    embed.add_field(name="Keyboard", value=get_markdown_keypad_status(game.used_letters), inline=False)
-    embed.set_footer(text=f"Attempts: {game.attempts_used}/6")
-    await interaction.response.send_message(embed=embed)
-
-# --- HELPER: Process Data for View ---
-async def fetch_and_format_rankings(results, bot_instance):
-    formatted_data = []
-    for i, (uid, w, g) in enumerate(results, 1):
-        try:
-            u = await bot_instance.fetch_user(uid)
-            name = u.display_name
-        except: name = f"Unknown ({uid})"
-        rate = (w/g)*100 if g>0 else 0
-        formatted_data.append((i, name, w, g, rate))
-    return formatted_data
-
-@bot.tree.command(name="leaderboard", description="Server Leaderboard.")
+@bot.tree.command(name="leaderboard", description="Server Standings.")
 async def leaderboard(interaction: discord.Interaction):
-    if not interaction.guild: return
+    bot.db_cursor.execute("SELECT user_id, wins, total_games FROM scores WHERE guild_id = ?", (interaction.guild_id,))
+    rows = bot.db_cursor.fetchall()
+    if not rows: return await interaction.response.send_message("No data.", ephemeral=True)
     
-    bot.db_cursor.execute("""
-        SELECT user_id, wins, total_games FROM scores 
-        WHERE guild_id = ? ORDER BY wins DESC, total_games ASC
-    """, (interaction.guild_id,))
-    results = bot.db_cursor.fetchall()
-
-    if not results:
-        return await interaction.response.send_message("No games played yet!", ephemeral=True)
-
-    await interaction.response.defer() 
-    data = await fetch_and_format_rankings(results, bot)
-    view = LeaderboardView(bot, data, f"🏆 {interaction.guild.name} Leaderboard", discord.Color.gold(), interaction.user)
-    await interaction.followup.send(embed=view.create_embed(), view=view)
-
-@bot.tree.command(name="leaderboard_global", description="Global Leaderboard.")
-async def leaderboard_global(interaction: discord.Interaction):
-    bot.db_cursor.execute("""
-        SELECT user_id, SUM(wins) as t_wins, SUM(total_games) as t_games 
-        FROM scores 
-        GROUP BY user_id 
-        ORDER BY t_wins DESC, t_games ASC
-    """)
-    results = bot.db_cursor.fetchall()
-
-    if not results:
-        return await interaction.response.send_message("No global games yet!", ephemeral=True)
-
-    await interaction.response.defer()
-    data = await fetch_and_format_rankings(results, bot)
-    view = LeaderboardView(bot, data, "🌍 Global Leaderboard", discord.Color.purple(), interaction.user)
-    await interaction.followup.send(embed=view.create_embed(), view=view)
-
-@bot.tree.command(name="profile", description="Check your personal stats.")
-async def profile(interaction: discord.Interaction):
-    if not interaction.guild: return
-    uid = interaction.user.id
+    # Calculate Ranks locally
+    data = []
+    for uid, w, g in rows:
+        data.append((uid, w, g, calculate_score(w, g)))
+    data.sort(key=lambda x: x[3], reverse=True)
     
-    # Get Server Stats
-    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", (uid, interaction.guild_id))
-    s_row = bot.db_cursor.fetchone()
-    s_wins, s_games = s_row if s_row else (0, 0)
-    s_rate = (s_wins/s_games)*100 if s_games > 0 else 0
+    desc = []
+    for i, (uid, w, g, s) in enumerate(data[:10], 1):
+        # Optimization: Try cache first
+        mem = interaction.guild.get_member(uid)
+        name = mem.display_name if mem else f"User {uid}"
+        
+        # Rank Icon
+        perc = (len(data) - (i-1)) / len(data)
+        icon, tier_name = get_tier_info(perc)
+        
+        desc.append(f"`#{i}` {icon} **{name}**\n└ Score: {s*100:.0f} • {w}/{g} Wins")
 
-    # Get Global Stats
-    bot.db_cursor.execute("SELECT SUM(wins), SUM(total_games) FROM scores WHERE user_id = ?", (uid,))
-    g_row = bot.db_cursor.fetchone()
-    g_wins, g_games = g_row if g_row and g_row[0] else (0, 0)
-    g_rate = (g_wins/g_games)*100 if g_games > 0 else 0
-
-    embed = discord.Embed(title=f"👤 Profile: {interaction.user.display_name}", color=discord.Color.teal())
-    embed.add_field(name=f"🏰 {interaction.guild.name} Stats", value=f"Wins: **{s_wins}**\nGames: {s_games}\nWin Rate: {s_rate:.1f}%", inline=True)
-    embed.add_field(name="🌍 Global Stats", value=f"Wins: **{g_wins}**\nGames: {g_games}\nWin Rate: {g_rate:.1f}%", inline=True)
-    
+    embed = discord.Embed(title=f"🏆 {interaction.guild.name} Leaderboard", description="\n".join(desc), color=discord.Color.gold())
     await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(name="profile", description="Your stats.")
+async def profile(interaction: discord.Interaction):
+    uid = interaction.user.id
+    gid = interaction.guild_id
+    
+    rank_icon = get_user_rank_display(bot, uid, gid)
+    
+    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", (uid, gid))
+    row = bot.db_cursor.fetchone()
+    w, g = row if row else (0,0)
+    
+    embed = discord.Embed(title=f"👤 {interaction.user.display_name}", color=discord.Color.teal())
+    embed.add_field(name="Rank", value=f"{rank_icon}", inline=True)
+    embed.add_field(name="Stats", value=f"Wins: {w}\nGames: {g}", inline=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+# --- FLASK & RUN ---
+def flask_thread():
+    app = Flask(__name__)
+    @app.route('/')
+    def h(): return "OK", 200
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=False)
 
 if __name__ == "__main__":
-    t = threading.Thread(target=run_flask_server)
-    t.start()
+    threading.Thread(target=flask_thread).start()
     bot.run(TOKEN)
