@@ -74,7 +74,7 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
 
     output_lines[1] = u"\u2007" + output_lines[1]
     output_lines[2] = u"\u2007\u2007" + output_lines[2] 
-    return "\n".join(output_lines) + extra_line + "\n```\nfixLegend:\n**Bold** = Correct | __Underline__ = Misplaced | ~~Strikeout~~ = Absent```"
+    return "\n".join(output_lines) + extra_line + "\n\nLegend:\n**Bold** = Correct | __Underline__ = Misplaced | ~~Strikeout~~ = Absent"
 
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
     """Updates score."""
