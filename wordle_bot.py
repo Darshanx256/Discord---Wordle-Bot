@@ -2,26 +2,33 @@ import os
 import random
 import discord
 from discord.ext import commands, tasks
-from discord import ui 
-import sqlite3
+from discord import ui
 from dotenv import load_dotenv
 import threading
 from flask import Flask
-import asyncio  
+import asyncio
 import sys
 import datetime
+# NEW: PostgreSQL and Pooling Imports
+import psycopg2
+from psycopg2 import pool 
 
 # --- 1. CONFIGURATION ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+# Using 'SUPALINK' as the new environment variable for the database URL
+SUPALINK = os.getenv('SUPALINK')
 
-if not TOKEN:
+if not TOKEN: 
     print("❌ FATAL: DISCORD_TOKEN not found.")
+    exit(1)
+
+if not SUPALINK:
+    print("❌ FATAL: SUPALINK (for Supabase) not found.")
     exit(1)
 
 SECRET_FILE = "words.txt"
 VALID_FILE = "all_words.txt"
-DB_NAME = 'wordle_leaderboard.db'
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 
 # --- 2. RANKING & TIER CONFIGURATION ---
@@ -32,11 +39,24 @@ C_WINRATE = 0.40 # Bayesian constant (Win Rate)
 TIERS = [
     (0.90, "💎", "Grandmaster"), 
     (0.65, "⚜️", "Master"),      
-    (0.40, "⚔️", "Elite"),       
-    (0.00, "🛡️", "Challenger")   
+    (0.40, "⚔️", "Elite"),      
+    (0.00, "🛡️", "Challenger")    
 ]
 
 # ========= 3. UTILITY FUNCTIONS =========
+
+# NEW HELPER: Connection management function
+def get_pg_conn(bot: commands.Bot):
+    """Retrieves a connection from the pool and returns the connection and cursor."""
+    conn = None
+    try:
+        conn = bot.db_pool.getconn()
+        cursor = conn.cursor()
+        return conn, cursor
+    except Exception as e:
+        print(f"ERROR: Could not get connection from pool: {e}")
+        # We don't put it back if we couldn't get it, but we still raise the error
+        raise e
 
 def calculate_score(wins: int, games: int) -> float:
     """Calculates Bayesian average score for ranking."""
@@ -51,14 +71,13 @@ def get_tier_display(percentile: float) -> str:
     return TIERS[-1][1], TIERS[-1][2] # Default to lowest
 
 def get_markdown_keypad_status(used_letters: dict) -> str:
-
-     #egg start
+    
+    #egg start
     extra_line = ""
     if random.randint(1,50) == 1:
         extra_line = "\n\n🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\nHave a nice day!"
     #egg end
 
-    
     """Generates the stylized keypad using Discord Markdown."""
     output_lines = []
     for row in KEYBOARD_LAYOUT:
@@ -74,44 +93,79 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
 
     output_lines[1] = u"\u2007" + output_lines[1]
     output_lines[2] = u"\u2007\u2007" + output_lines[2] 
-    return "\n".join(output_lines) + extra_line + "\n\nLegend:\n**Bold** = Correct | __Underline__ = Misplaced | ~~Strikeout~~ = Absent"
+    keypad_display = "\n".join(output_lines)
+    
+    # Updated legend formatting
+    legend = "\n\n```fix\nLegend:\n**BOLD** = Correct | __UNDERLINE__ = Misplaced | ~~STRIKEOUT~~ = Absent\n```"
+    
+    return keypad_display + extra_line + legend
 
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
-    """Updates score."""
+    """Updates score using the PostgreSQL connection pool."""
     if not guild_id: return 
 
-    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
-    row = bot.db_cursor.fetchone()
-    
-    cur_w, cur_g = row if row else (0, 0)
-    new_w = cur_w + 1 if won_game else cur_w
-    new_g = cur_g + 1
+    conn = None # Connection management required for pooling
+    try:
+        conn, cursor = get_pg_conn(bot)
+        
+        # 1. SELECT (Uses %s placeholder)
+        cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = %s AND guild_id = %s", (user_id, guild_id))
+        row = cursor.fetchone()
+        
+        cur_w, cur_g = row if row else (0, 0)
+        new_w = cur_w + 1 if won_game else cur_w
+        new_g = cur_g + 1
 
-    bot.db_cursor.execute("""
-        INSERT OR REPLACE INTO scores (user_id, guild_id, wins, total_games)
-        VALUES (?, ?, ?, ?)
-    """, (user_id, guild_id, new_w, new_g))
-    bot.db_conn.commit()
+        # 2. INSERT/UPDATE (Uses PostgreSQL ON CONFLICT DO UPDATE)
+        cursor.execute("""
+            INSERT INTO scores (user_id, guild_id, wins, total_games)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (user_id, guild_id) DO UPDATE SET 
+                wins = EXCLUDED.wins, 
+                total_games = EXCLUDED.total_games
+        """, (user_id, guild_id, new_w, new_g))
+        conn.commit()
+
+    except Exception as e:
+        print(f"DB ERROR in update_leaderboard: {e}")
+        if conn: conn.rollback() # Rollback changes on error
+    finally:
+        if conn: bot.db_pool.putconn(conn) # Return connection to pool
 
 def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
-    """Gets a secret word that hasn't been used in this guild, cycling when all are exhausted."""
-    bot.db_cursor.execute("SELECT word FROM guild_history WHERE guild_id = ?", (guild_id,))
-    used_words = {r[0] for r in bot.db_cursor.fetchall()}
-    
-    available_words = [w for w in bot.secrets if w not in used_words]
-    
-    if not available_words:
-        # Reset the history if all words have been used
-        bot.db_cursor.execute("DELETE FROM guild_history WHERE guild_id = ?", (guild_id,))
-        bot.db_conn.commit()
-        available_words = bot.secrets
-        print(f"🔄 Guild {guild_id} history reset. Word pool recycled.")
+    """Gets a secret word that hasn't been used in this guild."""
+    conn = None
+    try:
+        conn, cursor = get_pg_conn(bot)
         
-    pick = random.choice(available_words)
+        # 1. SELECT used words (Uses %s placeholder)
+        cursor.execute("SELECT word FROM guild_history WHERE guild_id = %s", (guild_id,))
+        used_words = {r[0] for r in cursor.fetchall()}
+        
+        available_words = [w for w in bot.secrets if w not in used_words]
+        
+        if not available_words:
+            # 2. Reset history
+            cursor.execute("DELETE FROM guild_history WHERE guild_id = %s", (guild_id,))
+            conn.commit()
+            available_words = bot.secrets
+            print(f"🔄 Guild {guild_id} history reset. Word pool recycled.")
+            
+        pick = random.choice(available_words)
+        
+        # 3. INSERT new secret (Uses %s placeholder)
+        cursor.execute("INSERT INTO guild_history (guild_id, word) VALUES (%s, %s)", (guild_id, pick))
+        conn.commit()
+        return pick
     
-    bot.db_cursor.execute("INSERT INTO guild_history (guild_id, word) VALUES (?, ?)", (guild_id, pick))
-    bot.db_conn.commit()
-    return pick
+    except Exception as e:
+        print(f"DB ERROR in get_next_secret: {e}")
+        if conn: conn.rollback()
+        # FALLBACK: If DB fails, grab a random word without logging it.
+        print("CRITICAL: Falling back to random word due to DB failure.")
+        return random.choice(bot.secrets)
+    finally:
+        if conn: bot.db_pool.putconn(conn)
 
 def get_win_flavor(attempts: int) -> str:
     """Returns a fun message based on how quickly they won."""
@@ -160,7 +214,7 @@ class LeaderboardView(discord.ui.View):
 
                 medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"`#{rank}`")
                 
-                description_lines.append(f"{medal} {tier_icon} **{name}**\n   > Score: **{score:.2f}** | Wins: {w} | Games: {g}")
+                description_lines.append(f"{medal} {tier_icon} **{name}**\n   > Score: **{score:.2f}** | Wins: {w} | Games: {g}")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)}")
@@ -273,8 +327,8 @@ class WordleBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
         self.games = {}      
-        self.secrets = []; self.valid_set = set() 
-        self.db_conn = None; self.db_cursor = None
+        self.secrets = []; self.valid_set = set()  
+        self.db_pool = None # REPLACED: self.db_conn and self.db_cursor
 
     async def setup_hook(self):
         self.load_local_data()
@@ -284,7 +338,8 @@ class WordleBot(commands.Bot):
         print(f"✅ Ready! {len(self.secrets)} secrets.")
         
     async def close(self):
-        if self.db_conn: self.db_conn.close()
+        if self.db_pool: 
+            self.db_pool.closeall() # Close all connections in the pool
         await super().close()
 
     def load_local_data(self):
@@ -300,24 +355,45 @@ class WordleBot(commands.Bot):
         self.valid_set.update(self.secrets)
 
     def setup_db(self):
-        self.db_conn = sqlite3.connect(DB_NAME, check_same_thread=False)
-        self.db_cursor = self.db_conn.cursor()
-        self.db_cursor.execute("""
-            CREATE TABLE IF NOT EXISTS scores (
-                user_id INTEGER NOT NULL,
-                guild_id INTEGER NOT NULL,  
-                wins INTEGER DEFAULT 0,
-                total_games INTEGER DEFAULT 0,
-                PRIMARY KEY (user_id, guild_id) 
+        print("Connecting to PostgreSQL using connection pooling...")
+        conn = None # Temporary connection for table creation
+        try:
+            # 1. Initialize the Connection Pool
+            self.db_pool = pool.SimpleConnectionPool(
+                1,  # minconn: Keep 1 connection active
+                5,  # maxconn: Do not exceed the 5-connection free limit
+                SUPALINK # Use the SUPALINK environment variable
             )
-        """)
-        self.db_cursor.execute("""
-            CREATE TABLE IF NOT EXISTS guild_history (
-                guild_id INTEGER NOT NULL,
-                word TEXT NOT NULL
-            )
-        """)
-        self.db_conn.commit()
+            
+            # 2. Use a temporary connection to ensure tables exist
+            conn = self.db_pool.getconn()
+            cursor = conn.cursor()
+
+            # PostgreSQL setup (BIGINT for IDs, matching the tables you created)
+            cursor.execute("SET search_path TO public;")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS scores (
+                    user_id BIGINT NOT NULL, 
+                    guild_id BIGINT NOT NULL, 
+                    wins INTEGER DEFAULT 0, 
+                    total_games INTEGER DEFAULT 0, 
+                    PRIMARY KEY (user_id, guild_id)
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS guild_history (
+                    guild_id BIGINT NOT NULL, 
+                    word VARCHAR(5) NOT NULL
+                )
+            """)
+            conn.commit()
+            print("PostgreSQL pooling ready.")
+            
+        except Exception as e:
+            print(f"❌ FATAL DB ERROR during setup: {e}")
+            sys.exit(1) # Cannot run bot without DB
+        finally:
+            if conn: self.db_pool.putconn(conn) # Return connection to pool
 
     @tasks.loop(minutes=60)
     async def cleanup_task(self):
@@ -341,7 +417,7 @@ class WordleBot(commands.Bot):
 bot = WordleBot()
 
 
-# ========= 6. EVENTS & COMMANDS =========
+# ========= 6. EVENTS & COMMANDS (Database calls updated below) =========
 
 @bot.tree.command(name="wordle", description="Start a new game.")
 async def start(interaction: discord.Interaction):
@@ -482,8 +558,8 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
                 try: u = await bot_instance.fetch_user(uid); name = u.display_name
                 except: pass
         else:
-             try: u = await bot_instance.fetch_user(uid); name = u.display_name
-             except: pass
+            try: u = await bot_instance.fetch_user(uid); name = u.display_name
+            except: pass
 
         formatted_data.append((i + 1, name, w, g, (w/g)*100 if g > 0 else 0, s))
         
@@ -493,11 +569,20 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
 async def leaderboard(interaction: discord.Interaction):
     if not interaction.guild: return
     
-    bot.db_cursor.execute("""
-        SELECT user_id, wins, total_games FROM scores 
-        WHERE guild_id = ? 
-    """, (interaction.guild_id,))
-    results = bot.db_cursor.fetchall()
+    conn = None
+    try:
+        conn, cursor = get_pg_conn(bot)
+        cursor.execute("""
+            SELECT user_id, wins, total_games FROM scores 
+            WHERE guild_id = %s 
+        """, (interaction.guild_id,))
+        results = cursor.fetchall()
+    except Exception as e:
+        print(f"DB ERROR in leaderboard: {e}")
+        return await interaction.response.send_message("❌ Database error retrieving leaderboard.", ephemeral=True)
+    finally:
+        if conn: bot.db_pool.putconn(conn)
+
 
     if not results:
         return await interaction.response.send_message("No games played yet!", ephemeral=True)
@@ -514,12 +599,21 @@ async def leaderboard(interaction: discord.Interaction):
 
 @bot.tree.command(name="leaderboard_global", description="Global Leaderboard.")
 async def leaderboard_global(interaction: discord.Interaction):
-    bot.db_cursor.execute("""
-        SELECT user_id, SUM(wins) as t_wins, SUM(total_games) as t_games 
-        FROM scores  
-        GROUP BY user_id
-    """)
-    results = bot.db_cursor.fetchall()
+    conn = None
+    try:
+        conn, cursor = get_pg_conn(bot)
+        cursor.execute("""
+            SELECT user_id, SUM(wins) as t_wins, SUM(total_games) as t_games 
+            FROM scores  
+            GROUP BY user_id
+        """)
+        results = cursor.fetchall()
+    except Exception as e:
+        print(f"DB ERROR in leaderboard_global: {e}")
+        return await interaction.response.send_message("❌ Database error retrieving global leaderboard.", ephemeral=True)
+    finally:
+        if conn: bot.db_pool.putconn(conn)
+
 
     if not results:
         return await interaction.response.send_message("No global games yet!", ephemeral=True)
@@ -539,31 +633,42 @@ async def profile(interaction: discord.Interaction):
     if not interaction.guild: return
     uid = interaction.user.id
     
-    # Get Server Stats
-    bot.db_cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = ? AND guild_id = ?", (uid, interaction.guild_id))
-    s_row = bot.db_cursor.fetchone()
-    s_wins, s_games = s_row if s_row else (0, 0)
-    s_score = calculate_score(s_wins, s_games)
+    conn = None
+    try:
+        conn, cursor = get_pg_conn(bot)
+        
+        # Get Server Stats
+        cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = %s AND guild_id = %s", (uid, interaction.guild_id))
+        s_row = cursor.fetchone()
+        s_wins, s_games = s_row if s_row else (0, 0)
+        s_score = calculate_score(s_wins, s_games)
 
-    # Determine Server Rank for Tier
-    bot.db_cursor.execute("SELECT user_id, wins, total_games FROM scores WHERE guild_id = ?", (interaction.guild_id,))
-    all_scores = [calculate_score(r[1], r[2]) for r in bot.db_cursor.fetchall()]
+        # Determine Server Rank for Tier
+        cursor.execute("SELECT user_id, wins, total_games FROM scores WHERE guild_id = %s", (interaction.guild_id,))
+        all_scores = [calculate_score(r[1], r[2]) for r in cursor.fetchall()]
+
+        # Get Global Stats
+        cursor.execute("SELECT SUM(wins), SUM(total_games) FROM scores WHERE user_id = %s", (uid,))
+        g_row = cursor.fetchone()
+        g_wins, g_games = g_row if g_row and g_row[0] else (0, 0)
+        g_score = calculate_score(g_wins, g_games)
+
+    except Exception as e:
+        print(f"DB ERROR in profile: {e}")
+        return await interaction.response.send_message("❌ Database error retrieving your profile.", ephemeral=True)
+    finally:
+        if conn: bot.db_pool.putconn(conn)
+
+
     all_scores.sort()
     rank_idx = sum(1 for s in all_scores if s < s_score)
     perc = rank_idx / len(all_scores) if all_scores else 0
     tier_icon, tier_name = get_tier_display(perc)
 
-
-    # Get Global Stats
-    bot.db_cursor.execute("SELECT SUM(wins), SUM(total_games) FROM scores WHERE user_id = ?", (uid,))
-    g_row = bot.db_cursor.fetchone()
-    g_wins, g_games = g_row if g_row and g_row[0] else (0, 0)
-    g_score = calculate_score(g_wins, g_games)
-
     embed = discord.Embed(title=f"👤 Profile: {interaction.user.display_name}", color=discord.Color.teal())
     embed.add_field(name="Current Tier", value=f"{tier_icon} **{tier_name}**", inline=False)
-    embed.add_field(name=f"🏰 {interaction.guild.name} Stats", value=f"Bayesian Score: **{s_score:.2f}**\nWins: {s_wins} | Games: {s_games}", inline=True)
-    embed.add_field(name="🌍 Global Stats", value=f"Bayesian Score: **{g_score:.2f}**\nWins: {g_wins} | Games: {g_games}", inline=True)
+    embed.add_field(name=f"🏰 {interaction.guild.name} Stats", value=f"Score: **{s_score:.2f}**\nWins: {s_wins} | Games: {s_games}", inline=True)
+    embed.add_field(name="🌍 Global Stats", value=f"Score: **{g_score:.2f}**\nWins: {g_wins} | Games: {g_games}", inline=True)
     
     await interaction.response.send_message(embed=embed)
 
