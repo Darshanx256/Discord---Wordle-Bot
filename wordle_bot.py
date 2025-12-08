@@ -11,7 +11,7 @@ import sys
 import datetime
 # NEW: Supabase Client Imports
 from supabase import create_client, Client
-from supabase.lib.gotrue_v1.exceptions import APIError as SupabaseAPIError
+from supabase.errors import AuthApiError as SupabaseAPIError
 
 # --- 1. CONFIGURATION ---
 load_dotenv()
