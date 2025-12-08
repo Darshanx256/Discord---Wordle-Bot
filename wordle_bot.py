@@ -9,26 +9,27 @@ from flask import Flask
 import asyncio
 import sys
 import datetime
-# NEW: PostgreSQL and Pooling Imports
-import psycopg2
-from psycopg2 import pool 
+# NEW: Supabase Client Imports
+from supabase import create_client, Client
+from gotrue.exceptions import APIError as SupabaseAPIError
 
 # --- 1. CONFIGURATION ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-# Using 'SUPALINK' as the new environment variable for the database URL
-SUPALINK = os.getenv('SUPALINK')
+# NEW Environment variables for Supabase Client
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not TOKEN: 
     print("❌ FATAL: DISCORD_TOKEN not found.")
     exit(1)
 
-if not SUPALINK:
-    print("❌ FATAL: SUPALINK (for Supabase) not found.")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("❌ FATAL: SUPABASE_URL or SUPABASE_KEY (for Supabase client) not found.")
     exit(1)
 
-SECRET_FILE = "words.txt"
-VALID_FILE = "all_words.txt"
+SECRET_FILE = "words.txt" # Simple list (Original Wordle)
+VALID_FILE = "all_words.txt" # Full dictionary (Classic mode secrets and valid guesses)
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 
 # --- 2. RANKING & TIER CONFIGURATION ---
@@ -44,19 +45,6 @@ TIERS = [
 ]
 
 # ========= 3. UTILITY FUNCTIONS =========
-
-# NEW HELPER: Connection management function
-def get_pg_conn(bot: commands.Bot):
-    """Retrieves a connection from the pool and returns the connection and cursor."""
-    conn = None
-    try:
-        conn = bot.db_pool.getconn()
-        cursor = conn.cursor()
-        return conn, cursor
-    except Exception as e:
-        print(f"ERROR: Could not get connection from pool: {e}")
-        # We don't put it back if we couldn't get it, but we still raise the error
-        raise e
 
 def calculate_score(wins: int, games: int) -> float:
     """Calculates Bayesian average score for ranking."""
@@ -96,76 +84,129 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
     keypad_display = "\n".join(output_lines)
     
     # Updated legend formatting
-    legend = "\n\n```fix\nLegend:\n**BOLD** = Correct | __UNDERLINE__ = Misplaced | ~~STRIKEOUT~~ = Absent\n```"
+    legend = "\n\nLegend:\n**BOLD** = Correct | __UNDERLINE__ = Misplaced | ~~STRIKEOUT~~ = Absent\n"
     
     return keypad_display + extra_line + legend
 
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
-    """Updates score using the PostgreSQL connection pool."""
+    """Updates score using the Supabase client's upsert method."""
     if not guild_id: return 
 
-    conn = None # Connection management required for pooling
     try:
-        conn, cursor = get_pg_conn(bot)
+        # 1. Fetch current score
+        response = bot.supabase_client.table('scores') \
+            .select('wins, total_games') \
+            .eq('user_id', user_id) \
+            .eq('guild_id', guild_id) \
+            .execute()
         
-        # 1. SELECT (Uses %s placeholder)
-        cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = %s AND guild_id = %s", (user_id, guild_id))
-        row = cursor.fetchone()
+        data = response.data
         
-        cur_w, cur_g = row if row else (0, 0)
+        cur_w, cur_g = (data[0]['wins'], data[0]['total_games']) if data else (0, 0)
+        
+        # 2. Calculate new scores
         new_w = cur_w + 1 if won_game else cur_w
         new_g = cur_g + 1
 
-        # 2. INSERT/UPDATE (Uses PostgreSQL ON CONFLICT DO UPDATE)
-        cursor.execute("""
-            INSERT INTO scores (user_id, guild_id, wins, total_games)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (user_id, guild_id) DO UPDATE SET 
-                wins = EXCLUDED.wins, 
-                total_games = EXCLUDED.total_games
-        """, (user_id, guild_id, new_w, new_g))
-        conn.commit()
+        # 3. UPSERT (Insert or Update) the score
+        score_data = {
+            'user_id': user_id, 
+            'guild_id': guild_id, 
+            'wins': new_w, 
+            'total_games': new_g
+        }
+        
+        bot.supabase_client.table('scores').upsert(score_data).execute()
 
+    except SupabaseAPIError as e:
+        print(f"DB ERROR (Supabase API) in update_leaderboard: {e}")
     except Exception as e:
-        print(f"DB ERROR in update_leaderboard: {e}")
-        if conn: conn.rollback() # Rollback changes on error
-    finally:
-        if conn: bot.db_pool.putconn(conn) # Return connection to pool
+        print(f"DB ERROR (General) in update_leaderboard: {e}")
 
 def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
-    """Gets a secret word that hasn't been used in this guild."""
-    conn = None
+    """Gets a secret word from the simple pool (bot.secrets) using guild_history table."""
+    
     try:
-        conn, cursor = get_pg_conn(bot)
+        # 1. SELECT used words
+        response = bot.supabase_client.table('guild_history') \
+            .select('word') \
+            .eq('guild_id', guild_id) \
+            .execute()
         
-        # 1. SELECT used words (Uses %s placeholder)
-        cursor.execute("SELECT word FROM guild_history WHERE guild_id = %s", (guild_id,))
-        used_words = {r[0] for r in cursor.fetchall()}
-        
+        used_words = {r['word'] for r in response.data}
         available_words = [w for w in bot.secrets if w not in used_words]
         
         if not available_words:
             # 2. Reset history
-            cursor.execute("DELETE FROM guild_history WHERE guild_id = %s", (guild_id,))
-            conn.commit()
+            bot.supabase_client.table('guild_history') \
+                .delete() \
+                .eq('guild_id', guild_id) \
+                .execute()
+                
             available_words = bot.secrets
-            print(f"🔄 Guild {guild_id} history reset. Word pool recycled.")
+            print(f"🔄 Guild {guild_id} history reset for Simple mode. Word pool recycled.")
             
         pick = random.choice(available_words)
         
-        # 3. INSERT new secret (Uses %s placeholder)
-        cursor.execute("INSERT INTO guild_history (guild_id, word) VALUES (%s, %s)", (guild_id, pick))
-        conn.commit()
+        # 3. INSERT new secret
+        bot.supabase_client.table('guild_history') \
+            .insert({'guild_id': guild_id, 'word': pick}) \
+            .execute()
+            
         return pick
     
-    except Exception as e:
-        print(f"DB ERROR in get_next_secret: {e}")
-        if conn: conn.rollback()
+    except SupabaseAPIError as e:
+        print(f"DB ERROR (Supabase API) in get_next_secret: {e}")
         # FALLBACK: If DB fails, grab a random word without logging it.
-        print("CRITICAL: Falling back to random word due to DB failure.")
+        print("CRITICAL: Falling back to random word (Simple) due to DB failure.")
         return random.choice(bot.secrets)
-    finally:
-        if conn: bot.db_pool.putconn(conn)
+    except Exception as e:
+        print(f"DB ERROR (General) in get_next_secret: {e}")
+        print("CRITICAL: Falling back to random word (Simple) due to DB failure.")
+        return random.choice(bot.secrets)
+        
+def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
+    """Gets a secret word from the full pool (bot.all_secrets) using guild_history_classic table."""
+    
+    try:
+        # 1. SELECT used words from the classic table
+        response = bot.supabase_client.table('guild_history_classic') \
+            .select('word') \
+            .eq('guild_id', guild_id) \
+            .execute()
+        
+        used_words = {r['word'] for r in response.data}
+        available_words = [w for w in bot.all_secrets if w not in used_words]
+        
+        if not available_words:
+            # 2. Reset history
+            bot.supabase_client.table('guild_history_classic') \
+                .delete() \
+                .eq('guild_id', guild_id) \
+                .execute()
+                
+            available_words = bot.all_secrets
+            print(f"🔄 Guild {guild_id} history reset for Classic mode. Word pool recycled.")
+            
+        pick = random.choice(available_words)
+        
+        # 3. INSERT new secret
+        bot.supabase_client.table('guild_history_classic') \
+            .insert({'guild_id': guild_id, 'word': pick}) \
+            .execute()
+            
+        return pick
+    
+    except SupabaseAPIError as e:
+        print(f"DB ERROR (Supabase API) in get_next_classic_secret: {e}")
+        # FALLBACK: If DB fails, grab a random word without logging it.
+        print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
+        return random.choice(bot.all_secrets)
+    except Exception as e:
+        print(f"DB ERROR (General) in get_next_classic_secret: {e}")
+        print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
+        return random.choice(bot.all_secrets)
+
 
 def get_win_flavor(attempts: int) -> str:
     """Returns a fun message based on how quickly they won."""
@@ -176,7 +217,7 @@ def get_win_flavor(attempts: int) -> str:
     if attempts == 5: return "😅 Cutting it close..."
     return "💀 CLUTCH! That was stressful."
 
-# --- PAGINATION VIEW CLASS ---
+# --- PAGINATION VIEW CLASS  ---
 class LeaderboardView(discord.ui.View):
     def __init__(self, bot, data, title, color, interaction_user):
         super().__init__(timeout=60)
@@ -251,7 +292,7 @@ class LeaderboardView(discord.ui.View):
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 
-# --- FLASK SERVER ---
+# --- FLASK SERVER  ---
 def run_flask_server():
     app = Flask(__name__)
     @app.route('/')
@@ -319,7 +360,7 @@ class WordleGame:
         self.participants.add(user.id)
         self.guessed_words.add(guess)
         
-        return pat, (guess == self.secret), ((guess == self.secret) or (self.attempts_used >= self.max_attempts))
+        return pat, (guess == self.secret), ((guess == self.secret) or (self.attempts_used >= self.max_attempts)) #!
 
 
 # ========= 5. BOT SETUP =========
@@ -327,73 +368,62 @@ class WordleBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
         self.games = {}      
-        self.secrets = []; self.valid_set = set()  
-        self.db_pool = None # REPLACED: self.db_conn and self.db_cursor
+        self.secrets = []      # Simple word list
+        self.all_secrets = []  # Full word list (used for Classic mode secrets)
+        self.valid_set = set() # Full dictionary (used for all valid guesses) 
+        self.supabase_client: Client = None 
 
     async def setup_hook(self):
         self.load_local_data()
         self.setup_db()
         await self.tree.sync()
         self.cleanup_task.start()
-        print(f"✅ Ready! {len(self.secrets)} secrets.")
+        print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.all_secrets)} classic secrets.")
         
     async def close(self):
-        if self.db_pool: 
-            self.db_pool.closeall() # Close all connections in the pool
+        # The Supabase client connection is stateless, no need for explicit closing like a pool
         await super().close()
 
     def load_local_data(self):
+        # Load Simple Secrets (words.txt)
         if os.path.exists(SECRET_FILE):
             with open(SECRET_FILE, "r", encoding="utf-8") as f:
                 self.secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
-        else: self.secrets = []
-
+        else: self.secrets = [] 
+        
+        # Load Full Dictionary (all_words.txt)
         if os.path.exists(VALID_FILE):
             with open(VALID_FILE, "r", encoding="utf-8") as f:
                 self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
-        else: self.valid_set = set()
-        self.valid_set.update(self.secrets)
+                self.all_secrets = list(self.valid_set) # Use all valid words for Classic mode
+        else: 
+            self.valid_set = set()
+            self.all_secrets = []
+            
+        # Ensure the simple secrets are also valid guesses
+        self.valid_set.update(self.secrets) 
 
     def setup_db(self):
-        print("Connecting to PostgreSQL using connection pooling...")
-        conn = None # Temporary connection for table creation
+        print("Connecting to Supabase client...")
         try:
-            # 1. Initialize the Connection Pool
-            self.db_pool = pool.SimpleConnectionPool(
-                1,  # minconn: Keep 1 connection active
-                5,  # maxconn: Do not exceed the 5-connection free limit
-                SUPALINK # Use the SUPALINK environment variable
-            )
+            # Initialize the Supabase Client
+            self.supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
             
-            # 2. Use a temporary connection to ensure tables exist
-            conn = self.db_pool.getconn()
-            cursor = conn.cursor()
-
-            # PostgreSQL setup (BIGINT for IDs, matching the tables you created)
-            cursor.execute("SET search_path TO public;")
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS scores (
-                    user_id BIGINT NOT NULL, 
-                    guild_id BIGINT NOT NULL, 
-                    wins INTEGER DEFAULT 0, 
-                    total_games INTEGER DEFAULT 0, 
-                    PRIMARY KEY (user_id, guild_id)
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS guild_history (
-                    guild_id BIGINT NOT NULL, 
-                    word VARCHAR(5) NOT NULL
-                )
-            """)
-            conn.commit()
-            print("PostgreSQL pooling ready.")
+            # Simple check to confirm connectivity (e.g., fetching schema name)
+            response = self.supabase_client.from_('scores').select('count', count='exact').limit(0).execute()
             
+            if response.data is not None:
+                print("✅ Supabase client ready and tables accessible.")
+            else:
+                 # This path usually indicates a connection or RLS issue
+                 raise Exception("Failed to confirm Supabase table access.")
+            
+        except SupabaseAPIError as e:
+            print(f"❌ FATAL DB ERROR during Supabase setup: Supabase API Error. Check URL/Key/RLS. Details: {e}")
+            sys.exit(1) 
         except Exception as e:
-            print(f"❌ FATAL DB ERROR during setup: {e}")
-            sys.exit(1) # Cannot run bot without DB
-        finally:
-            if conn: self.db_pool.putconn(conn) # Return connection to pool
+            print(f"❌ FATAL DB ERROR during Supabase setup: General Error. Details: {e}")
+            sys.exit(1) 
 
     @tasks.loop(minutes=60)
     async def cleanup_task(self):
@@ -417,24 +447,50 @@ class WordleBot(commands.Bot):
 bot = WordleBot()
 
 
-# ========= 6. EVENTS & COMMANDS (Database calls updated below) =========
+# ========= 6. EVENTS & COMMANDS =========
 
-@bot.tree.command(name="wordle", description="Start a new game.")
+@bot.tree.command(name="wordle", description="Start a new game (Simple word list).")
 async def start(interaction: discord.Interaction):
     if not interaction.guild: return await interaction.response.send_message("❌ Command must be used in a server.", ephemeral=True)
     
     if not bot.secrets:
-        return await interaction.response.send_message("❌ Word list missing.", ephemeral=True)
+        return await interaction.response.send_message("❌ Simple word list missing.", ephemeral=True)
 
     cid = interaction.channel_id
     if cid in bot.games:
         await interaction.response.send_message("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
         return
         
+    # Get secret from the simple pool
     secret = get_next_secret(bot, interaction.guild_id)
     
-    embed = discord.Embed(title="✨ Wordle Started!", color=discord.Color.blue())
+    embed = discord.Embed(title="✨ Wordle Started! (Simple)", color=discord.Color.blue())
     embed.description = "A **simple 5-letter word** has been chosen. **6 attempts** total."
+    embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
+    
+    await interaction.response.send_message(embed=embed)
+    
+    msg = await interaction.original_response()
+    bot.games[cid] = WordleGame(secret, cid, interaction.user, msg.id)
+
+
+@bot.tree.command(name="wordle_classic", description="Start a Classic game (Full dictionary list).")
+async def start_classic(interaction: discord.Interaction):
+    if not interaction.guild: return await interaction.response.send_message("❌ Command must be used in a server.", ephemeral=True)
+    
+    if not bot.all_secrets:
+        return await interaction.response.send_message("❌ Classic word list missing.", ephemeral=True)
+
+    cid = interaction.channel_id
+    if cid in bot.games:
+        await interaction.response.send_message("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
+        return
+        
+    # Get secret from the full classic pool
+    secret = get_next_classic_secret(bot, interaction.guild_id)
+    
+    embed = discord.Embed(title="⚔️ Wordle Started! (Classic)", color=discord.Color.dark_gold())
+    embed.description = "A **word from the full dictionary** has been chosen. **6 attempts** total. Harder than Simple mode!"
     embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
     
     await interaction.response.send_message(embed=embed)
@@ -468,7 +524,7 @@ async def guess(interaction: discord.Interaction, word: str):
     game = bot.games.get(cid)
 
     if not game:
-        return await interaction.response.send_message("⚠️ No active game. Start with `/wordle`.", ephemeral=True)
+        return await interaction.response.send_message("⚠️ No active game. Start with `/wordle` or `/wordle_classic`.", ephemeral=True)
 
     if game.is_duplicate(g_word):
         return await interaction.response.send_message(f"⚠️ **{g_word.upper()}** was already guessed!", ephemeral=True)
@@ -526,12 +582,14 @@ async def guess(interaction: discord.Interaction, word: str):
 
     if game_over or win:
         winner_id = interaction.user.id if win else None
+        # FIX: The update_leaderboard call is synchronous, run it in a thread to prevent blocking
         for pid in game.participants:
-            update_leaderboard(bot, pid, interaction.guild_id, (pid == winner_id))
+            await asyncio.to_thread(update_leaderboard, bot, pid, interaction.guild_id, (pid == winner_id))
         bot.games.pop(cid, None)
 
 @bot.tree.command(name="wordle_board", description="View current board.")
 async def board(interaction: discord.Interaction):
+    if not interaction.guild: return
     game = bot.games.get(interaction.channel_id)
     if not game: return await interaction.response.send_message("❌ No active game.", ephemeral=True)
     
@@ -569,61 +627,78 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
 async def leaderboard(interaction: discord.Interaction):
     if not interaction.guild: return
     
-    conn = None
+    await interaction.response.defer() 
+    
+    def fetch_server_leaderboard_sync():
+        # Synchronous function to run in a thread
+        response = bot.supabase_client.table('scores') \
+            .select('user_id, wins, total_games') \
+            .eq('guild_id', interaction.guild_id) \
+            .execute()
+        
+        return [(d['user_id'], d['wins'], d['total_games']) for d in response.data]
+
     try:
-        conn, cursor = get_pg_conn(bot)
-        cursor.execute("""
-            SELECT user_id, wins, total_games FROM scores 
-            WHERE guild_id = %s 
-        """, (interaction.guild_id,))
-        results = cursor.fetchall()
+        # FIX: Run the synchronous Supabase call in a thread to avoid blocking the event loop.
+        results = await asyncio.to_thread(fetch_server_leaderboard_sync)
+        
     except Exception as e:
         print(f"DB ERROR in leaderboard: {e}")
-        return await interaction.response.send_message("❌ Database error retrieving leaderboard.", ephemeral=True)
-    finally:
-        if conn: bot.db_pool.putconn(conn)
+        return await interaction.followup.send("❌ Database error retrieving leaderboard.", ephemeral=True)
 
 
     if not results:
-        return await interaction.response.send_message("No games played yet!", ephemeral=True)
+        return await interaction.followup.send("No games played yet!", ephemeral=True)
 
     scored_results = sorted(
         [(uid, w, g, calculate_score(w, g)) for uid, w, g in results],
         key=lambda x: x[3], reverse=True
     )
 
-    await interaction.response.defer() 
     data = await fetch_and_format_rankings(scored_results, bot, interaction.guild) 
     view = LeaderboardView(bot, data, f"🏆 {interaction.guild.name} Leaderboard", discord.Color.gold(), interaction.user)
     await interaction.followup.send(embed=view.create_embed(), view=view)
 
 @bot.tree.command(name="leaderboard_global", description="Global Leaderboard.")
 async def leaderboard_global(interaction: discord.Interaction):
-    conn = None
+    await interaction.response.defer()
+    
+    def fetch_global_leaderboard_sync():
+        # Synchronous function to fetch all data for global aggregation
+        response = bot.supabase_client.table('scores') \
+            .select('user_id, wins, total_games') \
+            .execute()
+            
+        all_scores_data = response.data
+        
+        # Aggregate scores by user_id in Python
+        global_scores = {}
+        for row in all_scores_data:
+            uid = row['user_id']
+            if uid not in global_scores:
+                global_scores[uid] = {'wins': 0, 'games': 0}
+            global_scores[uid]['wins'] += row['wins']
+            global_scores[uid]['games'] += row['total_games']
+            
+        return [(uid, d['wins'], d['games']) for uid, d in global_scores.items()]
+    
     try:
-        conn, cursor = get_pg_conn(bot)
-        cursor.execute("""
-            SELECT user_id, SUM(wins) as t_wins, SUM(total_games) as t_games 
-            FROM scores  
-            GROUP BY user_id
-        """)
-        results = cursor.fetchall()
+        # FIX: Run the synchronous Supabase call in a thread
+        results = await asyncio.to_thread(fetch_global_leaderboard_sync)
+        
     except Exception as e:
         print(f"DB ERROR in leaderboard_global: {e}")
-        return await interaction.response.send_message("❌ Database error retrieving global leaderboard.", ephemeral=True)
-    finally:
-        if conn: bot.db_pool.putconn(conn)
+        return await interaction.followup.send("❌ Database error retrieving global leaderboard.", ephemeral=True)
 
 
     if not results:
-        return await interaction.response.send_message("No global games yet!", ephemeral=True)
+        return await interaction.followup.send("No global games yet!", ephemeral=True)
 
     scored_results = sorted(
         [(uid, w, g, calculate_score(w, g)) for uid, w, g in results],
         key=lambda x: x[3], reverse=True
     )
 
-    await interaction.response.defer()
     data = await fetch_and_format_rankings(scored_results, bot) 
     view = LeaderboardView(bot, data, "🌍 Global Leaderboard", discord.Color.purple(), interaction.user)
     await interaction.followup.send(embed=view.create_embed(), view=view)
@@ -633,31 +708,49 @@ async def profile(interaction: discord.Interaction):
     if not interaction.guild: return
     uid = interaction.user.id
     
-    conn = None
-    try:
-        conn, cursor = get_pg_conn(bot)
+    await interaction.response.defer()
+    
+    def fetch_profile_stats_sync():
+        # Synchronous function to run in a thread
         
         # Get Server Stats
-        cursor.execute("SELECT wins, total_games FROM scores WHERE user_id = %s AND guild_id = %s", (uid, interaction.guild_id))
-        s_row = cursor.fetchone()
-        s_wins, s_games = s_row if s_row else (0, 0)
+        server_response = bot.supabase_client.table('scores') \
+            .select('wins, total_games') \
+            .eq('user_id', uid) \
+            .eq('guild_id', interaction.guild_id) \
+            .execute()
+        
+        s_row = server_response.data[0] if server_response.data else None
+        s_wins, s_games = (s_row['wins'], s_row['total_games']) if s_row else (0, 0)
         s_score = calculate_score(s_wins, s_games)
 
-        # Determine Server Rank for Tier
-        cursor.execute("SELECT user_id, wins, total_games FROM scores WHERE guild_id = %s", (interaction.guild_id,))
-        all_scores = [calculate_score(r[1], r[2]) for r in cursor.fetchall()]
+        # Get all Server Scores for Tier Calculation
+        all_scores_response = bot.supabase_client.table('scores') \
+            .select('wins, total_games') \
+            .eq('guild_id', interaction.guild_id) \
+            .execute()
+            
+        all_scores = [calculate_score(r['wins'], r['total_games']) for r in all_scores_response.data]
 
-        # Get Global Stats
-        cursor.execute("SELECT SUM(wins), SUM(total_games) FROM scores WHERE user_id = %s", (uid,))
-        g_row = cursor.fetchone()
-        g_wins, g_games = g_row if g_row and g_row[0] else (0, 0)
+        # Get Global Stats (Fetch all of user's scores and aggregate in Python)
+        global_response = bot.supabase_client.table('scores') \
+            .select('wins, total_games') \
+            .eq('user_id', uid) \
+            .execute()
+            
+        g_wins = sum(r['wins'] for r in global_response.data)
+        g_games = sum(r['total_games'] for r in global_response.data)
         g_score = calculate_score(g_wins, g_games)
+        
+        return s_wins, s_games, s_score, all_scores, g_wins, g_games, g_score
+
+    try:
+        # FIX: Run the synchronous Supabase calls in a thread
+        s_wins, s_games, s_score, all_scores, g_wins, g_games, g_score = await asyncio.to_thread(fetch_profile_stats_sync)
 
     except Exception as e:
         print(f"DB ERROR in profile: {e}")
-        return await interaction.response.send_message("❌ Database error retrieving your profile.", ephemeral=True)
-    finally:
-        if conn: bot.db_pool.putconn(conn)
+        return await interaction.followup.send("❌ Database error retrieving your profile.", ephemeral=True)
 
 
     all_scores.sort()
@@ -670,7 +763,7 @@ async def profile(interaction: discord.Interaction):
     embed.add_field(name=f"🏰 {interaction.guild.name} Stats", value=f"Score: **{s_score:.2f}**\nWins: {s_wins} | Games: {s_games}", inline=True)
     embed.add_field(name="🌍 Global Stats", value=f"Score: **{g_score:.2f}**\nWins: {g_wins} | Games: {g_games}", inline=True)
     
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed)
 
 
 if __name__ == "__main__":
