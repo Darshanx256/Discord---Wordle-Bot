@@ -9,9 +9,7 @@ from flask import Flask
 import asyncio
 import sys
 import datetime
-# NEW: Supabase Client Imports
 from supabase import create_client, Client
-from supabase.errors import AuthApiError as SupabaseAPIError
 
 # --- 1. CONFIGURATION ---
 load_dotenv()
@@ -118,8 +116,6 @@ def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game:
         
         bot.supabase_client.table('scores').upsert(score_data).execute()
 
-    except SupabaseAPIError as e:
-        print(f"DB ERROR (Supabase API) in update_leaderboard: {e}")
     except Exception as e:
         print(f"DB ERROR (General) in update_leaderboard: {e}")
 
@@ -155,13 +151,8 @@ def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
             
         return pick
     
-    except SupabaseAPIError as e:
-        print(f"DB ERROR (Supabase API) in get_next_secret: {e}")
-        # FALLBACK: If DB fails, grab a random word without logging it.
-        print("CRITICAL: Falling back to random word (Simple) due to DB failure.")
-        return random.choice(bot.secrets)
     except Exception as e:
-        print(f"DB ERROR (General) in get_next_secret: {e}")
+        print(f"DB ERROR in get_next_secret: {e}")
         print("CRITICAL: Falling back to random word (Simple) due to DB failure.")
         return random.choice(bot.secrets)
         
@@ -197,11 +188,6 @@ def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
             
         return pick
     
-    except SupabaseAPIError as e:
-        print(f"DB ERROR (Supabase API) in get_next_classic_secret: {e}")
-        # FALLBACK: If DB fails, grab a random word without logging it.
-        print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
-        return random.choice(bot.all_secrets)
     except Exception as e:
         print(f"DB ERROR (General) in get_next_classic_secret: {e}")
         print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
@@ -417,10 +403,7 @@ class WordleBot(commands.Bot):
             else:
                  # This path usually indicates a connection or RLS issue
                  raise Exception("Failed to confirm Supabase table access.")
-            
-        except SupabaseAPIError as e:
-            print(f"❌ FATAL DB ERROR during Supabase setup: Supabase API Error. Check URL/Key/RLS. Details: {e}")
-            sys.exit(1) 
+                
         except Exception as e:
             print(f"❌ FATAL DB ERROR during Supabase setup: General Error. Details: {e}")
             sys.exit(1) 
