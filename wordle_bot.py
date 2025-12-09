@@ -845,28 +845,28 @@ async def profile(interaction: discord.Interaction):
     
     # Add Global Tier
     embed.add_field(
-        name="🌍 Global Tier", 
-        value=f"{g_tier_icon} **{g_tier_name}**", 
+        name="🌐 Your Tier", 
+        value=f"\u2003{g_tier_icon} **{g_tier_name}**", 
         inline=False # prominence
     )
     
     # Add Server Stats
     embed.add_field(
-        name=f"🏰 {interaction.guild.name}", 
+        name=f"\n🏰 Server {interaction.guild.name}", 
         value=(
-            f"Tier: {s_tier_icon} **{s_tier_name}**\n"
-            f"Score: **{s_score:.2f}**\n"
-            f"Wins: {s_wins} | Games: {s_games}"
+            f"\u2003Tier: {s_tier_icon} **{s_tier_name}**\n"
+            f"\u2003Score: **{s_score:.2f}**\n"
+            f"\u2003Wins: {s_wins} | Games: {s_games}"
         ), 
         inline=True
     )
     
     # Add Global Stats 
     embed.add_field(
-        name="Global Aggregate Stats", 
+        name="\n🌐 Global Aggregate Stats", 
         value=(
-            f"Score: **{g_score:.2f}**\n"
-            f"Wins: {g_wins} | Games: {g_games}"
+            f"\u2003Score: **{g_score:.2f}**\n"
+            f"\u2003Wins: {g_wins} | Games: {g_games}"
         ), 
         inline=True
     )
