@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <title>Wordle Game Bot</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+ 
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            color: #333; /* Base text color */
+            max-width: 900px; /* Constrained width */
+            margin: 0 auto; 
+            padding: 20px; 
+            background-color: #f9f9f9; /* Light gray background */
+        }
+        header { 
+            text-align: center; 
+            padding: 10px 0; 
+            border-bottom: 2px solid #ddd; 
+            margin-bottom: 10px; /* Added spacing */
+        }
+        h1 { color: #5c6bc0; font-size: 2.5em; margin-bottom: 8px; } /* Primary title color */
+        .logo { margin-bottom: 10px; }
+        .logo img { max-width: 150px; height: 40px; width: 40px; border-radius: 8px; }
+        footer { 
+            margin-top: 40px; 
+            padding-top: 20px; 
+            text-align: center; 
+            font-size: 0.9em; 
+            color: #777; 
+            border-top: 1px solid #ddd; 
+        }
+                .container {
+            
+            padding: 0 20px; 
+            text-align: center;
+        }
+        
+        .tagline { 
+            font-size: 1.3em;
+            color: #7f8c8d; 
+            margin-top: 5px;
+        }
+        
+        /* CTA BUTTON */
+        .cta-button { 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px 40px;
+            background-color: #5865F2; /* Official Discord Blue */
+            color: white; 
+            border-radius: 8px; 
+            font-weight: 700; 
+            font-size: 1.3em; 
+            transition: background-color 0.3s, transform 0.2s; 
+            margin: 20px 0;
+            text-decoration: none;
+        }
+        .cta-button i { margin-right: 12px; font-size: 1.5em; }
+        .cta-button:hover { 
+            background-color: #4b57d9; 
+            transform: translateY(-2px);
+        }
+
+        /* FEATURES LIST */
+        .features {
+            list-style-type: none;
+            padding: 0;
+            margin: 30px 0 40px;
+            text-align: left;
+            width: 80%; /* Constrain list width slightly */
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .features li {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            padding-left: 1.8em;
+            position: relative;
+        }
+        .features li strong { color: #4db6ac; } /* Accent color for feature titles */
+        .features li:before {
+            content: '🐙'; 
+            color: #4db6ac; 
+            font-size: 1.3em;
+            position: absolute;
+            left: 0;
+            line-height: 1.4;
+        }
+        
+        /* Footer Links */
+        footer a { color: #5c6bc0; text-decoration: none; margin: 0 10px; }
+        footer a:hover { text-decoration: underline; }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .container { padding: 0 10px; }
+            h1 { font-size: 2em; }
+            .cta-button { font-size: 1.1em; padding: 15px 30px; }
+            .features { width: 95%; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <img src="icon.png" alt="Bot Logo" height="40" width="40"/>
+        </div>
+        <h1>Wordle Game Bot</h1>
+    </header>
+
+    <div class="container">
+        
+        <a href="https://discord.com/oauth2/authorize?client_id=1446184470251048991&scope=bot" class="cta-button" target="_blank">
+            <i class="fab fa-discord"></i>
+            Add Wordle Game to Discord
+        </a>
+
+        <section>
+            <ul class="features">
+                <li><strong>Dual Game Modes:</strong> For when you're feeling either <b>Simple</b> or <b>dangerously</b> clever.</li>
+                <li><strong>Global Leaderboards:</strong> Prove you're the smartest squid in the server (scores never reset).</li>
+                <li><strong>Permanent Stats:</strong> Your wins, losses, and bragging rights are securely saved on a high-tech Supabase database.</li>
+                <li><strong>Zero Spam:</strong> It only speaks when commanded. Silence guaranteed between games.</li>
+            </ul>
+        </section>
+
+    </div>
+
+    <footer>
+        <p>For any questions, please contact <b>Ortsx256@proton.me</b>.</p>
+        <p>&copy; 2025 Octo Wordle. All rights reserved.</p>
+        <p>
+            <a href="/terms">Terms of Service</a> | 
+            <a href="/privacy">Privacy Policy</a>
+        </p>
+	<p><a href="https://www.flaticon.com/free-icons/octopus" title="octopus icons">Octopus icons created by Whitevector - Flaticon</a></p>
+    </footer>
+
+</body>
+</html>
