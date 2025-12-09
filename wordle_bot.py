@@ -504,7 +504,7 @@ async def start(interaction: discord.Interaction):
 async def start_classic(interaction: discord.Interaction):
     if not interaction.guild: return await interaction.response.send_message("❌ Command must be used in a server.", ephemeral=True)
     
-    if not bot.all_secrets:
+    if not bot.hard_secrets:
         return await interaction.response.send_message("❌ Classic word list missing.", ephemeral=True)
 
     cid = interaction.channel_id
