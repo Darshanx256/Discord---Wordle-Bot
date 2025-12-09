@@ -433,7 +433,7 @@ class WordleBot(commands.Bot):
         for cid in to_remove:
             self.games.pop(cid, None)
     
-    @tasks.loop(days=4) # Pinging database once every 4 day to prevent freeze
+    @tasks.loop(hours=96) # Pinging database once every 4 day to prevent freeze
     async def db_ping_task(self):
         """Pings the Supabase database with a low-impact query to prevent project pausing."""
         await self.wait_until_ready()
