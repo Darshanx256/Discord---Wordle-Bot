@@ -508,10 +508,10 @@ async def start_classic(interaction: discord.Interaction):
         return await interaction.response.send_message("❌ Classic word list missing.", ephemeral=True)
 
     cid = interaction.channel_id
+    
     if cid in bot.games:
         await interaction.response.send_message("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
         return
-        
     # Get secret from the full classic pool
     secret = get_next_classic_secret(bot, interaction.guild_id)
     
@@ -523,7 +523,6 @@ async def start_classic(interaction: discord.Interaction):
     
     msg = await interaction.original_response()
     bot.games[cid] = WordleGame(secret, cid, interaction.user, msg.id)
-
 
 @bot.tree.command(name="stop_game", description="Force stop the current game (For Starter or Admin only).")
 async def stop_game(interaction: discord.Interaction):
