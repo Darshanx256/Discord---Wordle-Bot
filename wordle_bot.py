@@ -284,11 +284,40 @@ class LeaderboardView(discord.ui.View):
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 
-# --- FLASK SERVER  ---
+# --- FLASK SERVER ---
 def run_flask_server():
-    app = Flask(__name__)
+    # Initialize Flask App
+    app = Flask(__name__, static_folder='static')
+
+    # --- ROUTE HANDLERS ---
+    
+    # 1. Homepage Route (Serving index.html)
     @app.route('/')
-    def home(): return "Bot OK", 200
+    def home():
+        # Serves the index.html file from the 'static' folder
+        return send_from_directory(app.static_folder, 'index.html')
+
+    # 2. Terms of Service Route (Serving tos.html)
+    @app.route('/terms')
+    def terms():
+        # Serves the tos.html file from the 'static' folder
+        return send_from_directory(app.static_folder, 'tos.html')
+
+    # 3. Privacy Policy Route (Serving privacy.html)
+    @app.route('/privacy')
+    def privacy():
+        # Serves the privacy.html file from the 'static' folder
+        return send_from_directory(app.static_folder, 'privacy.html')
+
+    @app.route('/favicon.ico')
+    def favicon():
+        return send_from_directory(app.static_folder, 'favicon.ico')
+
+    @app.route('/icon.png')
+    def icon():
+        return send_from_directory(app.static_folder, 'icon.png')
+
+    # --- SERVER RUN CONFIGURATION ---
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
 
