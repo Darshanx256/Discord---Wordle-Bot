@@ -380,12 +380,14 @@ class WordleBot(commands.Bot):
         await self.tree.sync()
         self.cleanup_task.start()
         self.db_ping_task.start()
-        print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.all_secrets)} classic secrets.")
+        # FIX: Changed self.all_secrets to self.hard_secrets
+        print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
         
     async def close(self):
         # The Supabase client connection is stateless, no need for explicit closing like a pool
         await super().close()
 
+    def load_local_data(self):
         # Load Simple Secrets (words.txt)
         if os.path.exists(SECRET_FILE):
             with open(SECRET_FILE, "r", encoding="utf-8") as f:
