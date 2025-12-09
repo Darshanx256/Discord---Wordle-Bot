@@ -27,7 +27,8 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     exit(1)
 
 SECRET_FILE = "words.txt" # Simple list (Original Wordle)
-VALID_FILE = "all_words.txt" # Full dictionary (Classic mode secrets and valid guesses)
+VALID_FILE = "all_words.txt" # Full dictionary (Valid guesses)
+CLASSIC_FILE = "words_hard.txt" # Classic list
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 
 # --- 2. RANKING & TIER CONFIGURATION ---
@@ -162,7 +163,7 @@ def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
         return random.choice(bot.secrets)
         
 def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
-    """Gets a secret word from the full pool (bot.all_secrets) using guild_history_classic table."""
+    """Gets a secret word from the hard pool (bot.hard_secrets) using guild_history_classic table."""
     
     try:
         # 1. SELECT used words from the classic table
@@ -172,7 +173,7 @@ def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
             .execute()
         
         used_words = {r['word'] for r in response.data}
-        available_words = [w for w in bot.all_secrets if w not in used_words]
+        available_words = [w for w in bot.hard_secrets if w not in used_words]
         
         if not available_words:
             # 2. Reset history
@@ -181,7 +182,7 @@ def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
                 .eq('guild_id', guild_id) \
                 .execute()
                 
-            available_words = bot.all_secrets
+            available_words = bot.hard_secrets
             print(f"🔄 Guild {guild_id} history reset for Classic mode. Word pool recycled.")
             
         pick = random.choice(available_words)
@@ -196,7 +197,7 @@ def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
     except Exception as e:
         print(f"DB ERROR (General) in get_next_classic_secret: {e}")
         print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
-        return random.choice(bot.all_secrets)
+        return random.choice(bot.hard_secrets)
 
 
 def get_win_flavor(attempts: int) -> str:
@@ -294,11 +295,12 @@ def run_flask_server():
 
 # ========= 4. GAME CLASS =========
 class WordleGame:
-    __slots__ = ('secret', 'channel_id', 'started_by', 'max_attempts', 'history', 
+    __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
                  'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
+        self.secret_set = set(secret) # Store secret as a set for O(1) lookups
         self.channel_id = channel_id
         self.started_by = started_by
         self.max_attempts = 6
@@ -318,7 +320,8 @@ class WordleGame:
         s_list = list(self.secret)
         g_list = list(guess)
         res = ["⬜"] * 5 
-        cur_abs = set(guess) - set(s_list)
+        
+        cur_abs = set(guess) - self.secret_set 
 
         # 1. Greens (Exact Matches)
         for i in range(5):
@@ -326,43 +329,50 @@ class WordleGame:
                 res[i] = "🟩"
                 s_list[i] = None; g_list[i] = None
                 self.used_letters['correct'].add(guess[i])
-                self.used_letters['present'].discard(guess[i])
+                self.used_letters['present'].discard(guess[i]) # If it's Green, it can't be Yellow
 
         # 2. Yellows (Misplaced)
         for i in range(5):
             if res[i] == "🟩": continue
             ch = g_list[i]
+            
+            # Use 'ch in s_list' for checking presence in the remaining characters
             if ch is not None and ch in s_list:
                 res[i] = "🟨"
-                s_list[s_list.index(ch)] = None
-                if ch not in self.used_letters['correct']: self.used_letters['present'].add(ch)
-            elif ch is not None: cur_abs.add(ch)
-
+                s_list[s_list.index(ch)] = None 
+                
+                # Use set lookups to prevent overwriting correct letters
+                if ch not in self.used_letters['correct']: 
+                    self.used_letters['present'].add(ch)
+                    
         # 3. Absents (Grey)
-        self.used_letters['absent'].update(cur_abs - self.used_letters['correct'] - self.used_letters['present'])
+        # Final update using set arithmetic for efficiency and correctness
+        self.used_letters['absent'].update(
+            set(guess) - self.used_letters['correct'] - self.used_letters['present']
+        )
+        
         return "".join(res)
 
     def process_turn(self, guess: str, user):
         self.last_interaction = datetime.datetime.now()
         pat = self.evaluate_guess(guess)
         
-        # Add to history and guessed_words ONLY after all validation/processing
         self.history.append({'word': guess, 'pattern': pat, 'user': user})
         self.participants.add(user.id)
         self.guessed_words.add(guess)
         
-        return pat, (guess == self.secret), ((guess == self.secret) or (self.attempts_used >= self.max_attempts)) #!
+        return pat, (guess == self.secret), ((guess == self.secret) or (self.attempts_used >= self.max_attempts))
 
 
 # ========= 5. BOT SETUP =========
 class WordleBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
-        self.games = {}      
-        self.secrets = []      # Simple word list
-        self.all_secrets = []  # Full word list (used for Classic mode secrets)
-        self.valid_set = set() # Full dictionary (used for all valid guesses) 
-        self.supabase_client: Client = None 
+        self.games = {} 
+        self.secrets = []       
+        self.hard_secrets = []  
+        self.valid_set = set()  # Full dictionary (Set, for O(1) validation) 
+        self.supabase_client: Client = None
 
     async def setup_hook(self):
         self.load_local_data()
@@ -376,24 +386,29 @@ class WordleBot(commands.Bot):
         # The Supabase client connection is stateless, no need for explicit closing like a pool
         await super().close()
 
-    def load_local_data(self):
         # Load Simple Secrets (words.txt)
         if os.path.exists(SECRET_FILE):
             with open(SECRET_FILE, "r", encoding="utf-8") as f:
                 self.secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
-        else: self.secrets = [] 
-        
+        else: self.secrets = []
+
+        # Load Classic Secrets (words_hard.txt)
+        if os.path.exists(CLASSIC_FILE):
+            with open(CLASSIC_FILE, "r", encoding="utf-8") as f:
+                self.hard_secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
+        else: self.hard_secrets = []
+            
         # Load Full Dictionary (all_words.txt)
         if os.path.exists(VALID_FILE):
             with open(VALID_FILE, "r", encoding="utf-8") as f:
-                self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
-                self.all_secrets = list(self.valid_set) # Use all valid words for Classic mode
+                # Use set comprehension for O(1) lookups
+                self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5} 
         else: 
             self.valid_set = set()
-            self.all_secrets = []
             
-        # Ensure the simple secrets are also valid guesses
+        # Ensure the simple and hard secrets are also valid guesses
         self.valid_set.update(self.secrets) 
+        self.valid_set.update(self.hard_secrets)
 
     def setup_db(self):
         print("Connecting to Supabase client...")
