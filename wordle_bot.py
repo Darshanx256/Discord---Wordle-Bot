@@ -1,4 +1,4 @@
-import os
+Import os
 import random
 import discord
 from discord.ext import commands, tasks
@@ -473,6 +473,9 @@ class WordleBot(commands.Bot):
                     if channel:
                         embed = discord.Embed(title="⏰ Time's Up!", description=f"Game timed out.\nThe word was **{game.secret.upper()}**.", color=discord.Color.dark_grey())
                         await channel.send(embed=embed)
+                        # --- FIX FOR RATE LIMIT ---
+                        await asyncio.sleep(1) # Wait 1 second between sending cleanup messages
+                        # --------------------------
                 except:
                     pass
         
@@ -636,7 +639,7 @@ async def guess(interaction: discord.Interaction, word: str):
 
     if game_over or win:
         winner_id = interaction.user.id if win else None
-        # FIX: The update_leaderboard call is synchronous, run it in a thread to prevent blocking
+        # The update_leaderboard call is synchronous, running it in a thread to prevent blocking
         for pid in game.participants:
             await asyncio.to_thread(update_leaderboard, bot, pid, interaction.guild_id, (pid == winner_id))
         bot.games.pop(cid, None)
@@ -656,23 +659,42 @@ async def board(interaction: discord.Interaction):
 
 
 # --- HELPER: Process Data for View (Optimized Network) ---
+# FIX: Added asyncio.sleep(0.1) after every fetch_user call to prevent Discord rate limits.
 async def fetch_and_format_rankings(results, bot_instance, guild=None):
     formatted_data = []
     
     for i, (uid, w, g, s) in enumerate(results):
         
         name = f"User {uid}"
+        fetched_successfully = False
+        
         if guild:
+            # 1. Try Local Cache (FAST & SAFE - No API Call)
             member = guild.get_member(uid)
             if member:
                 name = member.display_name
-            else:
-                try: u = await bot_instance.fetch_user(uid); name = u.display_name
-                except: pass
-        else:
-            try: u = await bot_instance.fetch_user(uid); name = u.display_name
-            except: pass
-
+                fetched_successfully = True
+        
+        if not fetched_successfully:
+            # 2. Try Global Cache (FAST & SAFE - No API Call)
+            user = bot_instance.get_user(uid)
+            if user:
+                name = user.display_name
+                fetched_successfully = True
+        
+        if not fetched_successfully:
+            # 3. API Call (SLOW & DANGEROUS - Counts towards Rate Limit)
+            try: 
+                u = await bot_instance.fetch_user(uid)
+                name = u.display_name
+                
+                # --- CRITICAL FIX ---
+                await asyncio.sleep(0.1) 
+                # --------------------
+                
+            except: 
+                pass
+        
         formatted_data.append((i + 1, name, w, g, (w/g)*100 if g > 0 else 0, s))
         
     return formatted_data
@@ -725,8 +747,8 @@ async def leaderboard(interaction: discord.Interaction):
     if not scored_results:
         return await interaction.followup.send("No games played yet!", ephemeral=True)
 
+
     # 3. FORMATTING AND DISPLAY
-    
     # fetch_and_format_rankings requires interaction.guild for server leaderboards
     data = await fetch_and_format_rankings(scored_results, bot, interaction.guild)
     
