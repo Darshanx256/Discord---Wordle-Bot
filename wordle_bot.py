@@ -705,51 +705,36 @@ async def leaderboard(interaction: discord.Interaction):
     
     await interaction.response.defer()
     uid = interaction.user.id
-    
-    # ----------------------------------------------------------------------
-    # 1. CENTRALIZED ASYNC/SYNC LOGIC
-    # ----------------------------------------------------------------------
-    def fetch_server_leaderboard_sync():
-        # Synchronous function: Fetches all server scores to find user rank.
-        response = bot.supabase_client.table('scores') \
-            .select('user_id, wins, total_games') \
-            .eq('guild_id', interaction.guild_id) \
+    guild_id = interaction.guild_id
+
+    try:
+        response = bot.supabase_client.table('guild_leaderboard') \
+            .select('user_id, guild_wins, guild_games, guild_score, guild_rank') \
+            .eq('guild_id', guild_id) \
+            .order('guild_rank', desc=False) \
             .execute()
             
-        results = [(d['user_id'], d['wins'], d['total_games']) for d in response.data]
+        scored_results = []
+        user_rank = None
         
-        # Calculate scores and sort immediately
-        scored_results = sorted(
-            [(user_id, w, g, calculate_score(w, g)) for user_id, w, g in results],
-            key=lambda x: x[3], reverse=True
-        )
-        
-        # Find the rank of the current user
-        user_rank = next(
-            (i + 1 for i, item in enumerate(scored_results) if item[0] == uid), 
-            None
-        )
-        
-        return scored_results, user_rank
+        for row in response.data:
+            user_id = row['user_id']
+            scored_results.append((
+                user_id,
+                row['guild_wins'],
+                row['guild_games'],
+                round(row['guild_score'], 2)
+            ))
+            
+            if user_id == uid:
+                user_rank = row['guild_rank']
 
-    # ----------------------------------------------------------------------
-    # 2. EXECUTION AND RANKING
-    # ----------------------------------------------------------------------
-    try:
-        # Run the entire process in the thread and unpack results
-        scored_results, user_rank = await asyncio.to_thread(fetch_server_leaderboard_sync)
-        
     except Exception as e:
-        print(f"DB ERROR in leaderboard: {e}")
         return await interaction.followup.send("❌ Database error retrieving leaderboard.", ephemeral=True)
-
 
     if not scored_results:
         return await interaction.followup.send("No games played yet!", ephemeral=True)
 
-
-    # 3. FORMATTING AND DISPLAY
-    # fetch_and_format_rankings requires interaction.guild for server leaderboards
     data = await fetch_and_format_rankings(scored_results, bot, interaction.guild)
     
     footer_text = f"🏆 {interaction.guild.name} Leaderboard"
@@ -766,64 +751,39 @@ async def leaderboard(interaction: discord.Interaction):
     
     await interaction.followup.send(embed=view.create_embed(), view=view)
 
+
 @bot.tree.command(name="leaderboard_global", description="Global Leaderboard.")
 async def leaderboard_global(interaction: discord.Interaction):
     await interaction.response.defer()
     uid = interaction.user.id
     
-    # ----------------------------------------------------------------------
-    # 1. CENTRALIZED ASYNC/SYNC LOGIC
-    # ----------------------------------------------------------------------
-    def fetch_global_leaderboard_sync():
-        # Fetch ALL user_id, wins, and total_games data from the entire table
-        response = bot.supabase_client.table('scores') \
-            .select('user_id, wins, total_games') \
+    try:
+        response = bot.supabase_client.table('global_leaderboard') \
+            .select('user_id, global_wins, global_games, global_score, global_rank') \
+            .order('global_rank', desc=False) \
             .execute()
             
-        all_scores_data = response.data
-        
-        # Aggregate scores by user_id and calculate score in Python
-        global_scores = {}
-        for row in all_scores_data:
-            user_id = row['user_id']
-            if user_id not in global_scores:
-                global_scores[user_id] = {'wins': 0, 'games': 0}
-            
-            global_scores[user_id]['wins'] += row['wins']
-            global_scores[user_id]['games'] += row['total_games']
-            
-        # Final sorted list of tuples (uid, w, g, score)
         scored_results = []
-        for user_id, d in global_scores.items():
-            score = calculate_score(d['wins'], d['games'])
-            scored_results.append((user_id, d['wins'], d['games'], score))
+        user_rank = None
+        
+        for row in response.data:
+            user_id = row['user_id']
+            scored_results.append((
+                user_id,
+                row['global_wins'],
+                row['global_games'],
+                round(row['global_score'], 2)
+            ))
             
-        # Sort immediately for efficiency and to find rank early
-        scored_results.sort(key=lambda x: x[3], reverse=True)
-        
-        # Find the rank of the current user
-        user_rank = next(
-            (i + 1 for i, item in enumerate(scored_results) if item[0] == uid), 
-            None
-        )
-        
-        return scored_results, user_rank
-    
-    # ----------------------------------------------------------------------
-    # 2. EXECUTION AND RANKING
-    # ----------------------------------------------------------------------
-    try:
-        # Run the entire aggregation and sorting process in the thread
-        scored_results, user_rank = await asyncio.to_thread(fetch_global_leaderboard_sync)
+            if user_id == uid:
+                user_rank = row['global_rank']
         
     except Exception as e:
-        print(f"DB ERROR in leaderboard_global: {e}")
         return await interaction.followup.send("❌ Database error retrieving global leaderboard.", ephemeral=True)
 
     if not scored_results:
         return await interaction.followup.send("No global games yet!", ephemeral=True)
 
-    # 3. FORMATTING AND DISPLAY
     data = await fetch_and_format_rankings(scored_results, bot)
     
     footer_text = "Global Leaderboard"
@@ -833,88 +793,93 @@ async def leaderboard_global(interaction: discord.Interaction):
     view = LeaderboardView(
         bot, 
         data, 
-        footer_text, # Use the dynamic footer text
+        footer_text, 
         discord.Color.purple(), 
         interaction.user
     )
     
     await interaction.followup.send(embed=view.create_embed(), view=view)
 
+
 @bot.tree.command(name="profile", description="Check your personal stats.")
 async def profile(interaction: discord.Interaction):
     if not interaction.guild: return
     uid = interaction.user.id
+    guild_id = interaction.guild_id
     
     await interaction.response.defer()
     
     def fetch_profile_stats_sync():
-        # 1. Fetch ALL data
-        response = bot.supabase_client.table('scores').select('*').execute()
-        all_data = response.data
+        server_response = bot.supabase_client.table('scores') \
+            .select('wins, total_games') \
+            .eq('guild_id', guild_id) \
+            .eq('user_id', uid) \
+            .limit(1) \
+            .execute()
         
-        # --- A. SERVER STATS ---
-        guild_data = [r for r in all_data if r['guild_id'] == interaction.guild_id]
-        
-        # User's stats in this guild
-        s_row = next((r for r in guild_data if r['user_id'] == uid), None)
+        s_row = server_response.data[0] if server_response.data else None
         s_wins = s_row['wins'] if s_row else 0
         s_games = s_row['total_games'] if s_row else 0
-        s_score = calculate_score(s_wins, s_games)
         
-        # Calculate Server Tier & Rank
-        server_scores = [calculate_score(r['wins'], r['total_games']) for r in guild_data]
-        server_scores.sort() # Ascending order [10, 20, 30]
+        s_rank_response = bot.supabase_client.table('guild_leaderboard') \
+            .select('guild_score, guild_rank') \
+            .eq('guild_id', guild_id) \
+            .eq('user_id', uid) \
+            .limit(1) \
+            .execute()
+            
+        s_rank_data = s_rank_response.data[0] if s_rank_response.data else None
+        s_score = s_rank_data['guild_score'] if s_rank_data else calculate_player_score(s_wins, s_games)
+        s_rank_num = s_rank_data['guild_rank'] if s_rank_data else 'N/A'
+
+        g_rank_response = bot.supabase_client.table('global_leaderboard') \
+            .select('global_wins, global_games, global_score, global_rank') \
+            .eq('user_id', uid) \
+            .limit(1) \
+            .execute()
+            
+        g_rank_data = g_rank_response.data[0] if g_rank_response.data else None
+        g_wins = g_rank_data['global_wins'] if g_rank_data else 0
+        g_games = g_rank_data['global_games'] if g_rank_data else 0
+        g_score = g_rank_data['global_score'] if g_rank_data else calculate_player_score(g_wins, g_games)
+        g_rank_num = g_rank_data['global_rank'] if g_rank_data else 'N/A'
         
-        # Percentile for Tier (How many people you beat)
+        all_guild_scores_response = bot.supabase_client.table('guild_leaderboard') \
+            .select('guild_score') \
+            .eq('guild_id', guild_id) \
+            .execute()
+            
+        all_global_scores_response = bot.supabase_client.table('global_leaderboard') \
+            .select('global_score') \
+            .execute()
+
+        server_scores = sorted([r['guild_score'] for r in all_guild_scores_response.data])
+        global_scores_list = sorted([r['global_score'] for r in all_global_scores_response.data])
+            
         s_rank_idx = sum(1 for s in server_scores if s < s_score)
         s_perc = s_rank_idx / len(server_scores) if server_scores else 0
         s_tier_icon, s_tier_name = get_tier_display(s_perc)
-        
-        # Numerical Rank (1st, 2nd, etc) - Invert logic: Total - People you beat
-        s_rank_num = len(server_scores) - s_rank_idx 
-
-        # --- B. GLOBAL STATS ---
-        global_map = {}
-        for r in all_data:
-            u = r['user_id']
-            if u not in global_map: global_map[u] = {'w': 0, 'g': 0}
-            global_map[u]['w'] += r['wins']
-            global_map[u]['g'] += r['total_games']
-            
-        u_global = global_map.get(uid, {'w': 0, 'g': 0})
-        g_wins = u_global['w']
-        g_games = u_global['g']
-        g_score = calculate_score(g_wins, g_games)
-        
-        # Calculate Global Tier & Rank
-        global_scores_list = [calculate_score(val['w'], val['g']) for val in global_map.values()]
-        global_scores_list.sort()
         
         g_rank_idx = sum(1 for s in global_scores_list if s < g_score)
         g_perc = g_rank_idx / len(global_scores_list) if global_scores_list else 0
         g_tier_icon, g_tier_name = get_tier_display(g_perc)
         
-        # Numerical Rank
-        g_rank_num = len(global_scores_list) - g_rank_idx
+        return (
+            s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
+            g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num
+        )
         
-        return (s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
-                g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num)
-
     try:
         stats = await asyncio.to_thread(fetch_profile_stats_sync)
         (s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
          g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num) = stats
 
     except Exception as e:
-        print(f"DB ERROR in profile: {e}")
         return await interaction.followup.send("❌ Database error retrieving your profile.", ephemeral=True)
 
-    # --- BEAUTIFIED EMBED ---
     embed = discord.Embed(color=discord.Color.teal())
     embed.set_author(name=f"{interaction.user.display_name}'s Profile", icon_url=interaction.user.display_avatar.url)
     
-    # 1. HERO SECTION: Global Tier
-    # Using \u2003 (Em Space) for indentation
     embed.add_field(
         name="🏆 **Rank**", 
         value=(
@@ -924,13 +889,12 @@ async def profile(interaction: discord.Interaction):
         inline=False
     )
     
-    # Separator (Invisible field to create visual space if needed, or just rely on new fields)
+    s_rank_display = f"**#{s_rank_num}**" if isinstance(s_rank_num, int) else s_rank_num
     
-    # 2. SERVER STATS
     embed.add_field(
         name=f"🏰 **{interaction.guild.name}**", 
         value=(
-            f"\u2003🏅 Rank: **#{s_rank_num}**\n"
+            f"\u2003🏅 Rank: {s_rank_display}\n"
             f"\u2003🎗️ Tier: {s_tier_icon} **{s_tier_name}**\n"
             f"\u2003📊 Score: **{s_score:.2f}**\n"
             f"\u2003✅ Wins: **{s_wins}**\n"
@@ -939,11 +903,12 @@ async def profile(interaction: discord.Interaction):
         inline=True
     )
     
-    # 3. GLOBAL STATS
+    g_rank_display = f"**#{g_rank_num}**" if isinstance(g_rank_num, int) else g_rank_num
+    
     embed.add_field(
         name="🌍 **Global Aggregate**", 
         value=(
-            f"\u2003🏅 Rank: **#{g_rank_num}**\n"
+            f"\u2003🏅 Rank: {g_rank_display}\n"
             f"\u2003🎗️ Tier: {g_tier_icon} **{g_tier_name}**\n"
             f"\u2003📊 Score: **{g_score:.2f}**\n"
             f"\u2003✅ Wins: **{g_wins}**\n"
@@ -952,7 +917,6 @@ async def profile(interaction: discord.Interaction):
         inline=True
     )
     
-    # Footer for polish
     embed.set_footer(text="Keep playing to rank up!", icon_url=bot.user.display_avatar.url)
     
     await interaction.followup.send(embed=embed)
