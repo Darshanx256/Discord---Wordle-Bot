@@ -13,7 +13,10 @@ from supabase import create_client, Client
 import requests
 
 # --- 0. EMOJI PREREQUISITES ---
-def load_app_emojis(TOKEN, app_id):
+load_dotenv()
+TOKEN = os.getenv('DISCORD_TOKEN')
+app_id = os.getenv('APP_ID')
+def load_app_emojis(bot_token = TOKEN, app_id):
     url = f"https://discord.com/api/v10/applications/{app_id}/emojis"
     headers = {"Authorization": f"Bot {bot_token}"}
     data = requests.get(url, headers=headers).json()
@@ -65,8 +68,6 @@ EMOJIS = load_app_emojis(BOT_TOKEN, APP_ID)
 EMOJIS = load_app_emojis(BOT_TOKEN, APP_ID)
 
 # --- 1. CONFIGURATION ---
-load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
 # NEW Environment variables for Supabase Client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
