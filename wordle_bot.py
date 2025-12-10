@@ -406,6 +406,502 @@ class WordleGame:
     def evaluate_guess(self, guess: str) -> str:
         s_list = list(self.secret)
         g_list = list(guess)
+
+        # default = white block emojis
+        res = [EMOJIS[f"block_{ch.lower()}_white"] for ch in guess]
+
+        # 1. Greens (Exact Matches)
+        for i in range(5):
+            if g_list[i] == s_list[i]:
+                letter = guess[i].lower()
+                res[i] = EMOJIS[f"block_{letter}_green"]
+                s_list[i] = None
+                g_list[i] = None
+                self.used_letters['correct'].add(letter)
+                self.used_letters['misplaced'].discard(letter)
+
+        # 2. Yellows (Misplaced)
+        for i in range(5):
+            if g_list[i] is None:
+                continue
+
+            ch = g_list[i]
+            if ch in s_list:
+                letter = ch.lower()
+                res[i] = EMOJIS[f"block_{letter}_yellow"]
+                s_list[s_list.index(ch)] = None
+
+                if letter not in self.used_letters['correct']:
+                    self.used_letters['misplaced'].add(letter)
+
+        # 3. Absents (Grey/White)
+        self.used_letters['absent'].update(
+            set(guess) - self.used_letters['correct'] - self.used_letters['misplaced']
+        )
+
+        return "".join(res)
+
+    def process_turn(self, guess: str, user):
+        self.last_interaction = datetime.datetime.now()
+        pat = self.evaluate_guess(guess)
+        
+        self.history.append({'word': guess, 'pattern': pat, 'user': user})
+        self.participants.add(user.id)
+        self.guessed_words.add(guess)
+        
+        return pat, (guess == self.secret), ((guess == self.secret) or (self.attempts_used >= self.max_attempts))
+
+
+# ========= 5. BOT SETUP =========
+class WordleBot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
+        self.games = {} 
+        self.secrets = []       
+        self.hard_secrets = []  
+        self.valid_set = set()  # Full dictionary (Set, for O(1) validation) 
+        self.supabase_client: Client = None
+
+    async def setup_hook(self):
+        self.load_local_data()
+        self.setup_db()
+        await self.tree.sync()
+        self.cleanup_task.start()
+        self.db_ping_task.start()
+        # FIX: Changed self.all_secrets to self.hard_secrets
+        print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
+        
+    async def close(self):
+        # The Supabase client connection is stateless, no need for explicit closing like a pool
+        await super().close()
+
+    def load_local_data(self):
+        # Load Simple Secrets (words.txt)
+        if os.path.exists(SECRET_FILE):
+            with open(SECRET_FILE, "r", encoding="utf-8") as f:
+                self.secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
+        else: self.secrets = []
+
+        # Load Classic Secrets (words_hard.txt)
+        if os.path.exists(CLASSIC_FILE):
+            with open(CLASSIC_FILE, "r", encoding="utf-8") as f:
+                self.hard_secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
+        else: self.hard_secrets = []
+            
+        # Load Full Dictionary (all_words.txt)
+        if os.path.exists(VALID_FILE):
+            with open(VALID_FILE, "r", encoding="utf-8") as f:
+                # Use set comprehension for O(1) lookups
+                self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5} 
+        else: 
+            self.valid_set = set()
+            
+        # Ensure the simple and hard secrets are also valid guesses
+        self.valid_set.update(self.secrets) 
+        self.valid_set.update(self.hard_secrets)
+
+    def setup_db(self):
+        print("Connecting to Supabase client...")
+        try:
+            # Initialize the Supabase Client
+            self.supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            
+            # Simple check to confirm connectivity (e.g., fetching schema name)
+            response = self.supabase_client.from_('scores').select('count', count='exact').limit(0).execute()
+            
+            if response.data is not None:
+                print("✅ Supabase client ready and tables accessible.")
+            else:
+                 # This path usually indicates a connection or RLS issue
+                 raise Exception("Failed to confirm Supabase table access.")
+                
+        except Exception as e:
+            print(f"❌ FATAL DB ERROR during Supabase setup: General Error. Details: {e}")
+            sys.exit(1) 
+
+    @tasks.loop(minutes=60)
+    async def cleanup_task(self):
+        now = datetime.datetime.now()
+        to_remove = []
+        for cid, game in self.games.items():
+            delta = now - game.last_interaction
+            if delta.total_seconds() > 86400: # 24 Hours
+                to_remove.append(cid)
+                try:
+                    channel = self.get_channel(cid)
+                    if channel:
+                        embed = di        # 1) KEYBOARD FORMAT—kbd_A_correct_green
+        # =====================================================
+        if raw_lower.startswith("kbd_"):
+            # ex: kbd_A_correct_green -> ["kbd", "A", "correct", "green"]
+            parts = raw.split("_")
+            letter = parts[1].lower()            # "A" → "a"
+            state  = parts[2].lower()            # "correct"
+            key = f"{letter}_{state}"            # "a_correct"
+            E[key] = token
+            continue
+
+        # =====================================================
+        # 2) WORDLE BLOCK FORMAT—green_A / yellow_A / white_A
+        # =====================================================
+        if raw_lower.startswith(("green_", "yellow_", "white_")):
+            # ex: green_A → green, A
+            color, letter = raw.split("_")       # letter still uppercase
+            color = color.lower()
+            letter = letter.lower()
+            key = f"block_{letter}_{color}"      # block_a_green
+            E[key] = token
+            continue
+
+        # ignore anything else
+
+    return E
+
+# ---- call it before main program ----
+EMOJIS = load_app_emojis(TOKEN, APP_ID)
+
+# --- 1. CONFIGURATION ---
+# NEW Environment variables for Supabase Client
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not TOKEN: 
+    print("❌ FATAL: DISCORD_TOKEN not found.")
+    exit(1)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("❌ FATAL: SUPABASE_URL or SUPABASE_KEY (for Supabase client) not found.")
+    exit(1)
+
+SECRET_FILE = "words.txt" # Simple list (Original Wordle)
+VALID_FILE = "all_words.txt" # Full dictionary (Valid guesses)
+CLASSIC_FILE = "words_hard.txt" # Classic list
+KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
+
+# --- 2. RANKING & TIER CONFIGURATION ---
+C_GAMES = 10  # Bayesian constant (Games)
+C_WINRATE = 0.40 # Bayesian constant (Win Rate)
+
+# emojis to represent tiers!!
+TIERS = [
+    (0.90, "💎", "Grandmaster"), 
+    (0.65, "⚜️", "Master"),      
+    (0.40, "⚔️", "Elite"),      
+    (0.00, "🛡️", "Challenger")    
+]
+
+# ========= 3. UTILITY FUNCTIONS =========
+
+def calculate_score(wins: int, games: int) -> float:
+    """Calculates Bayesian average score for ranking."""
+    if games == 0: return 0.0
+    # Score = (Wins + Prior_Wins) / (Games + Prior_Games)
+    return 10 * ((wins + (C_GAMES * C_WINRATE)) / (games + C_GAMES))
+
+def get_tier_display(percentile: float) -> str:
+    """Returns the Tier Icon and Name based on percentile rank."""
+    for thresh, icon, name in TIERS:
+        if percentile >= thresh: return icon, name
+    return TIERS[-1][1], TIERS[-1][2] # Default to lowest
+
+def get_markdown_keypad_status(used_letters: dict) -> str:
+    
+#egg start
+    extra_line = ""
+    if random.randint(1,50) == 1:
+        extra_line = (
+            "\n"
+            "> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
+            "> 🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\n"
+            "> Have a nice day!"
+        )
+    #egg end
+
+    """Generates the stylized keypad using Discord app emojis."""
+    output_lines = []
+    for row in KEYBOARD_LAYOUT:
+        line = ""
+        for char_key in row:
+            c = char_key.lower()
+            if c in used_letters['correct']:
+                state = "correct"
+            elif c in used_letters['misplaced']:
+                state = "misplaced"
+            elif c in used_letters['absent']:
+                state = "absent"
+            else:
+                state = "unknown"
+            line += EMOJIS[f"{c}_{state}"] + " "
+        output_lines.append(line.strip())
+
+    output_lines[1] = u"\u2007" + output_lines[1]
+    output_lines[2] = u"\u2007\u2007" + output_lines[2]
+    keypad_display = "\n".join(output_lines)
+
+    legend = (
+        "\n\nLegend:\n"
+        f"{EMOJIS['a_correct']} = Correct | "
+        f"{EMOJIS['a_misplaced']} = Misplaced | "
+        f"{EMOJIS['a_absent']} = Absent\n"
+    )
+    return keypad_display + extra_line + legend
+
+def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
+    """Updates score using the Supabase client's upsert method."""
+    if not guild_id: return 
+
+    try:
+        # 1. Fetch current score
+        response = bot.supabase_client.table('scores') \
+            .select('wins, total_games') \
+            .eq('user_id', user_id) \
+            .eq('guild_id', guild_id) \
+            .execute()
+        
+        data = response.data
+        
+        cur_w, cur_g = (data[0]['wins'], data[0]['total_games']) if data else (0, 0)
+        
+        # 2. Calculate new scores
+        new_w = cur_w + 1 if won_game else cur_w
+        new_g = cur_g + 1
+
+        # 3. UPSERT (Insert or Update) the score
+        score_data = {
+            'user_id': user_id, 
+            'guild_id': guild_id, 
+            'wins': new_w, 
+            'total_games': new_g
+        }
+        
+        bot.supabase_client.table('scores').upsert(score_data).execute()
+
+    except Exception as e:
+        print(f"DB ERROR (General) in update_leaderboard: {e}")
+
+def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
+    """Gets a secret word from the simple pool (bot.secrets) using guild_history table."""
+    
+    try:
+        # 1. SELECT used words
+        response = bot.supabase_client.table('guild_history') \
+            .select('word') \
+            .eq('guild_id', guild_id) \
+            .execute()
+        
+        used_words = {r['word'] for r in response.data}
+        available_words = [w for w in bot.secrets if w not in used_words]
+        
+        if not available_words:
+            # 2. Reset history
+            bot.supabase_client.table('guild_history') \
+                .delete() \
+                .eq('guild_id', guild_id) \
+                .execute()
+                
+            available_words = bot.secrets
+            print(f"🔄 Guild {guild_id} history reset for Simple mode. Word pool recycled.")
+            
+        pick = random.choice(available_words)
+        
+        # 3. INSERT new secret
+        bot.supabase_client.table('guild_history') \
+            .insert({'guild_id': guild_id, 'word': pick}) \
+            .execute()
+            
+        return pick
+    
+    except Exception as e:
+        print(f"DB ERROR in get_next_secret: {e}")
+        print("CRITICAL: Falling back to random word (Simple) due to DB failure.")
+        return random.choice(bot.secrets)
+        
+def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
+    """Gets a secret word from the hard pool (bot.hard_secrets) using guild_history_classic table."""
+    
+    try:
+        # 1. SELECT used words from the classic table
+        response = bot.supabase_client.table('guild_history_classic') \
+            .select('word') \
+            .eq('guild_id', guild_id) \
+            .execute()
+        
+        used_words = {r['word'] for r in response.data}
+        available_words = [w for w in bot.hard_secrets if w not in used_words]
+        
+        if not available_words:
+            # 2. Reset history
+            bot.supabase_client.table('guild_history_classic') \
+                .delete() \
+                .eq('guild_id', guild_id) \
+                .execute()
+                
+            available_words = bot.hard_secrets
+            print(f"🔄 Guild {guild_id} history reset for Classic mode. Word pool recycled.")
+            
+        pick = random.choice(available_words)
+        
+        # 3. INSERT new secret
+        bot.supabase_client.table('guild_history_classic') \
+            .insert({'guild_id': guild_id, 'word': pick}) \
+            .execute()
+            
+        return pick
+    
+    except Exception as e:
+        print(f"DB ERROR (General) in get_next_classic_secret: {e}")
+        print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
+        return random.choice(bot.hard_secrets)
+
+
+def get_win_flavor(attempts: int) -> str:
+    """Returns a fun message based on how quickly they won."""
+    if attempts == 1: return "🤯 IMPOSSIBLE! Pure luck or genius?"
+    if attempts == 2: return "🔥 Insane! You read my mind."
+    if attempts == 3: return "⚡ Blazing fast! Great job."
+    if attempts == 4: return "👏 Solid performance."
+    if attempts == 5: return "😅 Cutting it close..."
+    return "💀 CLUTCH! That was stressful."
+
+# --- PAGINATION VIEW CLASS  ---
+class LeaderboardView(discord.ui.View):
+    def __init__(self, bot, data, title, color, interaction_user):
+        super().__init__(timeout=60)
+        self.bot = bot
+        self.data = data  
+        self.title = title
+        self.color = color
+        self.user = interaction_user
+        self.current_page = 0
+        self.items_per_page = 10
+        self.total_pages = max(1, (len(data) - 1) // self.items_per_page + 1)
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.first_page.disabled = (self.current_page == 0)
+        self.prev_page.disabled = (self.current_page == 0)
+        self.next_page.disabled = (self.current_page == self.total_pages - 1)
+        self.last_page.disabled = (self.current_page == self.total_pages - 1)
+
+    def create_embed(self):
+        start = self.current_page * self.items_per_page
+        end = start + self.items_per_page
+        page_data = self.data[start:end]
+
+        description_lines = []
+        if not page_data: description_lines.append("No data available.")
+        else:
+            scores = [d[5] for d in self.data]
+            
+            for rank, name, w, g, rate, score in page_data:
+                # Determine Rank Icon and Tier
+                rank_index = sum(1 for s in scores if s < score)
+                perc = rank_index / len(scores) if scores else 0
+                tier_icon, _ = get_tier_display(perc)
+
+                medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"`#{rank}`")
+                
+                description_lines.append(f"{medal} {tier_icon} **{name}**\n   > Score: **{score:.2f}** | Wins: {w} | Games: {g}")
+
+        embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)}")
+        return embed
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user != self.user:
+            await interaction.response.send_message("❌ This is not your menu.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="<<", style=discord.ButtonStyle.grey)
+    async def first_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = 0
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    @discord.ui.button(label="<", style=discord.ButtonStyle.blurple)
+    async def prev_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    @discord.ui.button(label=">", style=discord.ButtonStyle.blurple)
+    async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    @discord.ui.button(label=">>", style=discord.ButtonStyle.grey)
+    async def last_page(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.current_page = self.total_pages - 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+
+# --- FLASK SERVER ---
+def run_flask_server():
+    # Initialize Flask App
+    app = Flask(__name__, static_folder='static')
+
+    # --- ROUTE HANDLERS ---
+    
+    # 1. Homepage Route (Serving index.html)
+    @app.route('/')
+    def home():
+        # Serves the index.html file from the 'static' folder
+        return send_from_directory(app.static_folder, 'index.html')
+
+    # 2. Terms of Service Route (Serving tos.html)
+    @app.route('/terms')
+    def terms():
+        # Serves the tos.html file from the 'static' folder
+        return send_from_directory(app.static_folder, 'tos.html')
+
+    # 3. Privacy Policy Route (Serving privacy.html)
+    @app.route('/privacy')
+    def privacy():
+        # Serves the privacy.html file from the 'static' folder
+        return send_from_directory(app.static_folder, 'privacy.html')
+
+    @app.route('/favicon.ico')
+    def favicon():
+        return send_from_directory(app.static_folder, 'favicon.ico')
+
+    @app.route('/icon.png')
+    def icon():
+        return send_from_directory(app.static_folder, 'icon.png')
+
+    # --- SERVER RUN CONFIGURATION ---
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
+
+
+# ========= 4. GAME CLASS =========
+class WordleGame:
+    __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
+                 'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id')
+
+    def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
+        self.secret = secret
+        self.secret_set = set(secret) # Store secret as a set for O(1) lookups
+        self.channel_id = channel_id
+        self.started_by = started_by
+        self.max_attempts = 6
+        self.history = [] 
+        self.participants = set() 
+        self.guessed_words = set()
+        self.used_letters = {'correct': set(), 'misplaced': set(), 'absent': set()}
+        self.last_interaction = datetime.datetime.now()
+        self.message_id = message_id
+
+    @property
+    def attempts_used(self): return len(self.history)
+
+    def is_duplicate(self, word: str) -> bool: return word in self.guessed_words
+
+    def evaluate_guess(self, guess: str) -> str:
+        s_list = list(self.secret)
+        g_list = list(guess)
             
         # default = white block emojis
         res = [EMOJIS[f"block_{ch.lower()}_white"] for ch in guess]
