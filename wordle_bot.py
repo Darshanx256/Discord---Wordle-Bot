@@ -16,7 +16,7 @@ import requests
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 app_id = os.getenv('APP_ID')
-def load_app_emojis(bot_token = TOKEN, app_id):
+def load_app_emojis(bot_token = TOKEN, app_id = APP_ID):
     url = f"https://discord.com/api/v10/applications/{app_id}/emojis"
     headers = {"Authorization": f"Bot {bot_token}"}
     data = requests.get(url, headers=headers).json()
