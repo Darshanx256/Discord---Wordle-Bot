@@ -394,7 +394,7 @@ class WordleGame:
         self.history = [] 
         self.participants = set() 
         self.guessed_words = set()
-        self.used_letters = {'correct': set(), 'present': set(), 'absent': set()}
+        self.used_letters = {'correct': set(), 'misplaced': set(), 'absent': set()}
         self.last_interaction = datetime.datetime.now()
         self.message_id = message_id
 
@@ -421,7 +421,7 @@ class WordleGame:
                 s_list[i] = None
                 g_list[i] = None
                 self.used_letters['correct'].add(letter)
-                self.used_letters['present'].discard(letter)
+                self.used_letters['misplaced'].discard(letter)
 
         # 2. Yellows (Misplaced)
         for i in range(5):
@@ -435,11 +435,11 @@ class WordleGame:
                 s_list[s_list.index(ch)] = None
 
                 if letter not in self.used_letters['correct']:
-                    self.used_letters['present'].add(letter)
+                    self.used_letters['misplaced'].add(letter)
 
         # 3. Absents (Grey/White)
         self.used_letters['absent'].update(
-            set(guess) - self.used_letters['correct'] - self.used_letters['present']
+            set(guess) - self.used_letters['correct'] - self.used_letters['misplaced']
         )
 
         return "".join(res)
