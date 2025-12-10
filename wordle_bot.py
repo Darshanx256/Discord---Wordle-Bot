@@ -754,10 +754,21 @@ async def leaderboard(interaction: discord.Interaction):
 
 @bot.tree.command(name="leaderboard_global", description="Global Leaderboard.")
 async def leaderboard_global(interaction: discord.Interaction):
-    await interaction.response.defer()
+    # --- Critical Fix: Check if the interaction has already been acknowledged/timed out ---
+    if not interaction.response.is_done():
+        try:
+            # Attempt to defer the response to acknowledge the command
+            await interaction.response.defer()
+        except discord.errors.NotFound:
+            # If defer fails (404 Unknown interaction), the bot cannot proceed 
+            # as the token has expired/been used.
+            print("Interaction already timed out or processed elsewhere.")
+            return
+
     uid = interaction.user.id
     
     try:
+        # 1. FETCH DATA FROM MATERIALIZED VIEW
         response = bot.supabase_client.table('global_leaderboard') \
             .select('user_id, global_wins, global_games, global_score, global_rank') \
             .order('global_rank', desc=False) \
@@ -768,22 +779,25 @@ async def leaderboard_global(interaction: discord.Interaction):
         
         for row in response.data:
             user_id = row['user_id']
+            # Map columns to the expected order: (uid, wins, games, score)
             scored_results.append((
                 user_id,
                 row['global_wins'],
                 row['global_games'],
-                round(row['global_score'], 2)
+                round(row['global_score'], 2) # Rounding to 2 decimals
             ))
             
             if user_id == uid:
                 user_rank = row['global_rank']
         
     except Exception as e:
+        # Use followup.send since the interaction was deferred (or attempted to be)
         return await interaction.followup.send("❌ Database error retrieving global leaderboard.", ephemeral=True)
 
     if not scored_results:
         return await interaction.followup.send("No global games yet!", ephemeral=True)
 
+    # 2. FORMATTING AND DISPLAY
     data = await fetch_and_format_rankings(scored_results, bot)
     
     footer_text = "Global Leaderboard"
@@ -799,7 +813,6 @@ async def leaderboard_global(interaction: discord.Interaction):
     )
     
     await interaction.followup.send(embed=view.create_embed(), view=view)
-
 
 @bot.tree.command(name="profile", description="Check your personal stats.")
 async def profile(interaction: discord.Interaction):
