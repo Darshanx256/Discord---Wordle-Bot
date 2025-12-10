@@ -10,6 +10,59 @@ import asyncio
 import sys
 import datetime
 from supabase import create_client, Client
+import requests
+
+# --- 0. EMOJI PREREQUISITES ---
+def load_app_emojis(bot_token, app_id):
+    url = f"https://discord.com/api/v10/applications/{app_id}/emojis"
+    headers = {"Authorization": f"Bot {bot_token}"}
+    data = requests.get(url, headers=headers).json()
+
+    E = {}
+
+    for e in data["items"]:
+        raw = e["name"]                  # keep original case for ID
+        raw_lower = raw.lower()          # for parsing
+        eid = e["id"]
+        is_anim = e.get("animated", False)
+        prefix = "a" if is_anim else ""
+
+        # final Discord emoji token
+        token = f"<{prefix}:{raw}:{eid}>"
+
+        # =====================================================
+        # 1) KEYBOARD FORMAT—kbd_A_correct_green
+        # =====================================================
+        if raw_lower.startswith("kbd_"):
+            # ex: kbd_A_correct_green -> ["kbd", "A", "correct", "green"]
+            parts = raw.split("_")
+            letter = parts[1].lower()            # "A" → "a"
+            state  = parts[2].lower()            # "correct"
+            key = f"{letter}_{state}"            # "a_correct"
+            E[key] = token
+            continue
+
+        # =====================================================
+        # 2) WORDLE BLOCK FORMAT—green_A / yellow_A / white_A
+        # =====================================================
+        if raw_lower.startswith(("green_", "yellow_", "white_")):
+            # ex: green_A → green, A
+            color, letter = raw.split("_")       # letter still uppercase
+            color = color.lower()
+            letter = letter.lower()
+            key = f"block_{letter}_{color}"      # block_a_green
+            E[key] = token
+            continue
+
+        # ignore anything else
+
+    return E
+
+# ---- call it once on startup ----
+EMOJIS = load_app_emojis(BOT_TOKEN, APP_ID)
+
+# ---- call it (once) ----
+EMOJIS = load_app_emojis(BOT_TOKEN, APP_ID)
 
 # --- 1. CONFIGURATION ---
 load_dotenv()
@@ -70,26 +123,33 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
         )
     #egg end
 
-    """Generates the stylized keypad using Discord Markdown."""
+    """Generates the stylized keypad using Discord app emojis."""
     output_lines = []
     for row in KEYBOARD_LAYOUT:
         line = ""
         for char_key in row:
-            char = char_key.lower()
-            formatting = ""
-            if char in used_letters['correct']: formatting = "**"
-            elif char in used_letters['present']: formatting = "__"
-            elif char in used_letters['absent']: formatting = "~~"
-            line += f"{formatting}{char_key}{formatting} "
+            c = char_key.lower()
+            if c in used_letters['correct']:
+                state = "correct"
+            elif c in used_letters['present']:
+                state = "present"
+            elif c in used_letters['absent']:
+                state = "absent"
+            else:
+                state = "unknown"
+            line += EMOJIS[f"{c}_{state}"] + " "
         output_lines.append(line.strip())
 
     output_lines[1] = u"\u2007" + output_lines[1]
-    output_lines[2] = u"\u2007\u2007" + output_lines[2] 
+    output_lines[2] = u"\u2007\u2007" + output_lines[2]
     keypad_display = "\n".join(output_lines)
-    
-    # Updated legend formatting
-    legend = "\n\nLegend:\n**BOLD** = Correct | __UNDERLINE__ = Misplaced | ~~STRIKEOUT~~ = Absent\n"
-    
+
+    legend = (
+        "\n\nLegend:\n"
+        f"{EMOJIS['a_correct']} = Correct | "
+        f"{EMOJIS['a_present']} = Misplaced | "
+        f"{EMOJIS['a_absent']} = Absent\n"
+    )
     return keypad_display + extra_line + legend
 
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
@@ -348,38 +408,42 @@ class WordleGame:
     def evaluate_guess(self, guess: str) -> str:
         s_list = list(self.secret)
         g_list = list(guess)
-        res = ["⬜"] * 5 
-        
+            
+        # default = white block emojis
+        res = [EMOJIS[f"block_{ch.lower()}_white"] for ch in guess]
+
+        # Track absents early (optional, kept from your version)
         cur_abs = set(guess) - self.secret_set 
 
         # 1. Greens (Exact Matches)
         for i in range(5):
             if g_list[i] == s_list[i]:
-                res[i] = "🟩"
-                s_list[i] = None; g_list[i] = None
-                self.used_letters['correct'].add(guess[i])
-                self.used_letters['present'].discard(guess[i]) # If it's Green, it can't be Yellow
+                letter = guess[i].lower()
+                res[i] = EMOJIS[f"block_{letter}_green"]
+                s_list[i] = None
+                g_list[i] = None
+                self.used_letters['correct'].add(letter)
+                self.used_letters['present'].discard(letter)
 
         # 2. Yellows (Misplaced)
         for i in range(5):
-            if res[i] == "🟩": continue
+            if res[i] == EMOJIS.get(f"block_{guess[i].lower()}_green"): 
+                continue
+
             ch = g_list[i]
-            
-            # Use 'ch in s_list' for checking presence in the remaining characters
             if ch is not None and ch in s_list:
-                res[i] = "🟨"
-                s_list[s_list.index(ch)] = None 
-                
-                # Use set lookups to prevent overwriting correct letters
-                if ch not in self.used_letters['correct']: 
-                    self.used_letters['present'].add(ch)
-                    
-        # 3. Absents (Grey)
-        # Final update using set arithmetic for efficiency and correctness
+                letter = ch.lower()
+                res[i] = EMOJIS[f"block_{letter}_yellow"]
+                s_list[s_list.index(ch)] = None
+
+                if letter not in self.used_letters['correct']:
+                    self.used_letters['present'].add(letter)
+
+        # 3. Absents (Grey/White)
         self.used_letters['absent'].update(
             set(guess) - self.used_letters['correct'] - self.used_letters['present']
         )
-        
+
         return "".join(res)
 
     def process_turn(self, guess: str, user):
