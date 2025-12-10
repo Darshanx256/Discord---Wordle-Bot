@@ -13,7 +13,7 @@ from supabase import create_client, Client
 import requests
 
 # --- 0. EMOJI PREREQUISITES ---
-def load_app_emojis(bot_token, app_id):
+def load_app_emojis(TOKEN, app_id):
     url = f"https://discord.com/api/v10/applications/{app_id}/emojis"
     headers = {"Authorization": f"Bot {bot_token}"}
     data = requests.get(url, headers=headers).json()
