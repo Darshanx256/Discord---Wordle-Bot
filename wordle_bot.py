@@ -145,7 +145,7 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
     legend = (
         "\n\nLegend:\n"
         f"{EMOJIS['a_correct']} = Correct | "
-        f"{EMOJIS['a_present']} = Misplaced | "
+        f"{EMOJIS['a_misplaced']} = Misplaced | "
         f"{EMOJIS['a_absent']} = Absent\n"
     )
     return keypad_display + extra_line + legend
