@@ -130,7 +130,7 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
             if c in used_letters['correct']:
                 state = "correct"
             elif c in used_letters['misplaced']:
-                state = "present"
+                state = "misplaced"
             elif c in used_letters['absent']:
                 state = "absent"
             else:
