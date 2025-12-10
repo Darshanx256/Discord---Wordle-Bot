@@ -61,11 +61,8 @@ def load_app_emojis(bot_token = TOKEN, app_id = APP_ID):
 
     return E
 
-# ---- call it once on startup ----
-EMOJIS = load_app_emojis(BOT_TOKEN, APP_ID)
-
-# ---- call it (once) ----
-EMOJIS = load_app_emojis(BOT_TOKEN, APP_ID)
+# ---- call it before main program ----
+EMOJIS = load_app_emojis(TOKEN, APP_ID)
 
 # --- 1. CONFIGURATION ---
 # NEW Environment variables for Supabase Client
