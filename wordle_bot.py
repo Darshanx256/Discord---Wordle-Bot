@@ -109,19 +109,16 @@ def get_tier_display(percentile: float) -> str:
     return TIERS[-1][1], TIERS[-1][2] # Default to lowest
 
 def get_markdown_keypad_status(used_letters: dict) -> str:
-    
-#egg start
+    # --- EASTER EGG ---
     extra_line = ""
-    if random.randint(1,50) == 1:
+    if random.randint(1, 50) == 1:
         extra_line = (
             "\n"
             "> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
-            "> 🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\n"
-            "> Have a nice day!"
+            "> 🦆 You found the Duck of Luck! Have a nice day!"
         )
-    #egg end
+    # ------------------
 
-    """Generates the stylized keypad using Discord app emojis."""
     output_lines = []
     for row in KEYBOARD_LAYOUT:
         line = ""
@@ -135,21 +132,35 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
                 state = "absent"
             else:
                 state = "unknown"
-            line += EMOJIS[f"{c}_{state}"] + " "
+
+            # SAFETY CHECK: If the emoji key doesn't exist, fallback to text
+            emoji_key = f"{c}_{state}"
+            if emoji_key in EMOJIS:
+                line += EMOJIS[emoji_key] + " "
+            else:
+                line += f"` {char_key} ` " 
+                
         output_lines.append(line.strip())
 
+    # Add indentation for QWERTY look
     output_lines[1] = u"\u2007" + output_lines[1]
     output_lines[2] = u"\u2007\u2007" + output_lines[2]
+    
     keypad_display = "\n".join(output_lines)
 
+    # Safety check for Legend keys too
+    legend_a_corr = EMOJIS.get('a_correct', '🟩')
+    legend_a_mis = EMOJIS.get('a_misplaced', '🟨')
+    legend_a_abs = EMOJIS.get('a_absent', '⬛')
+
     legend = (
-        "\n\nLegend:\n"
-        f"{EMOJIS['a_correct']} = Correct | "
-        f"{EMOJIS['a_misplaced']} = Misplaced | "
-        f"{EMOJIS['a_absent']} = Absent\n"
+        "\n\n**Legend:**\n"
+        f"{legend_a_corr} = Correct | "
+        f"{legend_a_mis} = Misplaced | "
+        f"{legend_a_abs} = Absent\n"
     )
     return keypad_display + extra_line + legend
-
+    
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
     """Updates score using the Supabase client's upsert method."""
     if not guild_id: return 
@@ -455,11 +466,16 @@ class WordleGame:
 # ========= 5. BOT SETUP =========
 class WordleBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
+        # ENABLE MEMBERS INTENT for Leaderboards
+        intents = discord.Intents.default()
+        intents.guilds = True
+        intents.members = True # <--- CRITICAL for get_member()
+        
+        super().__init__(command_prefix="!", intents=intents)
         self.games = {} 
         self.secrets = []       
         self.hard_secrets = []  
-        self.valid_set = set()  # Full dictionary (Set, for O(1) validation) 
+        self.valid_set = set()  
         self.supabase_client: Client = None
 
     async def setup_hook(self):
@@ -1407,7 +1423,6 @@ WHERE
     AND s.guild_id = %(guild_id)s;
 """
 
-
 @bot.tree.command(name="profile", description="Check your personal stats.")
 async def profile(interaction: discord.Interaction):
     if not interaction.guild: return
@@ -1416,91 +1431,99 @@ async def profile(interaction: discord.Interaction):
     
     await interaction.response.defer()
     
+    # 1. FETCH & CALC DATA (Run in Thread)
     def fetch_profile_stats_sync():
-        # --- PHASE 1: SINGLE OPTIMIZED QUERY ---
-        profile_data = bot.supabase_client.from_('scores').select(
-            """
-            wins:base_guild_wins, 
-            total_games:base_guild_games,
-            guild_leaderboard (guild_score, guild_rank),
-            global_leaderboard (global_wins, global_games, global_score, global_rank)
-            """
-        ).eq('user_id', uid).eq('guild_id', guild_id).limit(1).single().execute()
-        
-        data = profile_data.data if profile_data.data else {}
-
-        s_wins = data.get('base_guild_wins', 0)
-        s_games = data.get('base_guild_games', 0)
-        
-        guild_lb = data.get('guild_leaderboard')
-        g_lb = data.get('global_leaderboard')
-
-        # Server Stats
-        s_score = guild_lb[0]['guild_score'] if guild_lb else calculate_player_score(s_wins, s_games)
-        s_rank_num = guild_lb[0]['guild_rank'] if guild_lb else 'N/A'
-
-        # Global Stats
-        g_wins = g_lb[0]['global_wins'] if g_lb else 0
-        g_games = g_lb[0]['global_games'] if g_lb else 0
-        g_score = g_lb[0]['global_score'] if g_lb else calculate_player_score(g_wins, g_games)
-        g_rank_num = g_lb[0]['global_rank'] if g_lb else 'N/A'
-        
-        # --- PHASE 2: TIER CALCULATION ---
-
-        all_guild_scores_response = bot.supabase_client.table('guild_leaderboard') \
-            .select('guild_score') \
-            .eq('guild_id', guild_id) \
-            .order('guild_score', desc=True) \
-            .limit(10000) \
-            .execute()
+        try:
+            # Single query for User Score + Joining Views
+            # Note: Ensure your Supabase Foreign Keys are set up for this join to work,
+            # otherwise, you might need 3 separate queries.
+            profile_data = bot.supabase_client.from_('scores').select(
+                "wins, total_games, guild_leaderboard(guild_score, guild_rank), global_leaderboard(global_wins, global_games, global_score, global_rank)"
+            ).eq('user_id', uid).eq('guild_id', guild_id).maybe_single().execute()
             
-        all_global_scores_response = bot.supabase_client.table('global_leaderboard') \
-            .select('global_score') \
-            .order('global_score', desc=True) \
-            .limit(100000) \
-            .execute()
+            data = profile_data.data if profile_data.data else {}
 
-        server_scores = sorted([r['guild_score'] for r in all_guild_scores_response.data])
-        global_scores_list = sorted([r['global_score'] for r in all_global_scores_response.data])
+            # Parse Local Data
+            s_wins = data.get('wins', 0)
+            s_games = data.get('total_games', 0)
             
-        # Calculate Server Tier
-        s_rank_idx = sum(1 for s in server_scores if s < s_score)
-        s_perc = s_rank_idx / len(server_scores) if server_scores else 0
-        s_tier_icon, s_tier_name = get_tier_display(s_perc)
-        
-        # Calculate Global Tier
-        g_rank_idx = sum(1 for s in global_scores_list if s < g_score)
-        g_perc = g_rank_idx / len(global_scores_list) if global_scores_list else 0
-        g_tier_icon, g_tier_name = get_tier_display(g_perc)
-        
-        return (
-            s_wins, s_games, round(s_score, 2), s_tier_icon, s_tier_name, s_rank_num,
-            g_wins, g_games, round(g_score, 2), g_tier_icon, g_tier_name, g_rank_num
-        )
-        
-    try:
-        stats = await asyncio.to_thread(fetch_profile_stats_sync)
-        (s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
-         g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num) = stats
+            # Safe parsing of nested data (Supabase returns list for joins)
+            guild_lb_list = data.get('guild_leaderboard', [])
+            guild_lb = guild_lb_list[0] if guild_lb_list else {}
+            
+            global_lb_list = data.get('global_leaderboard', [])
+            g_lb = global_lb_list[0] if global_lb_list else {}
 
-    except Exception as e:
-        return await interaction.followup.send("❌ Database error retrieving your profile.", ephemeral=True)
+            # Server Stats
+            # FIX: Used 'calculate_score' instead of 'calculate_player_score'
+            s_score = guild_lb.get('guild_score', calculate_score(s_wins, s_games))
+            s_rank_num = guild_lb.get('guild_rank', 'N/A')
 
-    # --- DISPLAY LOGIC ---
+            # Global Stats
+            g_wins = g_lb.get('global_wins', 0)
+            g_games = g_lb.get('global_games', 0)
+            g_score = g_lb.get('global_score', calculate_score(g_wins, g_games))
+            g_rank_num = g_lb.get('global_rank', 'N/A')
+            
+            # --- TIER CALCULATION ---
+            # To get accurate percentile, we need a rough count or list of all scores.
+            # Optimized: Fetch only scores column to save bandwidth
+            all_guild_scores = bot.supabase_client.table('guild_leaderboard') \
+                .select('guild_score').eq('guild_id', guild_id).execute()
+            
+            all_global_scores = bot.supabase_client.table('global_leaderboard') \
+                .select('global_score').limit(50000).execute() # Cap limit for safety
+
+            server_scores = sorted([r['guild_score'] for r in all_guild_scores.data])
+            global_scores_list = sorted([r['global_score'] for r in all_global_scores.data])
+            
+            # Calculate Tiers
+            s_rank_idx = sum(1 for s in server_scores if s < s_score)
+            s_perc = s_rank_idx / len(server_scores) if server_scores else 0
+            s_tier_icon, s_tier_name = get_tier_display(s_perc)
+            
+            g_rank_idx = sum(1 for s in global_scores_list if s < g_score)
+            g_perc = g_rank_idx / len(global_scores_list) if global_scores_list else 0
+            g_tier_icon, g_tier_name = get_tier_display(g_perc)
+            
+            return (
+                s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
+                g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num
+            )
+        except Exception as e:
+            print(f"Profile Fetch Error: {e}")
+            return None
+
+    # Run the blocking DB code in a thread
+    stats = await asyncio.to_thread(fetch_profile_stats_sync)
+
+    if not stats:
+        return await interaction.followup.send("❌ Error fetching profile or no data found.", ephemeral=True)
+
+    # Unpack
+    (s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
+     g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num) = stats
+
+    # 2. DISPLAY LOGIC
     embed = discord.Embed(color=discord.Color.teal())
     embed.set_author(name=f"{interaction.user.display_name}'s Profile", icon_url=interaction.user.display_avatar.url)
     
+    # Global Field
+    g_rank_display = f"**#{g_rank_num}**" if isinstance(g_rank_num, int) else str(g_rank_num)
     embed.add_field(
-        name="🏆 **Rank**", 
+        name="🌍 **Global Aggregate**", 
         value=(
-            f"\u2003{g_tier_icon} **{g_tier_name}**\n"
-            f"\u2003Global Rank: **#{g_rank_num}**"
+            f"\u2003🏅 Rank: {g_rank_display}\n"
+            f"\u2003🎗️ Tier: {g_tier_icon} **{g_tier_name}**\n"
+            f"\u2003📊 Score: **{g_score:.2f}**\n"
+            f"\u2003✅ Wins: **{g_wins}**\n"
+            f"\u2003🎲 Games: **{g_games}**"
         ), 
-        inline=False
+        inline=True
     )
-    
-    s_rank_display = f"**#{s_rank_num}**" if isinstance(s_rank_num, int) else s_rank_num
-    
+
+    # Server Field
+    s_rank_display = f"**#{s_rank_num}**" if isinstance(s_rank_num, int) else str(s_rank_num)
     embed.add_field(
         name=f"🏰 **{interaction.guild.name}**", 
         value=(
@@ -1513,23 +1536,10 @@ async def profile(interaction: discord.Interaction):
         inline=True
     )
     
-    g_rank_display = f"**#{g_rank_num}**" if isinstance(g_rank_num, int) else g_rank_num
-    
-    embed.add_field(
-        name="🌍 **Global Aggregate**", 
-        value=(
-            f"\u2003🏅 Rank: {g_rank_display}\n"
-            f"\u2003🎗️ Tier: {g_tier_icon} **{g_tier_name}**\n"
-            f"\u2003📊 Score: **{g_score:.2f}**\n"
-            f"\u2003✅ Wins: **{g_wins}**\n"
-            f"\u2003🎲 Games: **{g_games}**"
-        ), 
-        inline=True
-    )
-    
     embed.set_footer(text="Keep playing to rank up!", icon_url=bot.user.display_avatar.url)
     
     await interaction.followup.send(embed=embed)
+
     
 if __name__ == "__main__":
     t = threading.Thread(target=run_flask_server)
