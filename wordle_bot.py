@@ -10,6 +10,7 @@ import asyncio
 import sys
 import datetime
 from supabase import create_client, Client
+import requests
 
 # --- 0. EMOJI PREREQUISITES ---
 load_dotenv()
