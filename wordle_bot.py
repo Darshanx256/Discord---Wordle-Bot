@@ -932,7 +932,7 @@ async def help_command(interaction: discord.Interaction):
 
     embed.set_footer(text="Green=Correct | Yellow=Misplaced | White=Absent")
     
-    await interaction.response.send_message(embed=embed, view=view ephemeral=True)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
     
 
 @bot.tree.command(name="leaderboard", description="Server Leaderboard.")
