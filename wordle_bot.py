@@ -753,17 +753,17 @@ async def guess(interaction: discord.Interaction, word: str):
             await asyncio.to_thread(update_leaderboard, bot, pid, interaction.guild_id, (pid == winner_id))
         bot.games.pop(cid, None)
 
-# ---
-
-## 🔑 Finalized `get_markdown_keypad_status` (Efficient & Coloring Fix)
-
-You must also ensure this utility function is updated to prevent `KeyError` and ensure coloring works correctly:
-
-```python
 def get_markdown_keypad_status(used_letters: dict) -> str:
-    # --- RARE DUCK EGG LOGIC (Omitted for brevity) ---
+ #egg start
     extra_line = ""
-    # ... (Your rare duck logic here)
+    if random.randint(1,50) == 1:
+        extra_line = (
+            "\n"
+            "> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
+            "> 🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\n"
+            "> Have a nice day!"
+        )
+    #egg end
 
     output_lines = []
     
