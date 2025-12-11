@@ -461,18 +461,18 @@ class WordleGame:
         return "".join(emoji_tags)
 
     def process_turn(self, guess: str, user):
-        guess = guess.upper() # Ensure the word is uppercase
+        guess = guess.upper()
         self.last_interaction = datetime.datetime.now()
         
-        # Pass the global EMOJIS dictionary
         pat = self.evaluate_guess(guess, EMOJIS) 
         
         self.history.append({'word': guess, 'pattern': pat, 'user': user})
         self.participants.add(user.id)
         self.guessed_words.add(guess)
         
-        # Check for win using the corrected uppercase guess
-        return pat, (guess == self.secret), ((guess == self.secret) or (self.attempts_used >= self.max_attempts))
+        secret_upper = self.secret.upper()
+        
+        return pat, (guess == secret_upper), ((guess == secret_upper) or (self.attempts_used >= self.max_attempts))
 
 # ========= 5. BOT SETUP =========
 class WordleBot(commands.Bot):
