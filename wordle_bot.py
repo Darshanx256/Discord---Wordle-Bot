@@ -143,7 +143,7 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
         output_lines.append(line.strip())
 
     output_lines[1] = u"\u2007\u2007" + output_lines[1]
-    output_lines[2] = u"\u2007\u2007\u2007" + output_lines[2] 
+    output_lines[2] = u"\u2007\u2007\u2007\u2007" + output_lines[2] 
     keypad_display = "\n".join(output_lines)
         
     return keypad_display + "\n" + extra_line
@@ -603,9 +603,9 @@ async def start(interaction: discord.Interaction):
     # Get secret from the simple pool
     secret = get_next_secret(bot, interaction.guild_id)
     
-    embed = discord.Embed(title="⚠️ The game is malfunctioning :(", color=discord.Color.blue())
-    embed.description = "It will be fixed very soon with new features"
-    embed.add_field(name="- Developer", value="`Thank You for patience`", inline=False)
+    embed = discord.Embed(title="✨ Wordle Started!(Simple)", color=discord.Color.blue())
+    embed.description = "A simple **5-letter word** has been chosen. **6 attempts** total."
+    embed.add_field(name="How to Play", value="`guess word:xxxxx`", inline=False)
     
     await interaction.response.send_message(embed=embed)
     
