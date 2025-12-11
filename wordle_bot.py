@@ -115,51 +115,42 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
     extra_line = ""
     if random.randint(1,50) == 1:
         extra_line = (
-            "\n"
+            "\n\n"
             "> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
             "> 🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\n"
             "> Have a nice day!"
         )
     #egg end
 
+    """Generates the stylized keypad using Discord Markdown."""
+    output_lines = []
     for row in KEYBOARD_LAYOUT:
         line = ""
         for char_key in row:
-            c = char_key.lower()
+            char = char_key.lower()
+            formatting = ""
+            if char in used_letters['correct']: formatting = "correct"
+            elif char in used_letters['present']: formatting = "misplaced"
+            elif char in used_letters['absent']: formatting = "absent"
             
-            # 1. Determine the state suffix
-            if c in used_letters['correct']:
-                state_suffix = "correct"
-            elif c in used_letters['present']:
-                state_suffix = "misplaced"  # Use 'misplaced' for the emoji name suffix
-            elif c in used_letters['absent']:
-                state_suffix = "absent"
+            # --- START MINIMAL MODIFICATION ---
+            if not formatting: 
+                emoji_display = char_key
             else:
-                state_suffix = "unknown"
+                emoji_key = f"{char}_{formatting}"
+                emoji_display = EMOJIS.get(emoji_key, char_key)
             
-            # 2. Construct the required emoji key (e.g., "a_correct")
-            emoji_key = f"{c}_{state_suffix}"
-            
-            # 3. CRITICAL FIX: Use .get() for safe lookup. 
-            # If the lookup fails (e.g., for "q_unknown"), fall back to the raw uppercase letter.
-            # This prevents the whole command from crashing.
-            emoji_display = EMOJIS.get(emoji_key, char_key.upper()) 
-            
-            # The "unknown" state might need a specific color (like white/light grey) 
-            # if you didn't define 26 "unknown" emojis. 
-            # If you want a specific "unknown" look, you need a different fallback logic here.
-            if state_suffix == "unknown":
-                # Fallback to the raw letter (no color) or a generic block if needed
-                emoji_display = char_key.upper()
-
-            # 4. Append the emoji (or fallback) and a space
-            line += emoji_display + " "
+            line += emoji_display + " " 
+            # --- END MINIMAL MODIFICATION ---
             
         output_lines.append(line.strip())
 
-    # ... (alignment and legend logic)
-    
-    return keypad_display + extra_line + legend
+    output_lines[1] = u"\u2007" + output_lines[1]
+    output_lines[2] = u"\u2007\u2007" + output_lines[2] 
+    keypad_display = "\n".join(output_lines)
+        
+    return keypad_display + extra_line
+
 
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
     """Updates score using the Supabase client's upsert method."""
