@@ -122,46 +122,42 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
         )
     #egg end
 
-    output_lines = []
-    # KEYBOARD_LAYOUT is a list of strings, e.g., ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
     for row in KEYBOARD_LAYOUT:
         line = ""
         for char_key in row:
             c = char_key.lower()
             
-            # --- FLAWLESS EMOJI FUSION LOGIC ---
-            # 1. Prioritize Green (Correct)
+            # 1. Determine the state suffix
             if c in used_letters['correct']:
                 state_suffix = "correct"
-            # 2. Check for Present (The key in the 'used_letters' dictionary)
             elif c in used_letters['present']:
-                # The internal data key is 'present', but the emoji name suffix is 'misplaced'
-                state_suffix = "misplaced" 
-            # 3. Check for Absent
+                state_suffix = "misplaced"  # Use 'misplaced' for the emoji name suffix
             elif c in used_letters['absent']:
                 state_suffix = "absent"
-            # 4. Fallback (Not yet guessed)
             else:
                 state_suffix = "unknown"
             
-            # Retrieve the correct custom emoji string using the determined state suffix
-            line += EMOJIS[f"{c}_{state_suffix}"] + " "
-            # --- END FUSION ---
+            # 2. Construct the required emoji key (e.g., "a_correct")
+            emoji_key = f"{c}_{state_suffix}"
+            
+            # 3. CRITICAL FIX: Use .get() for safe lookup. 
+            # If the lookup fails (e.g., for "q_unknown"), fall back to the raw uppercase letter.
+            # This prevents the whole command from crashing.
+            emoji_display = EMOJIS.get(emoji_key, char_key.upper()) 
+            
+            # The "unknown" state might need a specific color (like white/light grey) 
+            # if you didn't define 26 "unknown" emojis. 
+            # If you want a specific "unknown" look, you need a different fallback logic here.
+            if state_suffix == "unknown":
+                # Fallback to the raw letter (no color) or a generic block if needed
+                emoji_display = char_key.upper()
+
+            # 4. Append the emoji (or fallback) and a space
+            line += emoji_display + " "
             
         output_lines.append(line.strip())
 
-    # Add space alignment for the second and third rows (for QWERTY layout)
-    output_lines[1] = u"\u2007" + output_lines[1]
-    output_lines[2] = u"\u2007\u2007" + output_lines[2]
-    keypad_display = "\n".join(output_lines)
-
-    # Updated legend formatting using the custom emojis for clarity
-    legend = (
-        "\n\nLegend:\n"
-        f"{EMOJIS.get('a_correct', 'A')} = Correct | "
-        f"{EMOJIS.get('a_misplaced', 'A')} = Misplaced | " # Uses 'misplaced' for the legend emoji name
-        f"{EMOJIS.get('a_absent', 'A')} = Absent\n"
-    )
+    # ... (alignment and legend logic)
     
     return keypad_display + extra_line + legend
 
