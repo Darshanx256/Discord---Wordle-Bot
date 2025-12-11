@@ -744,67 +744,6 @@ async def guess(interaction: discord.Interaction, word: str):
             await asyncio.to_thread(update_leaderboard, bot, pid, interaction.guild_id, (pid == winner_id))
         bot.games.pop(cid, None)
 
-def get_markdown_keypad_status(used_letters: dict) -> str:
- #egg start
-    extra_line = ""
-    if random.randint(1,50) == 1:
-        extra_line = (
-            "\n"
-            "> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
-            "> 🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\n"
-            "> Have a nice day!"
-        )
-    #egg end
-
-    output_lines = []
-    
-    # Using a list comprehension for KEYBOARD_LAYOUT ensures efficiency and clarity.
-    for row in KEYBOARD_LAYOUT:
-        line = ""
-        for char_key in row:
-            c = char_key.lower()
-            
-            # 1. Determine the state suffix with correct priority
-            if c in used_letters['correct']:
-                state_suffix = "correct"
-            elif c in used_letters['present']:
-                state_suffix = "misplaced"  # Use 'misplaced' for the emoji name suffix
-            elif c in used_letters['absent']:
-                state_suffix = "absent"
-            else:
-                state_suffix = "unknown"
-            
-            # 2. Construct the required emoji key (e.g., "a_correct")
-            emoji_key = f"{c}_{state_suffix}"
-            
-            # 3. CRITICAL FIX: Safe lookup prevents crash and ensures coloring
-            if state_suffix == "unknown":
-                # Untouched keys (most efficient: use raw letter)
-                emoji_display = char_key.upper()
-            else:
-                # Colored keys (look up custom emoji; if missing, use raw letter)
-                emoji_display = EMOJIS.get(emoji_key, char_key.upper())
-
-            # 4. Append the emoji (or fallback) and a space
-            line += emoji_display + " "
-            
-        output_lines.append(line.strip())
-
-    # Add space alignment for the second and third rows (for QWERTY layout)
-    output_lines[1] = u"\u2007" + output_lines[1]
-    output_lines[2] = u"\u2007\u2007" + output_lines[2]
-    keypad_display = "\n".join(output_lines)
-
-    # Updated legend formatting (safe lookup with .get())
-    legend = (
-        "\n\nLegend:\n"
-        f"{EMOJIS.get('a_correct', 'A')} = Correct | "
-        f"{EMOJIS.get('a_misplaced', 'A')} = Misplaced | " 
-        f"{EMOJIS.get('a_absent', 'A')} = Absent\n"
-    )
-    
-    return keypad_display + extra_line + legend
-
 @bot.tree.command(name="wordle_board", description="View current board.")
 async def board(interaction: discord.Interaction):
     if not interaction.guild: return
