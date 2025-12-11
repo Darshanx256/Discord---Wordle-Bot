@@ -420,32 +420,33 @@ class WordleGame:
 
     def evaluate_guess(self, guess: str, EMOJIS: dict) -> str: 
         guess = guess.upper()
-        s_list = list(self.secret)
+        secret_upper = self.secret.upper() 
+        s_list = list(secret_upper)
         g_list = list(guess)
         state_list = ["white"] * 5
         
-        # FIX 2: Remove this unused and unnecessary line
-        # cur_abs = set(guess) - self.secret_set 
-
         # 1. Greens (Exact Matches)
-        # FIX 3: Add the loop back
-        for i in range(5): 
+        for i in range(5):
             if g_list[i] == s_list[i]:
                 state_list[i] = "green"
-                s_list[i] = None; g_list[i] = None
+                # Mark both letter slots as used
+                s_list[i] = None
+                g_list[i] = None
+                
+                # Update keyboard state
                 self.used_letters['correct'].add(guess[i])
                 self.used_letters['present'].discard(guess[i])
 
         # 2. Yellows (Misplaced)
-        # FIX 3: Add the loop back
         for i in range(5):
             if state_list[i] == "green": continue
             ch = g_list[i]
             
             if ch is not None and ch in s_list:
                 state_list[i] = "yellow"
-                s_list[s_list.index(ch)] = None 
                 
+                s_list[s_list.index(ch)] = None 
+                g_list[i] = None # <--- Important!
                 if ch not in self.used_letters['correct']:  
                     self.used_letters['present'].add(ch)
                     
@@ -455,24 +456,20 @@ class WordleGame:
              if state_list[i] == "white":
                  self.used_letters['absent'].add(ch)
 
-        # Ensure that letters marked 'correct' or 'present' are not in 'absent' 
+        # Ensuring that letters marked 'correct' or 'present' are not in 'absent' 
         self.used_letters['absent'] -= (self.used_letters['correct'] | self.used_letters['present'])
 
 
-        # --- Phase 4: Construct the final emoji pattern string using the requested format ---
+        # --- Phase 4: Construct the final emoji pattern string ---
         emoji_tags = [""] * 5
         for i in range(5):
             char = guess[i].lower()
-            state = state_list[i]  
+            state = state_list[i]
             
-            # CRITICAL FIX: Using the requested 'block_[char]_[color]' format
             emoji_key = f"block_{char}_{state}"
-            
-            # Retrieve the full Discord emoji tag
             emoji_tags[i] = EMOJIS.get(emoji_key, char.upper())
 
         return "".join(emoji_tags)
-
 
     def process_turn(self, guess: str, user):
         guess = guess.upper() # Ensure the word is uppercase
