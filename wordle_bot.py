@@ -10,7 +10,6 @@ import asyncio
 import sys
 import datetime
 from supabase import create_client, Client
-import requests
 
 # --- 0. EMOJI PREREQUISITES ---
 load_dotenv()
@@ -687,6 +686,8 @@ async def guess(interaction: discord.Interaction, word: str):
         return await interaction.response.send_message(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
     pattern, win, game_over = game.process_turn(g_word, interaction.user)
+    
+    # 1. Capture the full, verbose keypad status
     keypad = get_markdown_keypad_status(game.used_letters)
     
     # Progress Bar Logic (simple emojis)
@@ -694,51 +695,54 @@ async def guess(interaction: discord.Interaction, word: str):
     empty = "○" * (6 - game.attempts_used)
     progress_bar = f"[{filled}{empty}]"
 
-    # Board Display
+    # Board Display (using only the emoji pattern)
     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
     
     # --- HINT SYSTEM ---
     hint_msg = ""
     # Trigger hint on 3rd attempt if no Green or Yellow tiles have been found across ALL history
     if game.attempts_used == 3:
-        # FIX: Change the check to look for the custom emoji color suffixes in the pattern
-        # The pattern now contains custom emoji tags like <:block_a_green:...>
         all_gray = all(
             "_green" not in x['pattern'] and "_yellow" not in x['pattern'] 
             for x in game.history
         )
-    
-        if all_gray:
-            # Find a letter in the secret word that hasn't been successfully guessed yet
-            known_absent = game.used_letters['absent'] 
         
-            # Filter secret letters (uppercase) that are not in the known_absent set (lowercase)
+        if all_gray:
+            known_absent = game.used_letters['absent']
             available_letters = [c for c in game.secret if c.lower() not in known_absent]
 
             if available_letters:
                 hint_letter = random.choice(available_letters).upper()
                 hint_msg = f"\n\n**💡 HINT!** The letter **{hint_letter}** is in the word."
     # ---
-
+    
+    # --- CRITICAL FIX START: Move Keyboard Status to Message Content ---
+    
+    # Construct the message content to hold the long keypad status
+    message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+    
     if win:
         flavor = get_win_flavor(game.attempts_used)
         embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
         embed.description = f"**{interaction.user.mention}** found the word: **{game.secret.upper()}** in {game.attempts_used}/6 attempts!"
         embed.add_field(name="Final Board", value=board_display, inline=False)
-        embed.add_field(name="Keyboard Status", value=keypad, inline=False)
+        # REMOVED: embed.add_field(name="Keyboard Status", value=keypad, inline=False)
     elif game_over:
         embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
         embed.description = f"The word was **{game.secret.upper()}**."
         embed.add_field(name="Final Board", value=board_display, inline=False)
-        embed.add_field(name="Keyboard Status", value=keypad, inline=False)
+        # REMOVED: embed.add_field(name="Keyboard Status", value=keypad, inline=False)
     else:
         embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
         embed.description = f"**{interaction.user.display_name}** guessed: `{g_word.upper()}`"
         embed.add_field(name="Current Board", value=board_display + hint_msg, inline=False)
-        embed.add_field(name="Keyboard Status", value=keypad, inline=False)
+        # REMOVED: embed.add_field(name="Keyboard Status", value=keypad, inline=False)
         embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
         
-    await interaction.response.send_message(embed=embed)
+    # Send the message using both the (long) content and the (short) embed
+    await interaction.response.send_message(content=message_content, embed=embed)
+    
+    # --- CRITICAL FIX END ---
 
     if game_over or win:
         winner_id = interaction.user.id if win else None
