@@ -694,7 +694,7 @@ async def guess(interaction: discord.Interaction, word: str):
     progress_bar = f"[{filled}{empty}]"
 
     # Board Display
-    board_display = "\n".join([f"`{h['word'].upper()}` {h['pattern']}" for h in game.history])
+    board_display = "\n".join([f"{h['pattern']}" for h in game.history])
     
     # --- HINT SYSTEM ---
     hint_msg = ""
