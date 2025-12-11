@@ -536,25 +536,25 @@ class WordleBot(commands.Bot):
             sys.exit(1) 
 
     @tasks.loop(minutes=60)
-        async def cleanup_task(self):
-            now = datetime.datetime.now()
-            to_remove = []
-            for cid, game in self.games.items():
-                delta = now - game.last_interaction
-                if delta.total_seconds() > 86400: # 24 Hours
-                    to_remove.append(cid)
-                    try:
-                        channel = self.get_channel(cid)
-                        if channel:
-                            embed = discord.Embed(title="⏰ Time's Up!", description=f"Game timed out.\nThe word was **{game.secret.upper()}**.", color=discord.Color.dark_grey())
-                            await channel.send(embed=embed)
-                            await asyncio.sleep(1) # Wait 1 second between sending cleanup messages
-                            # ---------------------------------
-                    except:
-                        pass
+    async def cleanup_task(self):
+        now = datetime.datetime.now()
+        to_remove = []
+        for cid, game in self.games.items():
+            delta = now - game.last_interaction
+            if delta.total_seconds() > 86400: # 24 Hours
+                to_remove.append(cid)
+                try:
+                    channel = self.get_channel(cid)
+                    if channel:
+                        embed = discord.Embed(title="⏰ Time's Up!", description=f"Game timed out.\nThe word was **{game.secret.upper()}**.", color=discord.Color.dark_grey())
+                        await channel.send(embed=embed)
+                        await asyncio.sleep(1) # Wait 1 second between sending cleanup messages
+                        # ---------------------------------
+                except:
+                    pass
         
-            for cid in to_remove:
-                self.games.pop(cid, None)
+        for cid in to_remove:
+            self.games.pop(cid, None)
 
 # ---- call it before main program ----
 EMOJIS = load_app_emojis(TOKEN, APP_ID)
