@@ -419,8 +419,8 @@ class WordleGame:
                 
                 # Update keyboard state
                 letter = guess[i].lower()
-                self.used_letters['correct'].add(guess[i])
-                self.used_letters['present'].discard(guess[i])
+                self.used_letters['correct'].add(letter)
+                self.used_letters['present'].discard(letter)
 
         # 2. Yellows (Misplaced)
         for i in range(5):
@@ -433,8 +433,8 @@ class WordleGame:
                 s_list[s_list.index(ch)] = None 
                 g_list[i] = None # <--- Important!
                 letter = ch.lower()
-                if ch not in self.used_letters['correct']:  
-                    self.used_letters['present'].add(ch)
+                if letter not in self.used_letters['correct']:  
+                    self.used_letters['present'].add(letter)
                     
         # 3. Absents (Grey) & Keyboard State Update
         for i in range(5):
@@ -443,7 +443,7 @@ class WordleGame:
              letter = ch.lower()
              
              if state_list[i] == "white":
-                 self.used_letters['absent'].add(ch)
+                 self.used_letters['absent'].add(letter)
 
         # Ensuring that letters marked 'correct' or 'present' are not in 'absent' 
         self.used_letters['absent'] -= (self.used_letters['correct'] | self.used_letters['present'])
