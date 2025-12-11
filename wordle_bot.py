@@ -132,16 +132,13 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
             if char in used_letters['correct']: formatting = "correct"
             elif char in used_letters['present']: formatting = "misplaced"
             elif char in used_letters['absent']: formatting = "absent"
+            else : formatting = "unknown"
             
-            # --- START MINIMAL MODIFICATION ---
-            if not formatting: 
-                emoji_display = char_key
-            else:
-                emoji_key = f"{char}_{formatting}"
-                emoji_display = EMOJIS.get(emoji_key, char_key)
-            
-            line += emoji_display + " " 
-            # --- END MINIMAL MODIFICATION ---
+            # --- START LINE MODIFICATION ---
+            emoji_key = f"{char}_{formatting}"
+            emoji_display = EMOJIS.get(emoji_key, char_key)
+            line += emoji_display + " "            
+            # --- END LINE MODIFICATION ---
             
         output_lines.append(line.strip())
 
