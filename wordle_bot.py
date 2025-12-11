@@ -536,42 +536,25 @@ class WordleBot(commands.Bot):
             sys.exit(1) 
 
     @tasks.loop(minutes=60)
-    async def cleanup_task(self):
-        now = datetime.datetime.now()
-        to_remove = []
-        for cid, game in self.games.items():
-            delta = now - game.last_interaction
-            if delta.total_seconds() > 86400: # 24 Hours
-                to_remove.append(cid)
-                try:
-                    channel = self.get_channel(cid)
-                    if channel:
-                        embed = di        # 1) KEYBOARD FORMAT—kbd_A_correct_green
-        # =====================================================
-        if raw_lower.startswith("kbd_"):
-            # ex: kbd_A_correct_green -> ["kbd", "A", "correct", "green"]
-            parts = raw.split("_")
-            letter = parts[1].lower()            # "A" → "a"
-            state  = parts[2].lower()            # "correct"
-            key = f"{letter}_{state}"            # "a_correct"
-            E[key] = token
-            continue
-
-        # =====================================================
-        # 2) WORDLE BLOCK FORMAT—green_A / yellow_A / white_A
-        # =====================================================
-        if raw_lower.startswith(("green_", "yellow_", "white_")):
-            # ex: green_A → green, A
-            color, letter = raw.split("_")       # letter still uppercase
-            color = color.lower()
-            letter = letter.lower()
-            key = f"block_{letter}_{color}"      # block_a_green
-            E[key] = token
-            continue
-
-        # ignore anything else
-
-    return E
+        async def cleanup_task(self):
+            now = datetime.datetime.now()
+            to_remove = []
+            for cid, game in self.games.items():
+                delta = now - game.last_interaction
+                if delta.total_seconds() > 86400: # 24 Hours
+                    to_remove.append(cid)
+                    try:
+                        channel = self.get_channel(cid)
+                        if channel:
+                            embed = discord.Embed(title="⏰ Time's Up!", description=f"Game timed out.\nThe word was **{game.secret.upper()}**.", color=discord.Color.dark_grey())
+                            await channel.send(embed=embed)
+                            await asyncio.sleep(1) # Wait 1 second between sending cleanup messages
+                            # ---------------------------------
+                    except:
+                        pass
+        
+            for cid in to_remove:
+                self.games.pop(cid, None)
 
 # ---- call it before main program ----
 EMOJIS = load_app_emojis(TOKEN, APP_ID)
