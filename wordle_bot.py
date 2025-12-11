@@ -610,9 +610,9 @@ async def start(interaction: discord.Interaction):
     # Get secret from the simple pool
     secret = get_next_secret(bot, interaction.guild_id)
     
-    embed = discord.Embed(title="✨ Wordle Started! (Simple)", color=discord.Color.blue())
-    embed.description = "A **simple 5-letter word** has been chosen. **6 attempts** total."
-    embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
+    embed = discord.Embed(title="⚠️ The game is malfunctioning :(", color=discord.Color.blue())
+    embed.description = "It will be fixed very soon with new features"
+    embed.add_field(name="- Developer", value="`Thank You for patience`", inline=False)
     
     await interaction.response.send_message(embed=embed)
     
@@ -663,25 +663,32 @@ async def stop_game(interaction: discord.Interaction):
 
 @bot.tree.command(name="guess", description="Guess a 5-letter word.")
 async def guess(interaction: discord.Interaction, word: str):
-    if not interaction.guild: return
+    # 🚨 CRITICAL FIX: Acknowledge the interaction immediately to prevent the 3-second timeout
+    await interaction.response.defer() 
+    
+    if not interaction.guild: 
+        return await interaction.followup.send("Error: Command must be used in a guild.", ephemeral=True) 
+    
     cid = interaction.channel_id
     g_word = word.lower().strip()
     game = bot.games.get(cid)
 
     if not game:
-        return await interaction.response.send_message("⚠️ No active game. Start with `/wordle` or `/wordle_classic`.", ephemeral=True)
+        return await interaction.followup.send("⚠️ No active game. Start with `/wordle` or `/wordle_classic`.", ephemeral=True)
 
     if game.is_duplicate(g_word):
-        return await interaction.response.send_message(f"⚠️ **{g_word.upper()}** was already guessed!", ephemeral=True)
+        return await interaction.followup.send(f"⚠️ **{g_word.upper()}** was already guessed!", ephemeral=True)
 
     if len(g_word) != 5 or not g_word.isalpha():
-        return await interaction.response.send_message("⚠️ 5 letters only.", ephemeral=True)
+        return await interaction.followup.send("⚠️ 5 letters only.", ephemeral=True)
     if g_word not in bot.valid_set:
-        return await interaction.response.send_message(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
+        return await interaction.followup.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
+    # --- Game Turn Logic ---
+    # Assuming game.process_turn calls the fixed evaluate_guess
     pattern, win, game_over = game.process_turn(g_word, interaction.user)
     
-    # 1. Capture the full, verbose keypad status
+    # Get the full, verbose keypad status
     keypad = get_markdown_keypad_status(game.used_letters)
     
     # Progress Bar Logic (simple emojis)
@@ -692,10 +699,10 @@ async def guess(interaction: discord.Interaction, word: str):
     # Board Display (using only the emoji pattern)
     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
     
-    # --- HINT SYSTEM ---
+    # --- HINT SYSTEM (Using new emoji suffix check) ---
     hint_msg = ""
-    # Trigger hint on 3rd attempt if no Green or Yellow tiles have been found across ALL history
     if game.attempts_used == 3:
+        # Check for custom emoji color suffixes (e.g., "_green" in the pattern string)
         all_gray = all(
             "_green" not in x['pattern'] and "_yellow" not in x['pattern'] 
             for x in game.history
@@ -708,11 +715,11 @@ async def guess(interaction: discord.Interaction, word: str):
             if available_letters:
                 hint_letter = random.choice(available_letters).upper()
                 hint_msg = f"\n\n**💡 HINT!** The letter **{hint_letter}** is in the word."
-    # ---
+    # --- END HINT SYSTEM ---
+
+    # --- CRITICAL FIX: Move Keyboard Status to Message Content ---
     
-    # --- CRITICAL FIX START: Move Keyboard Status to Message Content ---
-    
-    # Construct the message content to hold the long keypad status
+    # Construct the message content to hold the long keypad status (2000 char limit)
     message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
     
     if win:
@@ -720,30 +727,92 @@ async def guess(interaction: discord.Interaction, word: str):
         embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
         embed.description = f"**{interaction.user.mention}** found the word: **{game.secret.upper()}** in {game.attempts_used}/6 attempts!"
         embed.add_field(name="Final Board", value=board_display, inline=False)
-        # REMOVED: embed.add_field(name="Keyboard Status", value=keypad, inline=False)
+        # Keyboard Status is NOT in the embed
     elif game_over:
         embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
         embed.description = f"The word was **{game.secret.upper()}**."
         embed.add_field(name="Final Board", value=board_display, inline=False)
-        # REMOVED: embed.add_field(name="Keyboard Status", value=keypad, inline=False)
+        # Keyboard Status is NOT in the embed
     else:
         embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
         embed.description = f"**{interaction.user.display_name}** guessed: `{g_word.upper()}`"
         embed.add_field(name="Current Board", value=board_display + hint_msg, inline=False)
-        # REMOVED: embed.add_field(name="Keyboard Status", value=keypad, inline=False)
+        # Keyboard Status is NOT in the embed
         embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
         
-    # Send the message using both the (long) content and the (short) embed
-    await interaction.response.send_message(content=message_content, embed=embed)
+    # Send the message using followup.send() since we deferred
+    await interaction.followup.send(content=message_content, embed=embed)
     
-    # --- CRITICAL FIX END ---
+    # --- END CRITICAL FIX ---
 
     if game_over or win:
         winner_id = interaction.user.id if win else None
         # The update_leaderboard call is synchronous, running it in a thread to prevent blocking
         for pid in game.participants:
+            # Use asyncio.to_thread for robust non-blocking execution
             await asyncio.to_thread(update_leaderboard, bot, pid, interaction.guild_id, (pid == winner_id))
         bot.games.pop(cid, None)
+
+# ---
+
+## 🔑 Finalized `get_markdown_keypad_status` (Efficient & Coloring Fix)
+
+You must also ensure this utility function is updated to prevent `KeyError` and ensure coloring works correctly:
+
+```python
+def get_markdown_keypad_status(used_letters: dict) -> str:
+    # --- RARE DUCK EGG LOGIC (Omitted for brevity) ---
+    extra_line = ""
+    # ... (Your rare duck logic here)
+
+    output_lines = []
+    
+    # Using a list comprehension for KEYBOARD_LAYOUT ensures efficiency and clarity.
+    for row in KEYBOARD_LAYOUT:
+        line = ""
+        for char_key in row:
+            c = char_key.lower()
+            
+            # 1. Determine the state suffix with correct priority
+            if c in used_letters['correct']:
+                state_suffix = "correct"
+            elif c in used_letters['present']:
+                state_suffix = "misplaced"  # Use 'misplaced' for the emoji name suffix
+            elif c in used_letters['absent']:
+                state_suffix = "absent"
+            else:
+                state_suffix = "unknown"
+            
+            # 2. Construct the required emoji key (e.g., "a_correct")
+            emoji_key = f"{c}_{state_suffix}"
+            
+            # 3. CRITICAL FIX: Safe lookup prevents crash and ensures coloring
+            if state_suffix == "unknown":
+                # Untouched keys (most efficient: use raw letter)
+                emoji_display = char_key.upper()
+            else:
+                # Colored keys (look up custom emoji; if missing, use raw letter)
+                emoji_display = EMOJIS.get(emoji_key, char_key.upper())
+
+            # 4. Append the emoji (or fallback) and a space
+            line += emoji_display + " "
+            
+        output_lines.append(line.strip())
+
+    # Add space alignment for the second and third rows (for QWERTY layout)
+    output_lines[1] = u"\u2007" + output_lines[1]
+    output_lines[2] = u"\u2007\u2007" + output_lines[2]
+    keypad_display = "\n".join(output_lines)
+
+    # Updated legend formatting (safe lookup with .get())
+    legend = (
+        "\n\nLegend:\n"
+        f"{EMOJIS.get('a_correct', 'A')} = Correct | "
+        f"{EMOJIS.get('a_misplaced', 'A')} = Misplaced | " 
+        f"{EMOJIS.get('a_absent', 'A')} = Absent\n"
+    )
+    
+    return keypad_display + extra_line + legend
 
 @bot.tree.command(name="wordle_board", description="View current board.")
 async def board(interaction: discord.Interaction):
