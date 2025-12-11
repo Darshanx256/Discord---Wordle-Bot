@@ -142,11 +142,11 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
             
         output_lines.append(line.strip())
 
-    output_lines[1] = u"\u2007" + output_lines[1]
-    output_lines[2] = u"\u2007\u2007" + output_lines[2] 
+    output_lines[1] = u"\u2007\u2007" + output_lines[1]
+    output_lines[2] = u"\u2007\u2007\u2007" + output_lines[2] 
     keypad_display = "\n".join(output_lines)
         
-    return keypad_display + extra_line
+    return keypad_display + "\n" + extra_line
 
 
 def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
@@ -961,35 +961,54 @@ async def profile(interaction: discord.Interaction):
     await interaction.response.defer()
     
     def fetch_profile_stats_sync():
-        # --- PHASE 1: SINGLE OPTIMIZED QUERY ---
-        profile_data = bot.supabase_client.from_('scores').select(
-            """
-            wins:base_guild_wins, 
-            total_games:base_guild_games,
-            guild_leaderboard (guild_score, guild_rank),
-            global_leaderboard (global_wins, global_games, global_score, global_rank)
-            """
-        ).eq('user_id', uid).eq('guild_id', guild_id).limit(1).single().execute()
-        
-        data = profile_data.data if profile_data.data else {}
+        try:
+            profile_data = bot.supabase_client.from_('scores').select(
+                """
+                wins:base_guild_wins, 
+                total_games:base_guild_games,
+                guild_leaderboard (guild_score, guild_rank),
+                global_leaderboard (global_wins, global_games, global_score, global_rank)
+                """
+            ).eq('user_id', uid).eq('guild_id', guild_id).limit(1).single().execute()
+            
+            data = profile_data.data if profile_data.data else None
+            
+        except Exception:
+            data = None
 
-        s_wins = data.get('base_guild_wins', 0)
-        s_games = data.get('base_guild_games', 0)
-        
-        guild_lb = data.get('guild_leaderboard')
-        g_lb = data.get('global_leaderboard')
+        if data is None:
+            s_wins, s_games, g_wins, g_games = 0, 0, 0, 0
+            
+            s_score = calculate_score(s_wins, s_games)
+            s_rank_num = 'N/A'
+            
+            g_score = calculate_score(g_wins, g_games)
+            g_rank_num = 'N/A'
+            
+        else:
+            s_wins = data.get('base_guild_wins', 0)
+            s_games = data.get('base_guild_games', 0)
+            
+            guild_lb = data.get('guild_leaderboard')
+            g_lb = data.get('global_leaderboard')
 
-        # Server Stats
-        s_score = guild_lb[0]['guild_score'] if guild_lb else calculate_player_score(s_wins, s_games)
-        s_rank_num = guild_lb[0]['guild_rank'] if guild_lb else 'N/A'
+            if guild_lb and guild_lb[0]:
+                s_score = guild_lb[0]['guild_score']
+                s_rank_num = guild_lb[0]['guild_rank']
+            else:
+                s_score = calculate_score(s_wins, s_games)
+                s_rank_num = 'N/A'
 
-        # Global Stats
-        g_wins = g_lb[0]['global_wins'] if g_lb else 0
-        g_games = g_lb[0]['global_games'] if g_lb else 0
-        g_score = g_lb[0]['global_score'] if g_lb else calculate_player_score(g_wins, g_games)
-        g_rank_num = g_lb[0]['global_rank'] if g_lb else 'N/A'
-        
-        # --- PHASE 2: TIER CALCULATION ---
+            if g_lb and g_lb[0]:
+                g_wins = g_lb[0]['global_wins']
+                g_games = g_lb[0]['global_games']
+                g_score = g_lb[0]['global_score']
+                g_rank_num = g_lb[0]['global_rank']
+            else:
+                g_wins = s_wins
+                g_games = s_games
+                g_score = calculate_score(g_wins, g_games)
+                g_rank_num = 'N/A'
 
         all_guild_scores_response = bot.supabase_client.table('guild_leaderboard') \
             .select('guild_score') \
@@ -1007,12 +1026,10 @@ async def profile(interaction: discord.Interaction):
         server_scores = sorted([r['guild_score'] for r in all_guild_scores_response.data])
         global_scores_list = sorted([r['global_score'] for r in all_global_scores_response.data])
             
-        # Calculate Server Tier
         s_rank_idx = sum(1 for s in server_scores if s < s_score)
         s_perc = s_rank_idx / len(server_scores) if server_scores else 0
         s_tier_icon, s_tier_name = get_tier_display(s_perc)
         
-        # Calculate Global Tier
         g_rank_idx = sum(1 for s in global_scores_list if s < g_score)
         g_perc = g_rank_idx / len(global_scores_list) if global_scores_list else 0
         g_tier_icon, g_tier_name = get_tier_display(g_perc)
@@ -1027,10 +1044,9 @@ async def profile(interaction: discord.Interaction):
         (s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
          g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num) = stats
 
-    except Exception as e:
-        return await interaction.followup.send("❌ Database error retrieving your profile.", ephemeral=True)
+    except Exception:
+        return await interaction.followup.send("❌ An error occurred while fetching your profile data. If you are a new player, please try playing one game first!", ephemeral=True)
 
-    # --- DISPLAY LOGIC ---
     embed = discord.Embed(color=discord.Color.teal())
     embed.set_author(name=f"{interaction.user.display_name}'s Profile", icon_url=interaction.user.display_avatar.url)
     
