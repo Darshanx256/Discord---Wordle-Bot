@@ -88,8 +88,10 @@ class WordleBot(commands.Bot):
     @tasks.loop(minutes=60)
     async def activity_loop(self):
         """Rotates the bot's activity status every hour."""
+        await self.wait_until_ready() # Wait for connection before setting presence
         if ROTATING_ACTIVITIES:
             act_data = random.choice(ROTATING_ACTIVITIES)
+
             # Create Activity object from dict data
             activity = discord.Activity(type=act_data["type"], name=act_data["name"])
             await self.change_presence(activity=activity)
