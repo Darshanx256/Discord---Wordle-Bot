@@ -358,18 +358,34 @@ async def guess(interaction: discord.Interaction, word: str):
 @bot.tree.command(name="wordle_board", description="View current board.")
 async def board(interaction: discord.Interaction):
     if not interaction.guild: return
-    game = bot.games.get(interaction.channel_id)
-    if not game: return await interaction.response.send_message("❌ No active game.", ephemeral=True)
     
-    if not game.history:
-        board_display = "No guesses yet! Start guessing with `/guess`."
-    else:
-        board_display = "\n".join([f"{h['pattern']}" for h in game.history]) 
+    # 1. Defer to prevent timeout
+    await interaction.response.defer()
+    
+    try:
+        game = bot.games.get(interaction.channel_id)
+        if not game: 
+            return await interaction.followup.send("❌ No active game.", ephemeral=True)
+        
+        if not game.history:
+            board_display = "No guesses yet! Start guessing with `/guess`."
+        else:
+            board_display = "\n".join([f"{h['pattern']}" for h in game.history]) 
 
-    embed = discord.Embed(title="📊 Current Board", description=board_display, color=discord.Color.blurple())
-    embed.add_field(name="Keyboard Status", value=get_markdown_keypad_status(game.used_letters), inline=False)
-    embed.set_footer(text=f"Attempts: {game.attempts_used}/6")
-    await interaction.response.send_message(embed=embed)
+        embed = discord.Embed(title="📊 Current Board", description=board_display, color=discord.Color.blurple())
+        
+        # Wrapped in try block to catch potential string building errors
+        keypad = get_markdown_keypad_status(game.used_letters)
+        embed.add_field(name="Keyboard Status", value=keypad, inline=False)
+        
+        embed.set_footer(text=f"Attempts: {game.attempts_used}/6")
+        
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await interaction.followup.send(f"⚠️ An error occurred while generating the board: {e}", ephemeral=True)
 
 @bot.tree.command(name="leaderboard", description="Server Leaderboard.")
 async def leaderboard(interaction: discord.Interaction):
