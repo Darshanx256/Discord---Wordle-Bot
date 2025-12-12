@@ -6,13 +6,16 @@ from src.utils import EMOJIS, get_tier_display
 def get_markdown_keypad_status(used_letters: dict) -> str:
     #egg start
     extra_line = ""
-    if random.randint(1,50) == 1:
+    rng = random.randint(1, 100)
+    if rng == 1:
         extra_line = (
-            "\n\n"
-            "> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
-            "> 🦆 CONGRATULATIONS! You summoned a RARE Duck of Luck!\n"
-            "> Have a nice day!"
+            "\n> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
+            "> 🦆 You summoned a RARE Duck of Luck!"
         )
+    elif rng == 2:
+        extra_line = "\n> *The letters are watching you...* 👁️"
+    elif rng == 3:
+        extra_line = "\n> *Does this keyboard feel sticky to you?* 🍬"
     #egg end
 
     """Generates the stylized keypad using Discord Markdown."""
@@ -162,7 +165,7 @@ class HelpView(discord.ui.View):
                 "`/wordle` - Start Simple Game\n"
                 "`/wordle_classic` - Start Hard Game\n"
                 "`/guess [word]` - Submit guess\n"
-                "`/board` - View pattern & keyboard\n"
+                "`/wordle_board` - View pattern & keyboard\n"
                 "`/leaderboard` - Server Rankings\n"
                 "`/leaderboard_global` - Global Rankings\n"
                 "`/profile` - View your stats\n"

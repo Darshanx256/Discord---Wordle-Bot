@@ -23,7 +23,7 @@ class WordleGame:
     @property
     def attempts_used(self): return len(self.history)
 
-    def is_duplicate(self, word: str) -> bool: return word in self.guessed_words
+    def is_duplicate(self, word: str) -> bool: return word.upper() in self.guessed_words
 
     def evaluate_guess(self, guess: str) -> str: 
         # Using global EMOJIS from src.utils handled via import if strictly needed inside or pass it.

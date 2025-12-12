@@ -211,7 +211,12 @@ async def start(interaction: discord.Interaction):
     # Get secret from the simple pool
     secret = get_next_secret(bot, interaction.guild_id)
     
-    embed = discord.Embed(title="✨ Wordle Started!(Simple)", color=discord.Color.blue())
+    # Easter Egg Title
+    title = "✨ Wordle Started! (Simple)"
+    if random.randint(1, 100) == 1:
+        title = "🪄 Wordle Started! (Magical Edition)"
+    
+    embed = discord.Embed(title=title, color=discord.Color.blue())
     embed.description = "A simple **5-letter word** has been chosen. **6 attempts** total."
     embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
     
@@ -236,7 +241,12 @@ async def start_classic(interaction: discord.Interaction):
     # Get secret from the full classic pool
     secret = get_next_classic_secret(bot, interaction.guild_id)
     
-    embed = discord.Embed(title="⚔️ Wordle Started! (Classic)", color=discord.Color.dark_gold())
+    # Easter Egg Title (Classic)
+    title = "⚔️ Wordle Started! (Classic)"
+    if random.randint(1, 100) == 1:
+        title = "🐲 Wordle Started! (Dragon Slayer Mode)"
+        
+    embed = discord.Embed(title=title, color=discord.Color.dark_gold())
     embed.description = "A **word from the full dictionary** has been chosen. **6 attempts** total. Harder than Simple mode!"
     embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
     
@@ -351,7 +361,10 @@ async def board(interaction: discord.Interaction):
     game = bot.games.get(interaction.channel_id)
     if not game: return await interaction.response.send_message("❌ No active game.", ephemeral=True)
     
-    board_display = "\n".join([f"{h['pattern']}" for h in game.history]) 
+    if not game.history:
+        board_display = "No guesses yet! Start guessing with `/guess`."
+    else:
+        board_display = "\n".join([f"{h['pattern']}" for h in game.history]) 
 
     embed = discord.Embed(title="📊 Current Board", description=board_display, color=discord.Color.blurple())
     embed.add_field(name="Keyboard Status", value=get_markdown_keypad_status(game.used_letters), inline=False)

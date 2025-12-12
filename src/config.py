@@ -48,5 +48,5 @@ ROTATING_ACTIVITIES = [
     {"type": discord.ActivityType.playing, "name": "Guess the word! /guess"},
     {"type": discord.ActivityType.listening, "name": "i rate you 6/6 ⸜(｡˃ ᵕ ˂ )⸝♡"},
     {"type": discord.ActivityType.listening, "name": "snipe your friend at 6/6!"},
-    {"type": discord.ActivityType.listening, "name": "octopus made by Whitevector - Flaticon"},
+    {"type": discord.ActivityType.listening, "name": "⚠️ SYABU not in dictionary"},
 ]
