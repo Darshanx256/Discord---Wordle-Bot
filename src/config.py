@@ -46,7 +46,7 @@ ROTATING_ACTIVITIES = [
     {"type": discord.ActivityType.playing, "name": "Hard Mode: /wordle_classic"},
     {"type": discord.ActivityType.listening, "name": "to the bot dev rage"},
     {"type": discord.ActivityType.playing, "name": "Guess the word! /guess"},
-    {"type": discord.ActivityType.listening, "name": "i rate you 6/6 ⸜(｡˃ ᵕ ˂ )⸝♡"},
-    {"type": discord.ActivityType.listening, "name": "snipe your friend at 6/6!"},
-    {"type": discord.ActivityType.listening, "name": "⚠️ SYABU not in dictionary"},
+    {"type": discord.ActivityType.watching, "name": "i rate you 6/6 ⸜(｡˃ ᵕ ˂ )⸝♡"},
+    {"type": discord.ActivityType.watching, "name": "snipe your friend at 6/6!"},
+    {"type": discord.ActivityType.watching, "name": "⚠️ SYABU not in dictionary"},
 ]
