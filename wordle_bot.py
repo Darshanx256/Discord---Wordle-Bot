@@ -3,7 +3,6 @@ import random
 import discord
 from discord.ext import commands, tasks
 from discord import ui
-from discord.ui import View, Button
 from dotenv import load_dotenv
 import threading
 from flask import Flask, send_from_directory, render_template
@@ -94,22 +93,6 @@ TIERS = [
     (0.65, "⚜️", "Master"),      
     (0.40, "⚔️", "Elite"),      
     (0.00, "🛡️", "Challenger")    
-]
-
-# rotating activities
-ROTATING_ACTIVITIES = [
-    {"type": discord.ActivityType.playing, "name": "/wordle to begin, /guess to play"}, 
-    {"type": discord.ActivityType.watching, "name": "users guess five-letter words"},
-    {"type": discord.ActivityType.playing, "name": "octopus knows secrets"},
-    {"type": discord.ActivityType.watching, "name": "the dictionary for secret words"},
-    {"type": discord.ActivityType.listening, "name": "to /help requests"},
-    {"type": discord.ActivityType.playing, "name": "with the alphabet"},
-    {"type": discord.ActivityType.watching, "name": "did you summon Duck yet?"},
-    {"type": discord.ActivityType.playing, "name": "Hard Mode: /wordle_classic"},
-    {"type": discord.ActivityType.listening, "name": "to the bot dev rage"},
-    {"type": discord.ActivityType.playing, "name": "Guess the word! /guess"},
-    {"type": discord.ActivityType.listening, "name": "i rate you 6/6💝"},
-    {"type": discord.ActivityType.listening, "name": "snipe your friend at 6/6!"},
 ]
 
 # ========= 3. UTILITY FUNCTIONS =========
@@ -500,8 +483,6 @@ class WordleBot(commands.Bot):
         self.hard_secrets = []  
         self.valid_set = set()  # Full dictionary (Set, for O(1) validation) 
         self.supabase_client: Client = None
-        self.activity_index = 0
-        self.rotate_activity.start()
 
     async def setup_hook(self):
         self.load_local_data()
@@ -601,25 +582,9 @@ class WordleBot(commands.Bot):
 
             except Exception as e:
                 print(f"⚠️ DB Ping Task Failed: {e}")
-                
-    @tasks.loop(hours=1)
-    async def rotate_activity(self):
-        activity_data = ROTATING_ACTIVITIES[self.activity_index]
-        
-        activity = discord.Activity(
-            type=activity_data["type"],
-            name=activity_data["name"]
-        )
-        
-        await self.change_presence(status=discord.Status.online, activity=activity)
-        
-        self.activity_index = (self.activity_index + 1) % len(ROTATING_ACTIVITIES)
-
-    @rotate_activity.before_loop
-    async def before_rotate_activity(self):
-        await self.wait_until_ready()
 
 bot = WordleBot()
+
 
 # ========= 6. EVENTS & COMMANDS =========
 
@@ -835,105 +800,6 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
         formatted_data.append((i + 1, name, w, g, (w/g)*100 if g > 0 else 0, s))
         
     return formatted_data
-    
-    
-# === Bot Help Setup ===
-
-class MoreInfoView(View):
-    def __init__(self, bot):
-        super().__init__(timeout=180) 
-        self.bot = bot
-        
-    @discord.ui.button(label="Show Advanced Info", style=discord.ButtonStyle.secondary, emoji="⚙️")
-    async def show_more(self, interaction: discord.Interaction, button: discord.Button):
-        # Disable the button so users can't click it again
-        button.disabled = True
-        await interaction.response.edit_message(view=self) 
-
-        # Create the advanced embed
-        advanced_embed = discord.Embed(
-            title="✨ Advanced Commands & Scoring",
-            description="Deep dive into stats and competition mechanics.",
-            color=discord.Color.dark_teal()
-        )
-
-        advanced_embed.add_field(
-            name="📊 Leaderboard Commands",
-            value=(
-                "`/leaderboard` - View the **current guild's** top players.\n"
-                "`/leaderboard_global` - View the **worldwide** top players.\n"
-                "`/profile` - View your personal stats (scores, wins, tiers, ranks)."
-            ),
-            inline=False
-        )
-
-        # --- UPDATED FIELD WITH TIER BREAKDOWN ---
-        tier_description = (
-            "Your **Score** is a dynamic value calculated from your wins and games played (more wins = higher score).\n"
-            "Your **Score** is affected by Bayesian penalty which gives **more rewards in earlier games** and gets **competitive** later.\n"
-            "**Game Fairness:** No secret word will be repeated in a server until the entire available word pool has been exhausted.\n\n"
-            
-            "### 👑 Tier Ranks (Based on Global Percentile)\n"
-            f"**💎 Grandmaster:** Top 10% (Above {int(0.90 * 100)}% of players)\n"
-            f"**⚜️ Master:** Top 35% (Above {int(0.65 * 100)}% of players)\n"
-            f"**⚔️ Elite:** Top 60% (Above {int(0.40 * 100)}% of players)\n"
-            f"**🛡️ Challenger:** The Starting Rank\n"
-        )
-        
-        advanced_embed.add_field(
-            name="🏆 Scoring & Tier System",
-            value=tier_description,
-            inline=False
-        )
-        # --- END UPDATED FIELD ---
-        
-        advanced_embed.add_field(
-            name="🛑 Game Management",
-            value="`/stop_game` - Immediately ends the active game in the channel and reveals the word.",
-            inline=False
-        )
-
-        await interaction.followup.send(embed=advanced_embed, ephemeral=True)
-        
-@bot.tree.command(name="help", description="Shows a quick guide on how to play Wordle.")
-async def help_command(interaction: discord.Interaction):
-
-    view = MoreInfoView(interaction.client)
-    
-    embed = discord.Embed(
-        title="📚 Wordle Game Bot - Basic Commands & Guide",
-        description="A simple guide to start guessing five-letter words!",
-        color=discord.Color.blue()
-    )
-
-    embed.add_field(
-        name="1. Start a Game",
-        value="`/wordle` (Simple, common words)\n`/wordle_classic` (Harder, larger dictionary)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="2. Make a Guess",
-        value="`/guess word:xxxxx`\n*Example: `/guess word:CRANE`*",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="3. Check Status",
-        value="`/wordle_board` (View the current board)\n`/profile` (Check your personal stats)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="4. End the Game",
-        value="`/stop_game` (Ends the active game and reveals the word)",
-        inline=False
-    )
-
-    embed.set_footer(text="Green=Correct | Yellow=Misplaced | White=Absent")
-    
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-    
 
 @bot.tree.command(name="leaderboard", description="Server Leaderboard.")
 async def leaderboard(interaction: discord.Interaction):
