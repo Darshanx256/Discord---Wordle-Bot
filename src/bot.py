@@ -28,6 +28,7 @@ class WordleBot(commands.Bot):
         self.secrets = []       
         self.hard_secrets = []  
         self.valid_set = set()  # Full dictionary (Set, for O(1) validation) 
+        self.name_cache = {} # {uid: display_name}
         self.supabase_client: Client = None
 
     async def setup_hook(self):
@@ -183,11 +184,16 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
         if user:
             return (i + 1, user.display_name, w, xp, wr, tier_icon, badge)
 
-        # 3. API Call (SLOW - Needs Semaphore)
+        # 3. Try In-Memory Name Cache (FAST)
+        if uid in bot_instance.name_cache:
+             return (i + 1, bot_instance.name_cache[uid], w, xp, wr, tier_icon, badge)
+
+        # 4. API Call (SLOW - Needs Semaphore)
         async with sem:
             try:
                 u = await bot_instance.fetch_user(uid)
                 name = u.display_name
+                bot_instance.name_cache[uid] = name # Cache it
             except:
                 pass 
         
