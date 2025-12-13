@@ -1,6 +1,6 @@
 import requests
 import random
-from src.config import TOKEN, APP_ID, TIERS, C_GAMES, C_WINRATE
+from src.config import TOKEN, APP_ID, TIERS
 
 def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
     url = f"https://discord.com/api/v10/applications/{app_id}/emojis"
