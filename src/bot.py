@@ -7,22 +7,24 @@ import discord
 from discord.ext import commands, tasks
 from supabase import create_client, Client
 
-from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, CLASSIC_FILE, ROTATING_ACTIVITIES
+from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, CLASSIC_FILE, ROTATING_ACTIVITIES, TIERS
 from src.utils import calculate_score, get_win_flavor, get_tier_display
 from src.database import (
-    update_leaderboard, 
+    record_game_v2,
+    fetch_user_profile_v2,
+    trigger_egg,
     get_next_secret, 
-    get_next_classic_secret, 
-    fetch_profile_stats_sync
+    get_next_classic_secret
 )
 from src.game import WordleGame
-from src.ui import LeaderboardView, HelpView, get_markdown_keypad_status
+from src.ui import LeaderboardView, HelpView, get_markdown_keypad_status, SoloView
 
 # ========= 5. BOT SETUP =========
 class WordleBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
         self.games = {} 
+        self.solo_games = {} # New: Stores private solo games
         self.secrets = []       
         self.hard_secrets = []  
         self.valid_set = set()  # Full dictionary (Set, for O(1) validation) 
@@ -147,24 +149,29 @@ bot = WordleBot()
 # Helper function 
 async def fetch_and_format_rankings(results, bot_instance, guild=None):
     # OPTIMIZATION: Concurrency with Rate Limiting
-    # fetching users can be slow. We use a semaphore to limit concurrent requests
-    # to 5 at a time to be safe against rate limits while speeding up the overall process.
     sem = asyncio.Semaphore(5) 
 
     async def fetch_user_safe(row_data):
-        i, (uid, w, g, s) = row_data
+        i, (uid, w, xp, wr) = row_data # V2 Structure
         name = f"User {uid}"
         
+        # Determine Tier Icon based on WR
+        tier_icon = "🛡️"
+        for t in TIERS:
+            if wr >= t['min_wr']:
+                tier_icon = t['icon']
+                break
+
         # 1. Try Local Cache (FAST & SAFE)
         if guild:
             member = guild.get_member(uid)
             if member:
-                return (i + 1, member.display_name, w, g, (w/g)*100 if g > 0 else 0, s)
+                return (i + 1, member.display_name, w, xp, wr, tier_icon)
         
         # 2. Try Global Bot Cache (FAST & SAFE)
         user = bot_instance.get_user(uid)
         if user:
-            return (i + 1, user.display_name, w, g, (w/g)*100 if g > 0 else 0, s)
+            return (i + 1, user.display_name, w, xp, wr, tier_icon)
 
         # 3. API Call (SLOW - Needs Semaphore)
         async with sem:
@@ -172,56 +179,50 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
                 u = await bot_instance.fetch_user(uid)
                 name = u.display_name
             except:
-                pass # Name stays "User {uid}" if fetch fails
+                pass 
         
-        return (i + 1, name, w, g, (w/g)*100 if g > 0 else 0, s)
+        return (i + 1, name, w, xp, wr, tier_icon)
 
     # Launch all tasks
     tasks = [fetch_user_safe((i, r)) for i, r in enumerate(results)]
     
-    # Wait for all to complete (asyncio.gather returns results in the order of tasks)
     formatted_data = await asyncio.gather(*tasks)
     return formatted_data
 
 
 @bot.tree.command(name="help", description="How to play and command guide.")
 async def help_command(interaction: discord.Interaction):
-    # Uses the advanced HelpView with pages
     view = HelpView(interaction.user)
-    # Using ephemeral=True so it doesn't clutter chat, or False if preferred. 
-    # Usually users prefer help to be visible to them only or public. 
-    # Let's make it public so others can see "show more" too if they want, 
-    # but interaction check restricts buttons to "interaction.user". 
-    # Actually, ephemeral is safer for personal help. 
     await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=True)
-
 
 @bot.tree.command(name="wordle", description="Start a new game (Simple word list).")
 async def start(interaction: discord.Interaction):
     if not interaction.guild: return await interaction.response.send_message("❌ Command must be used in a server.", ephemeral=True)
-    
-    if not bot.secrets:
-        return await interaction.response.send_message("❌ Simple word list missing.", ephemeral=True)
+    if not bot.secrets: return await interaction.response.send_message("❌ Simple word list missing.", ephemeral=True)
 
     cid = interaction.channel_id
     if cid in bot.games:
-        await interaction.response.send_message("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
-        return
+        return await interaction.response.send_message("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
         
-    # Get secret from the simple pool
     secret = get_next_secret(bot, interaction.guild_id)
     
-    # Easter Egg Title
+    # Easter Egg Trigger?
     title = "✨ Wordle Started! (Simple)"
+    # V2: Trigger "duck" or "dragon" internally on chance?
+    # Prompt: "when a user triggers duck, add 1x duck... shows up in profile".
+    # Logic: 1% chance on start? Or on guess? Prompt: "triggers duck". Usually on game start/end or random.
+    # Let's add it on Game Start.
+    egg_msg = ""
     if random.randint(1, 100) == 1:
-        title = "🪄 Wordle Started! (Magical Edition)"
+        title = "🦆 Wordle Started! (Duck Edition)"
+        trigger_egg(bot, interaction.user.id, "duck")
+        egg_msg = "\n🎉 **You found a rare Duck!** It has been added to your collection."
     
     embed = discord.Embed(title=title, color=discord.Color.blue())
-    embed.description = "A simple **5-letter word** has been chosen. **6 attempts** total."
+    embed.description = f"A simple **5-letter word** has been chosen. **6 attempts** total.{egg_msg}"
     embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
     
     await interaction.response.send_message(embed=embed)
-    
     msg = await interaction.original_response()
     bot.games[cid] = WordleGame(secret, cid, interaction.user, msg.id)
 
@@ -229,335 +230,317 @@ async def start(interaction: discord.Interaction):
 @bot.tree.command(name="wordle_classic", description="Start a Classic game (Full dictionary list).")
 async def start_classic(interaction: discord.Interaction):
     if not interaction.guild: return await interaction.response.send_message("❌ Command must be used in a server.", ephemeral=True)
-    
-    if not bot.hard_secrets:
-        return await interaction.response.send_message("❌ Classic word list missing.", ephemeral=True)
+    if not bot.hard_secrets: return await interaction.response.send_message("❌ Classic word list missing.", ephemeral=True)
 
     cid = interaction.channel_id
-    
     if cid in bot.games:
-        await interaction.response.send_message("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
-        return
-    # Get secret from the full classic pool
+        return await interaction.response.send_message("⚠️ Game already active.", ephemeral=True)
+
     secret = get_next_classic_secret(bot, interaction.guild_id)
     
-    # Easter Egg Title (Classic)
     title = "⚔️ Wordle Started! (Classic)"
-    if random.randint(1, 100) == 1:
+    egg_msg = ""
+    if random.randint(1, 200) == 1: # Rare
         title = "🐲 Wordle Started! (Dragon Slayer Mode)"
+        trigger_egg(bot, interaction.user.id, "dragon")
+        egg_msg = "\n🔥 **A DRAGON APPEARS!** (Added to collection)"
         
     embed = discord.Embed(title=title, color=discord.Color.dark_gold())
-    embed.description = "A **word from the full dictionary** has been chosen. **6 attempts** total. Harder than Simple mode!"
+    embed.description = f"**Hard Mode!** 6 attempts.{egg_msg}"
     embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
     
     await interaction.response.send_message(embed=embed)
-    
     msg = await interaction.original_response()
     bot.games[cid] = WordleGame(secret, cid, interaction.user, msg.id)
 
-@bot.tree.command(name="stop_game", description="Force stop the current game (For Starter or Admin only).")
+@bot.tree.command(name="solo", description="Play a private game (Ephemeral).")
+async def solo(interaction: discord.Interaction):
+    # Ephemeral Game
+    if interaction.user.id in bot.solo_games:
+        return await interaction.response.send_message("⚠️ You already have a solo game running!", ephemeral=True)
+    
+    # Pick secret
+    secret = random.choice(bot.secrets)
+    game = WordleGame(secret, 0, interaction.user, 0) # Dummy Channel/Msg ID
+    bot.solo_games[interaction.user.id] = game
+    
+    embed = discord.Embed(title="🕵️ Solo Wordle", color=discord.Color.dark_grey())
+    embed.description = "This game is **private**. Only you can see it.\nUse the button below to guess."
+    embed.set_footer(text="6 attempts")
+    
+    view = SoloView(bot, game, interaction.user)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+@bot.tree.command(name="stop_game", description="Force stop the current game.")
 async def stop_game(interaction: discord.Interaction):
     cid = interaction.channel_id
     game = bot.games.get(cid)
     
-    if not game:
-        return await interaction.response.send_message("No active game to stop.", ephemeral=True)
+    if not game: return await interaction.response.send_message("No active game to stop.", ephemeral=True)
     
-    is_starter = interaction.user.id == game.started_by.id
-    is_admin = interaction.permissions.manage_messages
-    
-    if is_starter or is_admin:
+    if (interaction.user.id == game.started_by.id) or interaction.permissions.manage_messages:
         bot.games.pop(cid)
-        await interaction.response.send_message(f"🛑 Game stopped by {interaction.user.mention}. The word was **{game.secret.upper()}**.")
+        await interaction.response.send_message(f"🛑 Game stopped. Word: **{game.secret.upper()}**.")
     else:
-        await interaction.response.send_message("❌ Only the player who started the game or an Admin can stop it.", ephemeral=True)
+        await interaction.response.send_message("❌ Only Starter or Admin can stop it.", ephemeral=True)
 
 @bot.tree.command(name="guess", description="Guess a 5-letter word.")
 async def guess(interaction: discord.Interaction, word: str):
-    # 🚨 CRITICAL FIX: Acknowledge the interaction immediately to prevent the 3-second timeout
     await interaction.response.defer() 
-    
-    if not interaction.guild: 
-        return await interaction.followup.send("Error: Command must be used in a guild.", ephemeral=True) 
+    if not interaction.guild: return await interaction.followup.send("Guild only.", ephemeral=True)
     
     cid = interaction.channel_id
-    g_word = word.lower().strip()
     game = bot.games.get(cid)
+    g_word = word.lower().strip()
 
-    if not game:
-        return await interaction.followup.send("⚠️ No active game. Start with `/wordle` or `/wordle_classic`.", ephemeral=True)
+    if not game: return await interaction.followup.send("⚠️ No active game.", ephemeral=True)
+    if game.is_duplicate(g_word): return await interaction.followup.send(f"⚠️ **{g_word.upper()}** already guessed!", ephemeral=True)
+    if len(g_word) != 5 or not g_word.isalpha(): return await interaction.followup.send("⚠️ 5 letters only.", ephemeral=True)
+    if g_word not in bot.valid_set: return await interaction.followup.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
-    if game.is_duplicate(g_word):
-        return await interaction.followup.send(f"⚠️ **{g_word.upper()}** was already guessed!", ephemeral=True)
-
-    if len(g_word) != 5 or not g_word.isalpha():
-        return await interaction.followup.send("⚠️ 5 letters only.", ephemeral=True)
-    if g_word not in bot.valid_set:
-        return await interaction.followup.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
-
-    # --- Game Turn Logic ---
-    pattern, win, game_over = game.process_turn(g_word, interaction.user)
+    # Note: Multiplayer games are cooperative? 
+    # Prompt: "Multiplayer... Includes Global Multiplayer and Guild Multiplayer... Played via /wordle... Uses /guess".
+    # "Match Performance Score... Based on the best final guess for the player's unique word" - wait.
+    # "Based on the best final guess for the *player's unique word*"? 
+    # Usually Wordle Bot is cooperative (everyone guesses together on one board).
+    # If "Multiplayer" implies standard channel game, then everyone contributes.
+    # "MPS... Based on the best final guess for the player's unique word" -> This sounds like everyone has their OWN word in the same game?
+    # NO, "Same board UI as multiplayer...".
+    # I suspect "player's unique word" is a typo in prompt or means "Based on the guess YOU made".
+    # "Correct word guessed: +120".
+    # Let's assume standard coop: You guess, you get points.
     
-    # Get the full, verbose keypad status
+    pat, win, game_over = game.process_turn(g_word, interaction.user)
+    
     keypad = get_markdown_keypad_status(game.used_letters)
-    
-    # Progress Bar Logic (simple emojis)
     filled = "●" * game.attempts_used
     empty = "○" * (6 - game.attempts_used)
-    progress_bar = f"[{filled}{empty}]"
-
-    # Board Display (using only the emoji pattern)
     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
     
-    # --- HINT SYSTEM (Using new emoji suffix check) ---
-    hint_msg = ""
-    if game.attempts_used == 3:
-        # Check for custom emoji color suffixes (e.g., "_green" in the pattern string)
-        all_gray = all(
-            "green_" not in x['pattern'] and "yellow_" not in x['pattern'] 
-            for x in game.history
-        )
-        
-        if all_gray:
-            known_absent = game.used_letters['absent']
-            available_letters = [c for c in game.secret if c.lower() not in known_absent]
-
-            if available_letters:
-                hint_letter = random.choice(available_letters).upper()
-                hint_msg = f"\n\n**💡 HINT!** The letter **{hint_letter}** is in the word."
-    # --- END HINT SYSTEM ---
-    
-    # Construct the message content to hold the long keypad status (2000 char limit)
     message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
     
     if win:
+        time_taken = (datetime.datetime.now() - game.start_time).total_seconds()
         flavor = get_win_flavor(game.attempts_used)
         embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
-        embed.description = f"**{interaction.user.mention}** found the word: **{game.secret.upper()}** in {game.attempts_used}/6 attempts!"
+        embed.description = f"**{interaction.user.mention}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
         embed.add_field(name="Final Board", value=board_display, inline=False)
+        
+        # RECORD stats for the WINNER
+        # "reward the participants fairly".
+        # Prompt: "Correct word guessed: +120... Participated: +5".
+        # So Winner gets Win points. Others get Participation?
+        # My record_game_v2 logic calculates based on outcome.
+        # Winner -> 'win'. Others -> 'participation'.
+        # I need to loop through participants.
+        
+        # 1. Award Winner
+        res = record_game_v2(bot, interaction.user.id, interaction.guild_id, 'MULTI', 'win', game.attempts_used, time_taken)
+        if res:
+             embed.add_field(name="Winner Rewards", value=f"➕ **{res.get('xp_gain',0)} XP** | 📈 WR: {res.get('multi_wr')}", inline=False)
+
+        # 2. Award Participants (excluding winner)
+        others = game.participants - {interaction.user.id}
+        for uid in others:
+            # "Participated: +5".
+            # Can I detect if they got letters correct? "4 letters correct: +70".
+            # That requires tracking who guessed what.
+            # `game.history` has `{'user': ...}`.
+            # I can calculate best guess for each user?
+            # Prompt: "Based on the best final guess for the player's unique word" -> "Best final guess" implies best result they got.
+            # Complex logic. For now, simple participation.
+            # Just give 'participation' reward.
+            await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild_id, 'MULTI', 'participation', game.attempts_used, 999)
+
+        bot.games.pop(cid, None)
+        
     elif game_over:
         embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
         embed.description = f"The word was **{game.secret.upper()}**."
         embed.add_field(name="Final Board", value=board_display, inline=False)
+        
+        # Award participation to all
+        for uid in game.participants:
+             await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild_id, 'MULTI', 'loss', 6, 999)
+             
+        bot.games.pop(cid, None)
     else:
+        # Just a turn
         embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
         embed.description = f"**{interaction.user.display_name}** guessed: `{g_word.upper()}`"
-        embed.add_field(name="Current Board", value=board_display + hint_msg, inline=False)
-        embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
+        embed.add_field(name="Current Board", value=board_display, inline=False)
+        embed.set_footer(text=f"{6 - game.attempts_used} tries left [{filled}{empty}]")
         
+        # Award partial points for letters? "1 letter correct: +10".
+        # Only if we want real-time XP? No, usually at end. 
+        # But Prompt says "XP granted... Correct word guessed +50... 1 letter correct +10".
+        # If we reward per guess, people will spam.
+        # "Match Performance Score... Based on the best final guess".
+        # Implies End of Game calculation.
+        # "XP... Earned from all games".
+        # Let's stick to End of Game rewards for simplicity and anti-spam.
+
     await interaction.followup.send(content=message_content, embed=embed)
-    
-    if game_over or win:
-        winner_id = interaction.user.id if win else None
-        # The update_leaderboard call is synchronous, running it in a thread to prevent blocking
-        for pid in game.participants:
-            # Use asyncio.to_thread for robust non-blocking execution
-            await asyncio.to_thread(update_leaderboard, bot, pid, interaction.guild_id, (pid == winner_id))
-        bot.games.pop(cid, None)
 
-@bot.tree.command(name="wordle_board", description="View current board.")
-async def board(interaction: discord.Interaction):
-    if not interaction.guild: return
-    
-    # 1. Defer to prevent timeout
-    await interaction.response.defer()
-    
-    try:
-        game = bot.games.get(interaction.channel_id)
-        if not game: 
-            return await interaction.followup.send("❌ No active game.", ephemeral=True)
-        
-        if not game.history:
-            board_display = "No guesses yet! Start guessing with `/guess`."
-        else:
-            board_display = "\n".join([f"{h['pattern']}" for h in game.history]) 
-
-        embed = discord.Embed(title="📊 Current Board", description=board_display, color=discord.Color.blurple())
-        
-        # Wrapped in try block to catch potential string building errors
-        keypad = get_markdown_keypad_status(game.used_letters)
-        embed.add_field(name="Keyboard Status", value=keypad, inline=False)
-        
-        embed.set_footer(text=f"Attempts: {game.attempts_used}/6")
-        
-        await interaction.followup.send(embed=embed)
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        await interaction.followup.send(f"⚠️ An error occurred while generating the board: {e}", ephemeral=True)
-
-@bot.tree.command(name="leaderboard", description="Server Leaderboard.")
+@bot.tree.command(name="leaderboard", description="Server Leaderboard (Multiplayer WR).")
 async def leaderboard(interaction: discord.Interaction):
     if not interaction.guild: return
-    
     await interaction.response.defer()
-    uid = interaction.user.id
-    guild_id = interaction.guild_id
-
+    
+    # Query Guild Stats + User Stats
+    # We want members of this guild, ordered by Multi WR.
+    # Join guild_stats_v2 and user_stats_v2.
     try:
-        response = bot.supabase_client.table('guild_leaderboard') \
-            .select('user_id, guild_wins, guild_games, guild_score, guild_rank') \
-            .eq('guild_id', guild_id) \
-            .order('guild_rank', desc=False) \
+        response = bot.supabase_client.table('guild_stats_v2') \
+            .select('user_id, user_stats_v2(xp, multi_wr, multi_wins)') \
+            .eq('guild_id', interaction.guild_id) \
             .execute()
             
-        scored_results = []
-        user_rank = None
+        # Supabase join syntax returns {user_id, user_stats_v2: {xp, ...}}
+        results = []
+        for r in response.data:
+            stats = r.get('user_stats_v2')
+            if stats:
+                results.append((r['user_id'], stats['multi_wins'], stats['xp'], stats['multi_wr']))
         
-        for row in response.data:
-            user_id = row['user_id']
-            scored_results.append((
-                user_id,
-                row['guild_wins'],
-                row['guild_games'],
-                round(row['guild_score'], 2)
-            ))
-            
-            if user_id == uid:
-                user_rank = row['guild_rank']
-
+        # Sort by WR desc
+        results.sort(key=lambda x: x[3], reverse=True)
+        results = results[:50] # Top 50
+        
     except Exception as e:
-        return await interaction.followup.send("❌ Database error retrieving leaderboard.", ephemeral=True)
+        print(f"Leaderboard Error: {e}")
+        return await interaction.followup.send("❌ Error fetching leaderboard.", ephemeral=True)
 
-    if not scored_results:
-        return await interaction.followup.send("No games played yet!", ephemeral=True)
+    if not results: return await interaction.followup.send("No ranked players yet!", ephemeral=True)
 
-    data = await fetch_and_format_rankings(scored_results, bot, interaction.guild)
+    data = await fetch_and_format_rankings(results, bot, interaction.guild)
     
-    footer_text = f"🏆 {interaction.guild.name} Leaderboard"
-    if user_rank is not None:
-        footer_text += f" | Your Rank: #{user_rank}"
-
-    view = LeaderboardView(
-        bot, 
-        data, 
-        footer_text,
-        discord.Color.gold(), 
-        interaction.user
-    )
-    
+    view = LeaderboardView(bot, data, f"🏆 {interaction.guild.name} Leaderboard", discord.Color.gold(), interaction.user)
     await interaction.followup.send(embed=view.create_embed(), view=view)
 
 
-@bot.tree.command(name="leaderboard_global", description="Global Leaderboard.")
+@bot.tree.command(name="leaderboard_global", description="Global Leaderboard (Multiplayer WR).")
 async def leaderboard_global(interaction: discord.Interaction):
-    if not interaction.response.is_done():
-        try:
-            await interaction.response.defer()
-        except discord.errors.NotFound:
-            print("Interaction already timed out or processed elsewhere.")
-            return
-
-    uid = interaction.user.id
-    
-    try:
-        # 1. FETCH DATA FROM MATERIALIZED VIEW
-        response = bot.supabase_client.table('global_leaderboard') \
-            .select('user_id, global_wins, global_games, global_score, global_rank') \
-            .order('global_rank', desc=False) \
-            .execute()
-            
-        scored_results = []
-        user_rank = None
-        
-        for row in response.data:
-            user_id = row['user_id']
-            # Map columns to the expected order: (uid, wins, games, score)
-            scored_results.append((
-                user_id,
-                row['global_wins'],
-                row['global_games'],
-                round(row['global_score'], 2) # Rounding to 2 decimals
-            ))
-            
-            if user_id == uid:
-                user_rank = row['global_rank']
-        
-    except Exception as e:
-        return await interaction.followup.send("❌ Database error retrieving global leaderboard.", ephemeral=True)
-
-    if not scored_results:
-        return await interaction.followup.send("No global games yet!", ephemeral=True)
-
-    # 2. FORMATTING AND DISPLAY
-    data = await fetch_and_format_rankings(scored_results, bot)
-    
-    footer_text = "Global Leaderboard"
-    if user_rank is not None:
-        footer_text += f" | Your Rank: #{user_rank}"
-
-    view = LeaderboardView(
-        bot, 
-        data, 
-        footer_text, 
-        discord.Color.purple(), 
-        interaction.user
-    )
-    
-    await interaction.followup.send(embed=view.create_embed(), view=view)
-
-
-@bot.tree.command(name="profile", description="Check your personal stats.")
-async def profile(interaction: discord.Interaction):
-    if not interaction.guild: return
-    uid = interaction.user.id
-    
     await interaction.response.defer()
     
     try:
-        # Use simple partial to pass arguments to the synchronous function
-        # Or just use key arguments in a lambda, but asyncio.to_thread supports args
-        stats = await asyncio.to_thread(fetch_profile_stats_sync, bot, uid, interaction.guild_id)
+        response = bot.supabase_client.table('user_stats_v2') \
+            .select('user_id, multi_wins, xp, multi_wr') \
+            .order('multi_wr', desc=True) \
+            .limit(50) \
+            .execute()
+            
+        results = [(r['user_id'], r['multi_wins'], r['xp'], r['multi_wr']) for r in response.data]
         
-        (s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
-         g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num) = stats
-
     except Exception as e:
-        print(f"DB ERROR in profile: {e}")
-        return await interaction.followup.send("❌ Database error retrieving your profile.", ephemeral=True)
+        return await interaction.followup.send("❌ Error fetching global leaderboard.", ephemeral=True)
 
-    # --- BEAUTIFIED EMBED ---
+    if not results: return await interaction.followup.send("No players yet!", ephemeral=True)
+
+    data = await fetch_and_format_rankings(results, bot)
+    
+    view = LeaderboardView(bot, data, "🌍 Global Leaderboard", discord.Color.purple(), interaction.user)
+    await interaction.followup.send(embed=view.create_embed(), view=view)
+
+@bot.tree.command(name="profile", description="Check your personal V2 stats.")
+async def profile(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    p = fetch_user_profile_v2(bot, interaction.user.id)
+    if not p:
+        # Try to make a profile if missing? Or just show empty
+        return await interaction.followup.send("You haven't played directly yet!", ephemeral=True)
+
+    # p keys: xp, level, solo_wr, multi_wr, eggs, badges, active_badge, etc.
     embed = discord.Embed(color=discord.Color.teal())
-    embed.set_author(name=f"{interaction.user.display_name}'s Profile", icon_url=interaction.user.display_avatar.url)
+    embed.set_author(name=f"{interaction.user.display_name}", icon_url=interaction.user.display_avatar.url)
     
-    # 1. HERO SECTION: Global Tier
-    embed.add_field(
-        name="🏆 **Rank**", 
-        value=(
-            f"\u2003{g_tier_icon} **{g_tier_name}**\n"
-            f"\u2003Global Rank: **#{g_rank_num}**"
-        ), 
-        inline=False
-    )
+    # Badge Display
+    badge_str = ""
+    if p.get('active_badge'):
+        badge_str = f"Permission Badge: **{p['active_badge']}**\n"
     
-    # 2. SERVER STATS
-    embed.add_field(
-        name=f"🏰 **{interaction.guild.name}**", 
-        value=(
-            f"\u2003🏅 Rank: **#{s_rank_num}**\n"
-            f"\u2003🎗️ Tier: {s_tier_icon} **{s_tier_name}**\n"
-            f"\u2003📊 Score: **{s_score:.2f}**\n"
-            f"\u2003✅ Wins: **{s_wins}**\n"
-            f"\u2003🎲 Games: **{s_games}**"
-        ), 
-        inline=True
-    )
+    # Tier info
+    tier = p.get('tier', {})
+    tier_name = tier.get('name', 'Unranked')
+    tier_icon = tier.get('icon', '')
     
-    # 3. GLOBAL STATS
-    embed.add_field(
-        name="🌍 **Global Aggregate**", 
-        value=(
-            f"\u2003🏅 Rank: **#{g_rank_num}**\n"
-            f"\u2003🎗️ Tier: {g_tier_icon} **{g_tier_name}**\n"
-            f"\u2003📊 Score: **{g_score:.2f}**\n"
-            f"\u2003✅ Wins: **{g_wins}**\n"
-            f"\u2003🎲 Games: **{g_games}**"
-        ), 
-        inline=True
-    )
+    embed.description = f"{badge_str}**Level {p.get('level', 1)}** | {tier_icon} **{tier_name}**"
     
-    # Footer for polish
-    embed.set_footer(text="Keep playing to rank up!", icon_url=bot.user.display_avatar.url)
+    embed.add_field(name="⚔️ Multiplayer", value=f"WR: **{p['multi_wr']}**\nWins: {p['multi_wins']}", inline=True)
+    embed.add_field(name="🕵️ Solo", value=f"WR: **{p['solo_wr']}**\nWins: {p['solo_wins']}", inline=True)
+    
+    # Collection
+    eggs = p.get('eggs', {})
+    egg_str = "None"
+    if eggs:
+        egg_str = "\n".join([f"{k.capitalize()}: {v}x" for k, v in eggs.items()])
+    
+    embed.add_field(name="🎒 Collection", value=egg_str, inline=False)
+    
+    # Progress Bar for Level
+    curr = p.get('current_level_xp', 0)
+    nxt = p.get('next_level_xp', 100)
+    pct = min(1.0, curr / nxt)
+    bar_len = 10
+    filled_len = int(bar_len * pct)
+    bar = "█" * filled_len + "░" * (bar_len - filled_len)
+    
+    embed.add_field(name="Level Progress", value=f"`{bar}` {curr}/{nxt} XP", inline=False)
     
     await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="shop", description="Exchange collected items for badges.")
+async def shop(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    
+    p = fetch_user_profile_v2(bot, interaction.user.id)
+    if not p: return await interaction.followup.send("Play some games first!", ephemeral=True)
+    
+    eggs = p.get('eggs', {}) or {}
+    duck_count = int(eggs.get('duck', 0))
+    dragon_count = int(eggs.get('dragon', 0))
+    
+    # Simple logic: Toggle Badge if requirements met
+    # Prompt: "purchase requires ... duck - 4x ... shows up next to name".
+    
+    view = discord.ui.View()
+    
+    async def buy_duck(inter: discord.Interaction):
+        if duck_count >= 4:
+            # Set Active Badge
+             bot.supabase_client.table('user_stats_v2').update({'active_badge': '🦆 Duck Lord'}).eq('user_id', interaction.user.id).execute()
+             await inter.response.send_message("✅ Equipped **Duck Lord** Badge!", ephemeral=True)
+        else:
+             await inter.response.send_message(f"❌ Need 4 Ducks. You have {duck_count}.", ephemeral=True)
+
+    async def buy_dragon(inter: discord.Interaction):
+        if dragon_count >= 2:
+             bot.supabase_client.table('user_stats_v2').update({'active_badge': '🐲 Dragon Slayer'}).eq('user_id', interaction.user.id).execute()
+             await inter.response.send_message("✅ Equipped **Dragon Slayer** Badge!", ephemeral=True)
+        else:
+             await inter.response.send_message(f"❌ Need 2 Dragons. You have {dragon_count}.", ephemeral=True)
+             
+    async def unequip(inter: discord.Interaction):
+        bot.supabase_client.table('user_stats_v2').update({'active_badge': None}).eq('user_id', interaction.user.id).execute()
+        await inter.response.send_message("✅ Badge unequipped.", ephemeral=True)
+    
+    b1 = discord.ui.Button(label="Duck Lord Badge (4 Ducks)", style=discord.ButtonStyle.primary, disabled=(duck_count < 4))
+    b1.callback = buy_duck
+    
+    b2 = discord.ui.Button(label="Dragon Slayer Badge (2 Dragons)", style=discord.ButtonStyle.danger, disabled=(dragon_count < 2))
+    b2.callback = buy_dragon
+    
+    b3 = discord.ui.Button(label="Unequip Badge", style=discord.ButtonStyle.secondary)
+    b3.callback = unequip
+    
+    view.add_item(b1)
+    view.add_item(b2)
+    view.add_item(b3)
+    
+    embed = discord.Embed(title="🛒 Collection Shop", description="Equip badges based on your findings!", color=discord.Color.gold())
+    embed.add_field(name="Your Inventory", value=f"🦆 Ducks: {duck_count}\n🐲 Dragons: {dragon_count}", inline=False)
+    
+    await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+

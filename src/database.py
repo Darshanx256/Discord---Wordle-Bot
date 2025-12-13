@@ -1,43 +1,189 @@
 import random
 from discord.ext import commands
-from src.utils import calculate_score, get_tier_display
+from src.utils import calculate_score, get_tier_display # Keep for backward compat if needed, but we likely won't use them for V2
+from src.config import TIERS, XP_GAINS, XP_LEVELS, MPS_BASE, MPS_EFFICIENCY, MPS_SPEED
 
-def update_leaderboard(bot: commands.Bot, user_id: int, guild_id: int, won_game: bool):
-    """Updates score using the Supabase client's upsert method."""
-    if not guild_id: return 
+# --- V2 SCORING & PROGRESSION ---
 
+def calculate_game_rewards(mode: str, outcome: str, guesses: int, time_taken: float):
+    """
+    Calculates XP and WR (MPS) delta based on game result.
+    mode: 'SOLO' or 'MULTI'
+    outcome: 'win', 'loss' (Solo) OR 'win', 'correct_4', ... (Multi)
+    guesses: Number of guesses used (1-6)
+    time_taken: Seconds
+    """
+    xp = 0
+    mps = 0
+    
+    # 1. Base Rewards
+    if mode == 'SOLO':
+        # outcome is 'win' or 'loss'
+        rewards = XP_GAINS['SOLO']
+        xp = rewards.get(outcome, 5)
+        
+        # Solo MPS (Writer Note: Prompt specifies MPS details for Multiplayer mostly)
+        # "Solo... Played via /solo... Input via button... Standard Wordle"
+        # "Rating... Solo... input via button".
+        # Prompt only detailed MPS for Multiplayer.
+        # "Match Performance Score (MPS) ... Base Outcome (Multiplayer)"
+        # Let's assume Solo uses similar logic or simplified.
+        # "Solo Mode: Correct solve +40 XP, Failed +5 XP".
+        # Let's use simple MPS for Solo if not specified: Win=Match Standard?
+        # "Rating... Solo... Performance-based".
+        if outcome == 'win':
+            # Use Multiplayer win base for Solo WR?
+            # "Multiplayer never causes negative WR". Solo can (after Challenger).
+            mps = 100 # Arbitrary base for Solo win? Or use MPS_BASE['win']?
+            # Efficiency Bonus
+            mps += MPS_EFFICIENCY.get(guesses, 0)
+            # Speed Bonus
+            if time_taken < 30: mps += MPS_SPEED[30]
+            elif time_taken < 40: mps += MPS_SPEED[40]
+        else:
+            mps = -15 # Small penalty for loss? 
+            # "Solo negatives (after Challenger): Soft-capped... limited".
+            # We'll pass negative, DB handles "No negative WR until Challenger".
+
+    else: # MULTIPLAYER
+        # outcome: 'win', 'correct_4', 'correct_3', etc.
+        # XP
+        xp = XP_GAINS['MULTI'].get(outcome, 5)
+        
+        # MPS (Start with Base)
+        mps = MPS_BASE.get(outcome, 0)
+        
+        if outcome == 'win':
+            # Efficiency
+            mps += MPS_EFFICIENCY.get(guesses, 0)
+            
+            # Speed
+            if time_taken < 30: 
+                mps += MPS_SPEED[30]
+                xp += XP_GAINS['BONUS']['under_30s']
+            elif time_taken < 40: 
+                mps += MPS_SPEED[40]
+                xp += XP_GAINS['BONUS']['under_40s']
+                
+    return xp, mps
+
+def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str, 
+                   outcome: str, guesses: int, time_taken: float, egg_trigger: str = None):
+    """
+    Calls the DB RPC to record game results.
+    """
     try:
-        # 1. Fetch current score
-        response = bot.supabase_client.table('scores') \
-            .select('wins, total_games') \
-            .eq('user_id', user_id) \
-            .eq('guild_id', guild_id) \
-            .execute()
+        xp_gain, wr_delta = calculate_game_rewards(mode, outcome, guesses, time_taken)
         
-        data = response.data
+        # "Solves" check for Challenger Tier? 
+        # DB tracks wins/games.
         
-        cur_w, cur_g = (data[0]['wins'], data[0]['total_games']) if data else (0, 0)
-        
-        # 2. Calculate new scores
-        new_w = cur_w + 1 if won_game else cur_w
-        new_g = cur_g + 1
-
-        # 3. UPSERT (Insert or Update) the score
-        score_data = {
-            'user_id': user_id, 
-            'guild_id': guild_id, 
-            'wins': new_w, 
-            'total_games': new_g
+        params = {
+            'p_user_id': user_id,
+            'p_guild_id': guild_id,
+            'p_mode': mode,
+            'p_xp_gain': xp_gain,
+            'p_wr_delta': wr_delta,
+            'p_is_win': (outcome == 'win'),
+            'p_egg_trigger': egg_trigger
         }
         
-        bot.supabase_client.table('scores').upsert(score_data).execute()
-
+        response = bot.supabase_client.rpc('record_game_result_v4', params).execute()
+        
+        if response.data:
+            response.data['xp_gain'] = xp_gain
+            response.data['wr_delta_raw'] = wr_delta
+            return response.data # {xp, solo_wr, multi_wr, games_today, xp_gain}
+        return None
+        
     except Exception as e:
-        print(f"DB ERROR (General) in update_leaderboard: {e}")
+        print(f"DB ERROR in record_game_v2: {e}")
+        return None
 
+def fetch_user_profile_v2(bot: commands.Bot, user_id: int):
+    """Fetches full profile V2."""
+    try:
+        response = bot.supabase_client.table('user_stats_v2').select('*').eq('user_id', user_id).execute()
+        if response.data:
+            data = response.data[0]
+            # Calculate Level dynamically (if not stored/reliable in DB or to serve UI)
+            # "Level XP resets after each level-up" -> Use cumulative manually or iterative
+            # Prompt: "Levels 1–10 : 100 XP per level... Level XP resets".
+            # This implies `xp` in DB might be "Current Level XP" or "Total XP".
+            # Usually easiest to store Total XP and calc level.
+            # My migration script stored Total XP (roughly).
+            # Let's assume `xp` is TOTAL XP and we calc level here.
+            total_xp = data['xp']
+            lvl = 1
+            
+            # Iterative Level Calc
+            while True:
+                needed = 100
+                if lvl >= 61: needed = 500
+                elif lvl >= 31: needed = 350
+                elif lvl >= 11: needed = 200
+                
+                if total_xp >= needed:
+                    total_xp -= needed
+                    lvl += 1
+                else:
+                    break
+            
+            data['level'] = lvl
+            data['current_level_xp'] = total_xp
+            data['next_level_xp'] = needed
+            
+            # Determine Tier
+            # Use Multi WR for main tier display? Prompt says "Wordle Rating... Separate ladders".
+            # "Grandmaster... 15 multiplayer wins... WR >= 2800".
+            # Let's check Multi WR for tier.
+            wr = data['multi_wr']
+            tier_info = TIERS[-1] # Default Challenger
+            
+            for t in TIERS:
+                if wr >= t['min_wr']:
+                    # Also check extra reqs conceptually? 
+                    # For now just WR based.
+                    tier_info = t
+                    break
+            
+            data['tier'] = tier_info
+            
+            return data
+        return None
+    except Exception as e:
+        print(f"DB ERROR in fetch_user_profile_v2: {e}")
+        return None
+
+def trigger_egg(bot: commands.Bot, user_id: int, egg_name: str):
+    """Triggers an easter egg update without a game."""
+    # We can use the same RPC or a simpler update.
+    # We implemented p_egg_trigger in record_game, but maybe we want standalone?
+    # Let's reuse record_game or direct update.
+    # Reuse record_game with 0 stats? Or specific RPC?
+    # Direct update.
+    try:
+        # We need to append to jsonb.
+        # supabase-py doesn't support complex jsonb updates easily without RPC or raw sql.
+        # Use RPC 'record_game_result_v4' with 0 delta?
+        params = {
+            'p_user_id': user_id,
+            'p_guild_id': None,
+            'p_mode': 'SOLO', # Dummy
+            'p_xp_gain': 0,
+            'p_wr_delta': 0,
+            'p_is_win': False,
+            'p_egg_trigger': egg_name
+        }
+        bot.supabase_client.rpc('record_game_result_v4', params).execute()
+        return True
+    except Exception as e:
+        print(f"Egg Error: {e}")
+        return False
+
+# --- EXISTING WORD LOGIC (Keep as is) ---
 def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
     """Gets a secret word from the simple pool (bot.secrets) using guild_history table."""
-    
     try:
         # 1. SELECT used words
         response = bot.supabase_client.table('guild_history') \
@@ -74,7 +220,6 @@ def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
 
 def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
     """Gets a secret word from the hard pool (bot.hard_secrets) using guild_history_classic table."""
-    
     try:
         # 1. SELECT used words from the classic table
         response = bot.supabase_client.table('guild_history_classic') \
@@ -108,56 +253,3 @@ def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
         print(f"DB ERROR (General) in get_next_classic_secret: {e}")
         print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
         return random.choice(bot.hard_secrets)
-
-def fetch_profile_stats_sync(bot: commands.Bot, user_id: int, guild_id: int):
-    # 1. Fetch ALL data
-    response = bot.supabase_client.table('scores').select('*').execute()
-    all_data = response.data
-    
-    # --- A. SERVER STATS ---
-    guild_data = [r for r in all_data if r['guild_id'] == guild_id]
-    
-    # User's stats in this guild
-    s_row = next((r for r in guild_data if r['user_id'] == user_id), None)
-    s_wins = s_row['wins'] if s_row else 0
-    s_games = s_row['total_games'] if s_row else 0
-    s_score = calculate_score(s_wins, s_games)
-    
-    # Calculate Server Tier & Rank
-    server_scores = [calculate_score(r['wins'], r['total_games']) for r in guild_data]
-    server_scores.sort() # Ascending order [10, 20, 30]
-    
-    # Percentile for Tier (How many people you beat)
-    s_rank_idx = sum(1 for s in server_scores if s < s_score)
-    s_perc = s_rank_idx / len(server_scores) if server_scores else 0
-    s_tier_icon, s_tier_name = get_tier_display(s_perc)
-    
-    # Numerical Rank (1st, 2nd, etc) - Invert logic: Total - People you beat
-    s_rank_num = len(server_scores) - s_rank_idx 
-
-    # --- B. GLOBAL STATS ---
-    global_map = {}
-    for r in all_data:
-        u = r['user_id']
-        if u not in global_map: global_map[u] = {'w': 0, 'g': 0}
-        global_map[u]['w'] += r['wins']
-        global_map[u]['g'] += r['total_games']
-        
-    u_global = global_map.get(user_id, {'w': 0, 'g': 0})
-    g_wins = u_global['w']
-    g_games = u_global['g']
-    g_score = calculate_score(g_wins, g_games)
-    
-    # Calculate Global Tier & Rank
-    global_scores_list = [calculate_score(val['w'], val['g']) for val in global_map.values()]
-    global_scores_list.sort()
-    
-    g_rank_idx = sum(1 for s in global_scores_list if s < g_score)
-    g_perc = g_rank_idx / len(global_scores_list) if global_scores_list else 0
-    g_tier_icon, g_tier_name = get_tier_display(g_perc)
-    
-    # Numerical Rank
-    g_rank_num = len(global_scores_list) - g_rank_idx
-    
-    return (s_wins, s_games, s_score, s_tier_icon, s_tier_name, s_rank_num,
-            g_wins, g_games, g_score, g_tier_icon, g_tier_name, g_rank_num)

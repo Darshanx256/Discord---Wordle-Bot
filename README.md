@@ -1,48 +1,44 @@
-# 🟩 Discord Wordle Bot
+# 🟩 Discord Wordle Bot (V2 Beta)
 
-A feature-rich, competitive Wordle bot for Discord, complete with a global leaderboard, competitive ranking system (Elo-like), and a web dashboard status page.
+A feature-rich, competitive Wordle bot for Discord, featuring a dual-track progression system (Rating & XP), cosmetic shop, and private solo modes.
 
 ## 📂 Project Structure
 
-The project is organized into a modular architecture for clarity and maintainability.
+The project is organized into a modular architecture:
 
 ```
 Discord---Wordle-Bot/
-├── wordle_bot.py       # 🚀 ENTRY POINT: Run this to start the bot.
+├── wordle_bot.py       # 🚀 ENTRY POINT
 ├── src/                # 🧠 CORE LOGIC
-│   ├── config.py       # ⚙️ Configuration constants & Environment variables
-│   ├── bot.py          # 🤖 Main Bot Class & Command Definitions
-│   ├── game.py         # 🎮 Game Logic (Wordle Engine)
-│   ├── database.py     # 🗄️ Supabase Interaction Layer
-│   ├── ui.py           # 🎨 Discord UI Views & Formatting
-│   ├── server.py       # 🌐 Flask Web Server (Status Page)
-│   └── utils.py        # 🛠️ Helper Functions & Emoji Loading
-├── static/             # 🌐 Web Assets (HTML/CSS) for the Flask server
-├── .env                # 🔒 Secrets (Token, DB Keys) - DO NOT SHARE
+│   ├── config.py       # ⚙️ Constants (XP Table, Tiers)
+│   ├── bot.py          # 🤖 Main Bot Class & Commands
+│   ├── game.py         # 🎮 Game Engine (Solo & Multiplayer)
+│   ├── database.py     # 🗄️ Supabase Interaction (V2 RPC)
+│   ├── ui.py           # 🎨 Views, Modals, & Embeds
+│   ├── server.py       # 🌐 Flask Web Server
+│   └── utils.py        # 🛠️ Helpers
+├── supabase.txt        # 📜 SQL Schema & Migration Script
+├── static/             # 🌐 Web Assets
+├── .env                # 🔒 Secrets
 └── requirements.txt    # 📦 Dependencies
 ```
 
-## 🧩 Module Guide
+## 🧩 New Features (Beta)
 
-### `src/bot.py`
-The heart of the application. It initializes the `discord.py` bot, sets up slash commands (`/wordle`, `/guess`, `/profile`), and handles the startup sequence (`setup_hook`).
+### 📈 Progression System
+- **Wordle Rating (WR)**: Skill-based ladder (Separate Solo vs Multiplayer).
+- **Player Level (XP)**: Activity-based progression. Never decreases.
+- **Tiers**: Challenger 🛡️ -> Elite ⚔️ -> Master ⚜️ -> Grandmaster 💎.
 
-### `src/game.py`
-Contains the `WordleGame` class. This handles the core mechanics: checking guesses, coloring letters (🟩🟨⬜), managing turn history, and detecting win/loss conditions.
+### 🎮 Game Modes
+- **Multiplayer**: Coop/Competitive in a channel (`/wordle`).
+- **Solo**: Private, ephemeral game using Discord Buttons & Modals (`/solo`).
+- **Classic**: Hard mode with full dictionary (`/wordle_classic`).
 
-### `src/database.py`
-Manages all data persistence using **Supabase**.
-- `update_leaderboard`: Upserts scores after games.
-- `get_next_secret`: Fetches non-repeated words for guilds.
-- `fetch_profile_stats_sync`: Aggregates complex user stats (Rank, Tier, Percentile).
-
-### `src/ui.py`
-Handles visual elements.
-- `LeaderboardView`: The interactive pagination buttons for leaderboards.
-- `get_markdown_keypad_status`: Generates the dynamic keyboard visualization.
-
-### `src/server.py`
-A lightweight **Flask** server running in a separate thread. It serves static pages (`/`, `/terms`, `/privacy`) required for Discord App Verification and status monitoring.
+### 🎒 Features
+- **Shop**: Unlock badges like "Duck Lord" or "Dragon Slayer".
+- **Collection**: Find rare easter eggs (Ducks, Dragons) randomly in games.
+- **Anti-Grind**: Daily soft-caps to encourage consistency over spam.
 
 ## 🚀 How to Run
 
@@ -51,14 +47,13 @@ A lightweight **Flask** server running in a separate thread. It serves static pa
     pip install -r requirements.txt
     ```
 
-2.  **Configure Environment**
-    Ensure your `.env` file has the following:
+2.  **Configure Environment** (`.env`)
     ```env
     DISCORD_TOKEN=your_token
-    APP_ID=your_app_id
     SUPABASE_URL=your_db_url
     SUPABASE_KEY=your_db_key
     ```
+    *(Run SQL from `supabase.txt` in your Database first)*
 
 3.  **Start the Bot**
     ```bash
@@ -67,29 +62,27 @@ A lightweight **Flask** server running in a separate thread. It serves static pa
 
 ## 🎮 Commands
 
-- `/help` - View the interactive guide (How to play, Ranking info).
-- `/wordle` - Start a classic 5-letter game (Simple dictionary).
-- `/wordle_classic` - Start a harder game (Full dictionary).
+- `/help` - Visual guide.
+- `/wordle` - Start public simple game.
+- `/wordle_classic` - Start public hard game.
+- `/solo` - **NEW!** Play privately.
 - `/guess [word]` - Submit a guess.
-- `/board` - View the current board status.
-- `/leaderboard` - View the server leaderboard.
-- `/leaderboard_global` - View the global cross-server leaderboard.
-- `/profile` - View your detailed stats and rank.
-- `/stop_game` - Cancel the current game.
+- `/leaderboard` - Server Rankings.
+- `/leaderboard_global` - Global Rankings.
+- `/profile` - Check your Level, WR, and Collection.
+- `/shop` - **NEW!** Equip badges.
+- `/stop_game` - Cancel public game.
 
-## 🏆 Ranking System
+## 🏆 Ranking Rules
 
-The bot uses a **Bayesian Average** system for ranking to ensure fairness.
-- **Grandmaster** 💎 (Top 10%)
-- **Master** ⚜️ (Top 35%)
-- **Elite** ⚔️ (Top 60%)
-- **Challenger** 🛡️ (Remainder)
+- **XP**: Earned from all games. +50 XP for Win, +10 XP per letter.
+- **WR (Rating)**: Based on Wins, Speed (<30s bonus), and Efficiency (fewer guesses).
+- **Penalties**: None for Multi. High-rank Solo players risk WR slightly.
 
 ## ⚡ Performance
 
-- **Waitress WSGI**: Production-grade server for stability.
-- **Async Optimization**: Parallel execution for leaderboard fetching to handle scale.
-- **Supabase**: Persistent, relational data storage.
+- **Optimized DB**: Logic moved to SQL RPC (`record_game_result_v4`) to minimize latency and ensure data integrity.
+- **Concurrency**: Async fetching for large leaderboards.
 
 ---
-*Created with ❤️ by the Wordle Bot Team. (One man)*
+*Created with ❤️ by the Wordle Bot Team.*

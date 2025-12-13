@@ -18,6 +18,7 @@ class WordleGame:
         self.guessed_words = set()
         self.used_letters = {'correct': set(), 'present': set(), 'absent': set()}
         self.last_interaction = datetime.datetime.now()
+        self.start_time = datetime.datetime.now()
         self.message_id = message_id
 
     @property

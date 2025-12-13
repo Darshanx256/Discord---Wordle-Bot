@@ -19,16 +19,44 @@ CLASSIC_FILE = "words_hard.txt" # Classic list
 # --- GAME CONSTANTS ---
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 
-# --- RANKING & TIERS ---
-C_GAMES = 10  # Bayesian constant (Games)
-C_WINRATE = 0.40 # Bayesian constant (Win Rate)
+# --- RANKING & PROGRESSION ---
 
+# XP REQUIREMENTS (Per Level)
+XP_LEVELS = {
+    10: 100,  # 1-10
+    30: 200,  # 11-30
+    60: 350,  # 31-60
+    1000: 500 # 61+
+}
+
+# XP GAINS
+XP_GAINS = {
+    'SOLO': {'win': 40, 'loss': 5},
+    'MULTI': {
+        'win': 50, 'correct_4': 40, 'correct_3': 30, 'correct_2': 20, 'correct_1': 10, 'participation': 5
+    },
+    'BONUS': {'under_30s': 10, 'under_40s': 5}
+}
+
+# MATCH PERFORMANCE SCORE (MPS) - WR Calculation
+MPS_BASE = {
+    'win': 120, 'correct_4': 70, 'correct_3': 50, 'correct_2': 20, 'correct_1': 10, 'participation': 5
+}
+MPS_EFFICIENCY = { # Bonus for Nth guess win
+    1: 50, 2: 40, 3: 30, 4: 20, 5: 10, 6: 5
+}
+MPS_SPEED = { # Bonus for correct solve time
+    30: 20, 40: 10
+}
+
+# TIERS
 TIERS = [
-    (0.90, "💎", "Grandmaster"), 
-    (0.65, "⚜️", "Master"),      
-    (0.40, "⚔️", "Elite"),      
-    (0.00, "🛡️", "Challenger")    
+    {"name": "Grandmaster", "icon": "💎", "min_wr": 2800, "req": "60% WR, <3.9 Avg"},
+    {"name": "Master",      "icon": "⚜️", "min_wr": 2300, "req": "58% WR, <4.0 Avg"},
+    {"name": "Elite",       "icon": "⚔️", "min_wr": 1600, "req": "52% WR, <4.4 Avg"},
+    {"name": "Challenger",  "icon": "🛡️", "min_wr": 900,  "req": "15 Solves"}
 ]
+
 
 # --- LINKS & ASSETS ---
 TOP_GG_LINK = "https://top.gg/bot/1446184470251048991"
