@@ -62,72 +62,72 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             from src.database import record_game_v2 # Ensure import
             from src.utils import get_win_flavor # Ensure import
 
-        guess = self.guess_input.value.lower().strip()
-        
-        # Validation
-        if not guess.isalpha():
-            return await interaction.response.send_message("⚠️ Letters only.", ephemeral=True)
-        if guess not in self.bot.valid_set:
-            return await interaction.response.send_message(f"⚠️ **{guess.upper()}** not in dictionary.", ephemeral=True)
-        if self.game.is_duplicate(guess):
-             return await interaction.response.send_message(f"⚠️ **{guess.upper()}** already guessed.", ephemeral=True)
+            guess = self.guess_input.value.lower().strip()
             
-        # Process Turn
-        pat, win, game_over = self.game.process_turn(guess, interaction.user)
-        
-         # Progress Bar Logic
-        filled = "●" * self.game.attempts_used
-        empty = "○" * (6 - self.game.attempts_used)
-        progress_bar = f"[{filled}{empty}]"
-
-        # Board Display
-        board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
-        keypad = get_markdown_keypad_status(self.game.used_letters)
-        
-        # Embed Update
-        if win:
-            time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
-            flavor = get_win_flavor(self.game.attempts_used)
-            embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
-            embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!"
-            embed.add_field(name="Final Board", value=board_display, inline=False)
-            
-            # Record Results
-            from src.database import record_game_v2
-            res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken)
-            if res:
-                xp_show = f"**{res.get('xp_gain',0)}** 💠"
-                embed.add_field(name="Progression", value=f"➕ {xp_show} XP | 📈 WR: {res.get('solo_wr')}", inline=False)
+            # Validation
+            if not guess.isalpha():
+                return await interaction.response.send_message("⚠️ Letters only.", ephemeral=True)
+            if guess not in self.bot.valid_set:
+                return await interaction.response.send_message(f"⚠️ **{guess.upper()}** not in dictionary.", ephemeral=True)
+            if self.game.is_duplicate(guess):
+                 return await interaction.response.send_message(f"⚠️ **{guess.upper()}** already guessed.", ephemeral=True)
                 
-                if res.get('level_up'):
-                    embed.description += f"\n\n🔼 **LEVEL UP!** You are now **Level {res['level_up']}**! 🔼"
-
-            embed.set_footer(text=f"Time: {time_taken:.1f}s")
-            self.view_ref.disable_all() # Disable button
+            # Process Turn
+            pat, win, game_over = self.game.process_turn(guess, interaction.user)
             
-            # Clean up game
-            self.bot.solo_games.pop(interaction.user.id, None)
+             # Progress Bar Logic
+            filled = "●" * self.game.attempts_used
+            empty = "○" * (6 - self.game.attempts_used)
+            progress_bar = f"[{filled}{empty}]"
 
-        elif game_over:
-            embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
-            embed.description = f"The word was **{self.game.secret.upper()}**."
-            embed.add_field(name="Final Board", value=board_display, inline=False)
+            # Board Display
+            board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
+            keypad = get_markdown_keypad_status(self.game.used_letters)
             
-            # Record Loss
-            from src.database import record_game_v2
-            record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', 6, 999)
-            
-            self.view_ref.disable_all()
-            self.bot.solo_games.pop(interaction.user.id, None)
+            # Embed Update
+            if win:
+                time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
+                flavor = get_win_flavor(self.game.attempts_used)
+                embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
+                embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!"
+                embed.add_field(name="Final Board", value=board_display, inline=False)
+                
+                # Record Results
+                from src.database import record_game_v2
+                res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken)
+                if res:
+                    xp_show = f"**{res.get('xp_gain',0)}** 💠"
+                    embed.add_field(name="Progression", value=f"➕ {xp_show} XP | 📈 WR: {res.get('solo_wr')}", inline=False)
+                    
+                    if res.get('level_up'):
+                        embed.description += f"\n\n🔼 **LEVEL UP!** You are now **Level {res['level_up']}**! 🔼"
 
-        else:
-            embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/6", color=discord.Color.gold())
-            embed.add_field(name="Board", value=board_display, inline=False)
-            embed.add_field(name="Keyboard", value=keypad, inline=False)
-            embed.set_footer(text=f"{6 - self.game.attempts_used} tries left {progress_bar}")
+                embed.set_footer(text=f"Time: {time_taken:.1f}s")
+                self.view_ref.disable_all() # Disable button
+                
+                # Clean up game
+                self.bot.solo_games.pop(interaction.user.id, None)
 
-            # Update the message (Embed + View)
-            await interaction.response.edit_message(embed=embed, view=self.view_ref)
+            elif game_over:
+                embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
+                embed.description = f"The word was **{self.game.secret.upper()}**."
+                embed.add_field(name="Final Board", value=board_display, inline=False)
+                
+                # Record Loss
+                from src.database import record_game_v2
+                record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', 6, 999)
+                
+                self.view_ref.disable_all()
+                self.bot.solo_games.pop(interaction.user.id, None)
+
+            else:
+                embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/6", color=discord.Color.gold())
+                embed.add_field(name="Board", value=board_display, inline=False)
+                embed.add_field(name="Keyboard", value=keypad, inline=False)
+                embed.set_footer(text=f"{6 - self.game.attempts_used} tries left {progress_bar}")
+
+                # Update the message (Embed + View)
+                await interaction.response.edit_message(embed=embed, view=self.view_ref)
             
         except Exception as e:
             print(f"ERROR in Solo Modal: {e}")
