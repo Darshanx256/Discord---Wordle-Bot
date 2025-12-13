@@ -93,9 +93,12 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             from src.database import record_game_v2
             res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken)
             if res:
-                embed.add_field(name="Progression", value=f"➕ **{res.get('xp_gain',0)} XP** | 📈 WR: {res.get('solo_wr')}", inline=False)
-                # Note: record_game result depends on RPC output. We might just show "Updated".
-            
+                xp_show = f"**{res.get('xp_gain',0)}** 💠"
+                embed.add_field(name="Progression", value=f"➕ {xp_show} XP | 📈 WR: {res.get('solo_wr')}", inline=False)
+                
+                if res.get('level_up'):
+                    embed.description += f"\n\n🔼 **LEVEL UP!** You are now **Level {res['level_up']}**! 🔼"
+
             embed.set_footer(text=f"Time: {time_taken:.1f}s")
             self.view_ref.disable_all() # Disable button
             

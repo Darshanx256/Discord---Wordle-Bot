@@ -338,7 +338,12 @@ async def guess(interaction: discord.Interaction, word: str):
         # 1. Award Winner
         res = record_game_v2(bot, interaction.user.id, interaction.guild_id, 'MULTI', 'win', game.attempts_used, time_taken)
         if res:
-             embed.add_field(name="Winner Rewards", value=f"➕ **{res.get('xp_gain',0)} XP** | 📈 WR: {res.get('multi_wr')}", inline=False)
+             xp_show = f"**{res.get('xp_gain',0)}** 💠" # Updated with diamond dot emoji
+             embed.add_field(name="Winner Rewards", value=f"➕ {xp_show} XP | 📈 WR: {res.get('multi_wr')}", inline=False)
+             
+             if res.get('level_up'):
+                 lvl = res['level_up']
+                 await interaction.channel.send(f"🔼 **LEVEL UP!** {interaction.user.mention} is now **Level {lvl}**! 🔼")
 
         # 2. Award Participants (excluding winner)
         others = game.participants - {interaction.user.id}

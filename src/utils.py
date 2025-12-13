@@ -52,23 +52,56 @@ def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
 # Helper to load emojis once
 EMOJIS = load_app_emojis()
 
-def calculate_score(wins: int, games: int) -> float:
-    """Calculates Bayesian average score for ranking."""
-    if games == 0: return 0.0
-    # Score = (Wins + Prior_Wins) / (Games + Prior_Games)
-    return 10 * ((wins + (C_GAMES * C_WINRATE)) / (games + C_GAMES))
+def calculate_score(wins, games):
+    if games == 0: return 0
+    # Simple average for legacy display if needed
+    return (wins / games) * 100
 
-def get_tier_display(percentile: float) -> tuple:
-    """Returns the Tier Icon and Name based on percentile rank."""
-    for thresh, icon, name in TIERS:
-        if percentile >= thresh: return icon, name
-    return TIERS[-1][1], TIERS[-1][2] # Default to lowest
+def get_tier_display(perc):
+    # Legacy percentile tier
+    return "🛡️", "Challenger"
 
-def get_win_flavor(attempts: int) -> str:
-    """Returns a fun message based on how quickly they won."""
-    if attempts == 1: return "🤯 IMPOSSIBLE! Pure luck or genius?"
-    if attempts == 2: return "🔥 Insane! You read my mind."
-    if attempts == 3: return "⚡ Blazing fast! Great job."
-    if attempts == 4: return "👏 Solid performance."
-    if attempts == 5: return "😅 Cutting it close..."
-    return "💀 CLUTCH! That was stressful."
+def get_win_flavor(attempts):
+    flavors = {
+        1: "🤯 INSANE!",
+        2: "🤩 Amazing!",
+        3: "🔥 Great!",
+        4: "👍 Good",
+        5: "😅 Phew...",
+        6: "😬 Close one!"
+    }
+    return flavors.get(attempts, "")
+
+def calculate_level(xp: int) -> int:
+    """Calculates level from total XP based on config thresholds."""
+    # Levels 1-10: 100 XP each (1000 total)
+    # Levels 11-30: 200 XP each (4000 total -> 5000 cumulative)
+    # Levels 31-60: 350 XP each (10500 total -> 15500 cumulative)
+    # Levels 61+: 500 XP each
+    
+    lvl = 1
+    curr = xp
+    
+    # Chunk 1: 1-10 (10 levels * 100)
+    if curr >= 1000:
+        lvl += 10
+        curr -= 1000
+    else:
+        return lvl + (curr // 100)
+
+    # Chunk 2: 11-30 (20 levels * 200)
+    if curr >= 4000:
+        lvl += 20
+        curr -= 4000
+    else:
+        return lvl + (curr // 200)
+        
+    # Chunk 3: 31-60 (30 levels * 350)
+    if curr >= 10500:
+        lvl += 30
+        curr -= 10500
+    else:
+        return lvl + (curr // 350)
+        
+    # Chunk 4: 61+ (500 each)
+    return lvl + (curr // 500)

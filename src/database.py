@@ -91,9 +91,25 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
         response = bot.supabase_client.rpc('record_game_result_v4', params).execute()
         
         if response.data:
-            response.data['xp_gain'] = xp_gain
-            response.data['wr_delta_raw'] = wr_delta
-            return response.data # {xp, solo_wr, multi_wr, games_today, xp_gain}
+            from src.utils import calculate_level
+            
+            data = response.data
+            new_xp = data.get('xp', 0)
+            
+            # Identify Old XP
+            old_xp = new_xp - xp_gain
+            if old_xp < 0: old_xp = 0 # Safety
+            
+            old_lvl = calculate_level(old_xp)
+            new_lvl = calculate_level(new_xp)
+            
+            data['xp_gain'] = xp_gain
+            data['wr_delta_raw'] = wr_delta
+            
+            if new_lvl > old_lvl:
+                data['level_up'] = new_lvl
+                
+            return data # {xp, solo_wr, multi_wr, games_today, xp_gain, level_up?}
         return None
         
     except Exception as e:
