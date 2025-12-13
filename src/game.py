@@ -5,7 +5,7 @@ from src.utils import EMOJIS
 # ========= 4. GAME CLASS =========
 class WordleGame:
     __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
-                 'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id')
+                 'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
