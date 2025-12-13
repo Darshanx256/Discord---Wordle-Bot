@@ -5,7 +5,7 @@ from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
 from src.utils import EMOJIS, get_tier_display, get_win_flavor # Added utils
 
-def get_markdown_keypad_status(used_letters: dict) -> str:
+def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) -> str:
     #egg start
     extra_line = ""
     rng = random.randint(1, 100)
@@ -14,10 +14,17 @@ def get_markdown_keypad_status(used_letters: dict) -> str:
             "\n> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
             "> 🦆 You summoned a RARE Duck of Luck!"
         )
+        if bot and user_id:
+            from src.database import trigger_egg
+            trigger_egg(bot, user_id, "duck")
+            
     elif rng == 2:
         extra_line = "\n> *The letters are watching you...* 👁️"
     elif rng == 3:
         extra_line = "\n> *Does this keyboard feel sticky to you?* 🍬"
+        if bot and user_id:
+            from src.database import trigger_egg
+            trigger_egg(bot, user_id, "candy")
     #egg end
 
     """Generates the stylized keypad using Discord Markdown."""
@@ -82,7 +89,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
 
             # Board Display
             board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
-            keypad = get_markdown_keypad_status(self.game.used_letters)
+            keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id)
             
             # Embed Update
             if win:
@@ -107,6 +114,9 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 
                 # Clean up game
                 self.bot.solo_games.pop(interaction.user.id, None)
+                
+                # CRITICAL FIX: Send the updated message
+                await interaction.response.edit_message(embed=embed, view=self.view_ref)
 
             elif game_over:
                 embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
@@ -119,6 +129,9 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 
                 self.view_ref.disable_all()
                 self.bot.solo_games.pop(interaction.user.id, None)
+                
+                # CRITICAL FIX: Send the updated message
+                await interaction.response.edit_message(embed=embed, view=self.view_ref)
 
             else:
                 embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/6", color=discord.Color.gold())

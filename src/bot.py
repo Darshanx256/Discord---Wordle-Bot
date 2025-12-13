@@ -327,7 +327,7 @@ async def guess(interaction: discord.Interaction, word: str):
     
     pat, win, game_over = game.process_turn(g_word, interaction.user)
     
-    keypad = get_markdown_keypad_status(game.used_letters)
+    keypad = get_markdown_keypad_status(game.used_letters, bot, interaction.user.id)
     filled = "●" * game.attempts_used
     empty = "○" * (6 - game.attempts_used)
     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
@@ -409,19 +409,28 @@ async def leaderboard(interaction: discord.Interaction):
     
     # Query Guild Stats + User Stats
     # We want members of this guild, ordered by Multi WR.
-    # Join guild_stats_v2 and user_stats_v2.
+    # Refactored to two-step fetch for robustness against Supabase join eccentricities
     try:
-        response = bot.supabase_client.table('guild_stats_v2') \
-            .select('user_id, user_stats_v2(xp, multi_wr, multi_wins)') \
+        # Step 1: Get User IDs in this guild
+        g_response = bot.supabase_client.table('guild_stats_v2') \
+            .select('user_id') \
             .eq('guild_id', interaction.guild_id) \
             .execute()
             
-        # Supabase join syntax returns {user_id, user_stats_v2: {xp, ...}}
+        if not g_response.data:
+            return await interaction.followup.send("No ranked players in this server yet!", ephemeral=True)
+            
+        guild_user_ids = [r['user_id'] for r in g_response.data]
+
+        # Step 2: Fetch Stats for these users
+        u_response = bot.supabase_client.table('user_stats_v2') \
+            .select('user_id, multi_wins, xp, multi_wr') \
+            .in_('user_id', guild_user_ids) \
+            .execute()
+
         results = []
-        for r in response.data:
-            stats = r.get('user_stats_v2')
-            if stats:
-                results.append((r['user_id'], stats['multi_wins'], stats['xp'], stats['multi_wr']))
+        for r in u_response.data:
+            results.append((r['user_id'], r['multi_wins'], r['xp'], r['multi_wr']))
         
         # Sort by WR desc
         results.sort(key=lambda x: x[3], reverse=True)
@@ -429,7 +438,7 @@ async def leaderboard(interaction: discord.Interaction):
         
     except Exception as e:
         print(f"Leaderboard Error: {e}")
-        return await interaction.followup.send("❌ Error fetching leaderboard.", ephemeral=True)
+        return await interaction.followup.send("❌ Error fetching leaderboard. Please try again later.", ephemeral=True)
 
     if not results: return await interaction.followup.send("No ranked players yet!", ephemeral=True)
 
@@ -524,6 +533,7 @@ async def shop(interaction: discord.Interaction):
     eggs = p.get('eggs', {}) or {}
     duck_count = int(eggs.get('duck', 0))
     dragon_count = int(eggs.get('dragon', 0))
+    candy_count = int(eggs.get('candy', 0))
     
     # Simple logic: Toggle Badge if requirements met
     # Prompt: "purchase requires ... duck - 4x ... shows up next to name".
@@ -544,6 +554,13 @@ async def shop(interaction: discord.Interaction):
              await inter.response.send_message("✅ Equipped **Dragon Slayer** Badge!", ephemeral=True)
         else:
              await inter.response.send_message(f"❌ Need 2 Dragons. You have {dragon_count}.", ephemeral=True)
+
+    async def buy_candy(inter: discord.Interaction):
+        if candy_count >= 3:
+             bot.supabase_client.table('user_stats_v2').update({'active_badge': '🍬 Sugar Rush'}).eq('user_id', interaction.user.id).execute()
+             await inter.response.send_message("✅ Equipped **Sugar Rush** Badge!", ephemeral=True)
+        else:
+             await inter.response.send_message(f"❌ Need 3 Candies. You have {candy_count}.", ephemeral=True)
              
     async def unequip(inter: discord.Interaction):
         bot.supabase_client.table('user_stats_v2').update({'active_badge': None}).eq('user_id', interaction.user.id).execute()
@@ -555,15 +572,19 @@ async def shop(interaction: discord.Interaction):
     b2 = discord.ui.Button(label="Dragon Slayer Badge (2 Dragons)", style=discord.ButtonStyle.danger, disabled=(dragon_count < 2))
     b2.callback = buy_dragon
     
-    b3 = discord.ui.Button(label="Unequip Badge", style=discord.ButtonStyle.secondary)
-    b3.callback = unequip
+    b3 = discord.ui.Button(label="Sugar Rush Badge (3 Candies)", style=discord.ButtonStyle.success, disabled=(candy_count < 3))
+    b3.callback = buy_candy
+
+    b4 = discord.ui.Button(label="Unequip Badge", style=discord.ButtonStyle.secondary)
+    b4.callback = unequip
     
     view.add_item(b1)
     view.add_item(b2)
     view.add_item(b3)
+    view.add_item(b4)
     
     embed = discord.Embed(title="🛒 Collection Shop", description="Equip badges based on your findings!", color=discord.Color.gold())
-    embed.add_field(name="Your Inventory", value=f"🦆 Ducks: {duck_count}\n🐲 Dragons: {dragon_count}", inline=False)
+    embed.add_field(name="Your Inventory", value=f"🦆 Ducks: {duck_count}\n🐲 Dragons: {dragon_count}\n🍬 Candies: {candy_count}", inline=False)
     
     await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
