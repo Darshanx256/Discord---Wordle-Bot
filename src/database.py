@@ -100,6 +100,32 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
             old_xp = new_xp - xp_gain
             if old_xp < 0: old_xp = 0 # Safety
             
+            old_wr = 0
+            new_wr = 0
+            if mode == 'SOLO':
+                 new_wr = data.get('solo_wr', 0)
+            else:
+                 new_wr = data.get('multi_wr', 0)
+                 
+            old_wr = new_wr - wr_delta
+            
+            # Check Tier Cross
+            # Find old and new tier
+            from src.config import TIERS
+            
+            old_tier = None
+            new_tier = None
+            
+            for t in TIERS:
+                if old_wr >= t['min_wr']: old_tier = t
+                if new_wr >= t['min_wr']: new_tier = t
+                
+            # If crossed threshold
+            if new_tier and old_tier and (new_tier['min_wr'] > old_tier['min_wr']):
+                 data['tier_up'] = new_tier
+            elif new_tier and not old_tier: # Unranked to Ranked
+                 data['tier_up'] = new_tier
+            
             old_lvl = calculate_level(old_xp)
             new_lvl = calculate_level(new_xp)
             
@@ -109,7 +135,7 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
             if new_lvl > old_lvl:
                 data['level_up'] = new_lvl
                 
-            return data # {xp, solo_wr, multi_wr, games_today, xp_gain, level_up?}
+            return data # {xp, solo_wr, multi_wr, games_today, xp_gain, level_up?, tier_up?}
         return None
         
     except Exception as e:

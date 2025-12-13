@@ -205,12 +205,15 @@ class LeaderboardView(discord.ui.View):
             
             for row in page_data:
                 # Unpack flexibly or assuming fixed structure
-                # Let's assume structure: (Rank, Name, Wins, XP, WR, TierIcon)
-                rank, name, wins, xp, wr, icon = row
+                # Updated Structure: (Rank, Name, Wins, XP, WR, TierIcon, ActiveBadge)
+                rank, name, wins, xp, wr, icon, badge = row
+                
+                # Show badge if exists
+                badge_str = f"{badge} " if badge else ""
                 
                 medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"`#{rank}`")
                 
-                description_lines.append(f"{medal} {icon} **{name}**\n   > WR: **{wr}** | XP: {xp} | Wins: {wins}")
+                description_lines.append(f"{medal} {icon} **{badge_str}{name}**\n   > WR: **{wr}** | XP: {xp} | Wins: {wins}")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)}")

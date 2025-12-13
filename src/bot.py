@@ -152,7 +152,7 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
     sem = asyncio.Semaphore(5) 
 
     async def fetch_user_safe(row_data):
-        i, (uid, w, xp, wr) = row_data # V2 Structure
+        i, (uid, w, xp, wr, badge) = row_data # V2 Structure Updated
         name = f"User {uid}"
         
         # Determine Tier Icon based on WR
@@ -166,12 +166,12 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
         if guild:
             member = guild.get_member(uid)
             if member:
-                return (i + 1, member.display_name, w, xp, wr, tier_icon)
+                return (i + 1, member.display_name, w, xp, wr, tier_icon, badge)
         
         # 2. Try Global Bot Cache (FAST & SAFE)
         user = bot_instance.get_user(uid)
         if user:
-            return (i + 1, user.display_name, w, xp, wr, tier_icon)
+            return (i + 1, user.display_name, w, xp, wr, tier_icon, badge)
 
         # 3. API Call (SLOW - Needs Semaphore)
         async with sem:
@@ -181,7 +181,7 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
             except:
                 pass 
         
-        return (i + 1, name, w, xp, wr, tier_icon)
+        return (i + 1, name, w, xp, wr, tier_icon, badge)
 
     # Launch all tasks
     tasks = [fetch_user_safe((i, r)) for i, r in enumerate(results)]
@@ -334,11 +334,26 @@ async def guess(interaction: discord.Interaction, word: str):
     
     message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
     
+    # Display Badge logic 
+    # Optimization: Fetch badge from local cache if possible, or simple query. 
+    # For speed, we might want to query user_stats_v2.active_badge.
+    # But doing a DB call every guess is heavy.
+    # Let's rely on Profile fetch (cached?) or just do a quick select.
+    # Or, only on Win? User wants "jack🦆 guessed: ...".
+    # We will do a lightweight select.
+    try:
+         b_res = bot.supabase_client.table('user_stats_v2').select('active_badge').eq('user_id', interaction.user.id).execute()
+         active_badge = b_res.data[0]['active_badge'] if b_res.data else None
+    except:
+         active_badge = None
+         
+    badge_str = f"{active_badge} " if active_badge else ""
+    
     if win:
         time_taken = (datetime.datetime.now() - game.start_time).total_seconds()
         flavor = get_win_flavor(game.attempts_used)
         embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
-        embed.description = f"**{interaction.user.mention}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
+        embed.description = f"**{badge_str}{interaction.user.mention}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
         embed.add_field(name="Final Board", value=board_display, inline=False)
         
         # RECORD stats for the WINNER
@@ -358,6 +373,11 @@ async def guess(interaction: discord.Interaction, word: str):
              if res.get('level_up'):
                  lvl = res['level_up']
                  await interaction.channel.send(f"🔼 **LEVEL UP!** {interaction.user.mention} is now **Level {lvl}**! 🔼")
+
+             if res.get('tier_up'):
+                 t_name = res['tier_up']['name']
+                 t_icon = res['tier_up']['icon']
+                 await interaction.channel.send(f"🎉 **PROMOTION!** {interaction.user.mention} has reached **{t_icon} {t_name}** Tier! 🎉")
 
         # 2. Award Participants (excluding winner)
         others = game.participants - {interaction.user.id}
@@ -387,7 +407,7 @@ async def guess(interaction: discord.Interaction, word: str):
     else:
         # Just a turn
         embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
-        embed.description = f"**{interaction.user.display_name}** guessed: `{g_word.upper()}`"
+        embed.description = f"**{badge_str}{interaction.user.display_name}** guessed: `{g_word.upper()}`"
         embed.add_field(name="Current Board", value=board_display, inline=False)
         embed.set_footer(text=f"{6 - game.attempts_used} tries left [{filled}{empty}]")
         
@@ -424,13 +444,13 @@ async def leaderboard(interaction: discord.Interaction):
 
         # Step 2: Fetch Stats for these users
         u_response = bot.supabase_client.table('user_stats_v2') \
-            .select('user_id, multi_wins, xp, multi_wr') \
+            .select('user_id, multi_wins, xp, multi_wr, active_badge') \
             .in_('user_id', guild_user_ids) \
             .execute()
 
         results = []
         for r in u_response.data:
-            results.append((r['user_id'], r['multi_wins'], r['xp'], r['multi_wr']))
+            results.append((r['user_id'], r['multi_wins'], r['xp'], r['multi_wr'], r.get('active_badge')))
         
         # Sort by WR desc
         results.sort(key=lambda x: x[3], reverse=True)
