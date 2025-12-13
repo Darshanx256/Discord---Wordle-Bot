@@ -208,15 +208,17 @@ async def start(interaction: discord.Interaction):
     
     # Easter Egg Trigger?
     title = "✨ Wordle Started! (Simple)"
-    # V2: Trigger "duck" or "dragon" internally on chance?
-    # Prompt: "when a user triggers duck, add 1x duck... shows up in profile".
-    # Logic: 1% chance on start? Or on guess? Prompt: "triggers duck". Usually on game start/end or random.
-    # Let's add it on Game Start.
     egg_msg = ""
-    if random.randint(1, 100) == 1:
+    rng = random.randint(1, 100)
+    
+    if rng == 1:
         title = "🦆 Wordle Started! (Duck Edition)"
         trigger_egg(bot, interaction.user.id, "duck")
         egg_msg = "\n🎉 **You found a rare Duck!** It has been added to your collection."
+    elif rng == 2:
+        title = "🍬 Wordle Started! (Candy Edition)"
+        trigger_egg(bot, interaction.user.id, "candy")
+        egg_msg = "\n🍬 **Ooh! A piece of candy!** (Added to collection)"
     
     embed = discord.Embed(title=title, color=discord.Color.blue())
     embed.description = f"A simple **5-letter word** has been chosen. **6 attempts** total.{egg_msg}"
@@ -224,7 +226,10 @@ async def start(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed)
     msg = await interaction.original_response()
+    
+    # Init Game
     bot.games[cid] = WordleGame(secret, cid, interaction.user, msg.id)
+    print(f"DEBUG: Game STARTED in Channel {cid}. Active Games: {list(bot.games.keys())}")
 
 
 @bot.tree.command(name="wordle_classic", description="Start a Classic game (Full dictionary list).")
@@ -240,10 +245,16 @@ async def start_classic(interaction: discord.Interaction):
     
     title = "⚔️ Wordle Started! (Classic)"
     egg_msg = ""
-    if random.randint(1, 200) == 1: # Rare
+    rng = random.randint(1, 200) # Rare
+    
+    if rng == 1: 
         title = "🐲 Wordle Started! (Dragon Slayer Mode)"
         trigger_egg(bot, interaction.user.id, "dragon")
         egg_msg = "\n🔥 **A DRAGON APPEARS!** (Added to collection)"
+    elif rng == 2:
+        title = "🍬 Wordle Started! (Candy Edition)"
+        trigger_egg(bot, interaction.user.id, "candy")
+        egg_msg = "\n🍬 **Sweeeet! Found a candy.**"
         
     embed = discord.Embed(title=title, color=discord.Color.dark_gold())
     embed.description = f"**Hard Mode!** 6 attempts.{egg_msg}"
@@ -252,6 +263,7 @@ async def start_classic(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
     msg = await interaction.original_response()
     bot.games[cid] = WordleGame(secret, cid, interaction.user, msg.id)
+    print(f"DEBUG: Classic Game STARTED in Channel {cid}. Active Games: {list(bot.games.keys())}")
 
 @bot.tree.command(name="solo", description="Play a private game (Ephemeral).")
 async def solo(interaction: discord.Interaction):
@@ -293,6 +305,8 @@ async def guess(interaction: discord.Interaction, word: str):
     cid = interaction.channel_id
     game = bot.games.get(cid)
     g_word = word.lower().strip()
+    
+    print(f"DEBUG: Guess in Channel {cid}. Active: {list(bot.games.keys())}")
 
     if not game: return await interaction.followup.send("⚠️ No active game.", ephemeral=True)
     if game.is_duplicate(g_word): return await interaction.followup.send(f"⚠️ **{g_word.upper()}** already guessed!", ephemeral=True)
@@ -436,9 +450,13 @@ async def leaderboard_global(interaction: discord.Interaction):
             .limit(50) \
             .execute()
             
+        if not response.data:
+            return await interaction.followup.send("No records found in global leaderboard.", ephemeral=True)
+            
         results = [(r['user_id'], r['multi_wins'], r['xp'], r['multi_wr']) for r in response.data]
         
     except Exception as e:
+        print(f"Global Leaderboard Error: {e}")
         return await interaction.followup.send("❌ Error fetching global leaderboard.", ephemeral=True)
 
     if not results: return await interaction.followup.send("No players yet!", ephemeral=True)

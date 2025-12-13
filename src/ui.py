@@ -58,7 +58,10 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
         self.view_ref = view_ref # Review to the SoloView to disable buttons if over
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Game Logic Integration
+        try:
+            from src.database import record_game_v2 # Ensure import
+            from src.utils import get_win_flavor # Ensure import
+
         guess = self.guess_input.value.lower().strip()
         
         # Validation
@@ -123,8 +126,15 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             embed.add_field(name="Keyboard", value=keypad, inline=False)
             embed.set_footer(text=f"{6 - self.game.attempts_used} tries left {progress_bar}")
 
-        # Update the message (Embed + View)
-        await interaction.response.edit_message(embed=embed, view=self.view_ref)
+            # Update the message (Embed + View)
+            await interaction.response.edit_message(embed=embed, view=self.view_ref)
+            
+        except Exception as e:
+            print(f"ERROR in Solo Modal: {e}")
+            # Try to send ephemeral if possible, but edit_message might have failed
+            # If interaction is already responded (edit_message), we can't send another unless followup
+            # But earlier code was edit_message.
+            pass
 
 class SoloView(ui.View):
     def __init__(self, bot, game, user):
