@@ -122,31 +122,13 @@ def fetch_user_profile_v2(bot: commands.Bot, user_id: int):
         response = bot.supabase_client.table('user_stats_v2').select('*').eq('user_id', user_id).execute()
         if response.data:
             data = response.data[0]
-            # Calculate Level dynamically (if not stored/reliable in DB or to serve UI)
-            # "Level XP resets after each level-up" -> Use cumulative manually or iterative
-            # Prompt: "Levels 1–10 : 100 XP per level... Level XP resets".
-            # This implies `xp` in DB might be "Current Level XP" or "Total XP".
-            # Usually easiest to store Total XP and calc level.
-            # My migration script stored Total XP (roughly).
-            # Let's assume `xp` is TOTAL XP and we calc level here.
-            total_xp = data['xp']
-            lvl = 1
+            # Use centralized utility for consistent math
+            from src.utils import get_level_progress
             
-            # Iterative Level Calc
-            while True:
-                needed = 100
-                if lvl >= 61: needed = 500
-                elif lvl >= 31: needed = 350
-                elif lvl >= 11: needed = 200
-                
-                if total_xp >= needed:
-                    total_xp -= needed
-                    lvl += 1
-                else:
-                    break
+            lvl, cur_xp, needed = get_level_progress(data['xp'])
             
             data['level'] = lvl
-            data['current_level_xp'] = total_xp
+            data['current_level_xp'] = cur_xp
             data['next_level_xp'] = needed
             
             # Determine Tier

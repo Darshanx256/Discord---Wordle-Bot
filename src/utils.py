@@ -73,35 +73,39 @@ def get_win_flavor(attempts):
     return flavors.get(attempts, "")
 
 def calculate_level(xp: int) -> int:
-    """Calculates level from total XP based on config thresholds."""
-    # Levels 1-10: 100 XP each (1000 total)
-    # Levels 11-30: 200 XP each (4000 total -> 5000 cumulative)
-    # Levels 31-60: 350 XP each (10500 total -> 15500 cumulative)
-    # Levels 61+: 500 XP each
-    
+    """Calculates level from total XP. Legacy simple return."""
+    lvl, _, _ = get_level_progress(xp)
+    return lvl
+
+def get_level_progress(total_xp: int):
+    """Returns (level, xp_in_level, xp_needed_for_next)."""
     lvl = 1
-    curr = xp
+    curr = total_xp
     
-    # Chunk 1: 1-10 (10 levels * 100)
+    # Chunk 1: 1-10 (100 XP each)
     if curr >= 1000:
         lvl += 10
         curr -= 1000
     else:
-        return lvl + (curr // 100)
+        l_gain = curr // 100
+        return lvl + l_gain, curr % 100, 100
 
-    # Chunk 2: 11-30 (20 levels * 200)
+    # Chunk 2: 11-30 (200 XP each)
     if curr >= 4000:
         lvl += 20
         curr -= 4000
     else:
-        return lvl + (curr // 200)
-        
-    # Chunk 3: 31-60 (30 levels * 350)
+        l_gain = curr // 200
+        return lvl + l_gain, curr % 200, 200
+
+    # Chunk 3: 31-60 (350 XP each)
     if curr >= 10500:
         lvl += 30
         curr -= 10500
     else:
-        return lvl + (curr // 350)
-        
-    # Chunk 4: 61+ (500 each)
-    return lvl + (curr // 500)
+        l_gain = curr // 350
+        return lvl + l_gain, curr % 350, 350
+
+    # Chunk 4: 61+ (500 XP each)
+    l_gain = curr // 500
+    return lvl + l_gain, curr % 500, 500
