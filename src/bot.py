@@ -119,6 +119,16 @@ class WordleBot(commands.Bot):
         
         for cid in to_remove:
             self.games.pop(cid, None)
+
+        # Cleanup Solo Games
+        solo_remove = []
+        for uid, sgame in self.solo_games.items():
+             delta = now - sgame.last_interaction
+             if delta.total_seconds() > 86400: # 24 Hours
+                 solo_remove.append(uid)
+        
+        for uid in solo_remove:
+            self.solo_games.pop(uid, None)
     
     @tasks.loop(hours=96) # Pinging database once every 4 day to prevent freeze
     async def db_ping_task(self):
@@ -283,6 +293,30 @@ async def solo(interaction: discord.Interaction):
     view = SoloView(bot, game, interaction.user)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+@bot.tree.command(name="show_solo", description="Show your active solo game (if dismissed via Ephemeral).")
+async def show_solo(interaction: discord.Interaction):
+    
+    if interaction.user.id not in bot.solo_games:
+        return await interaction.response.send_message("⚠️ No active solo game found.", ephemeral=True)
+        
+    game = bot.solo_games[interaction.user.id]
+    
+    # Reconstruct state
+    filled = "●" * game.attempts_used
+    empty = "○" * (6 - game.attempts_used)
+    progress_bar = f"[{filled}{empty}]"
+    
+    board_display = "\n".join([f"{h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
+    keypad = get_markdown_keypad_status(game.used_letters, bot, interaction.user.id)
+    
+    embed = discord.Embed(title=f"Solo Wordle | Attempt {game.attempts_used}/6", color=discord.Color.gold())
+    embed.add_field(name="Board", value=board_display, inline=False)
+    embed.add_field(name="Keyboard", value=keypad, inline=False)
+    embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
+    
+    view = SoloView(bot, game, interaction.user)
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
 
 @bot.tree.command(name="stop_game", description="Force stop the current game.")
 async def stop_game(interaction: discord.Interaction):
@@ -347,13 +381,13 @@ async def guess(interaction: discord.Interaction, word: str):
     except:
          active_badge = None
          
-    badge_str = f"{active_badge} " if active_badge else ""
+    badge_str = f" {active_badge}" if active_badge else ""
     
     if win:
         time_taken = (datetime.datetime.now() - game.start_time).total_seconds()
         flavor = get_win_flavor(game.attempts_used)
         embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
-        embed.description = f"**{badge_str}{interaction.user.mention}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
+        embed.description = f"**{interaction.user.mention}{badge_str}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
         embed.add_field(name="Final Board", value=board_display, inline=False)
         
         # RECORD stats for the WINNER
@@ -407,7 +441,7 @@ async def guess(interaction: discord.Interaction, word: str):
     else:
         # Just a turn
         embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
-        embed.description = f"**{badge_str}{interaction.user.display_name}** guessed: `{g_word.upper()}`"
+        embed.description = f"**{interaction.user.display_name}{badge_str}** guessed: `{g_word.upper()}`"
         embed.add_field(name="Current Board", value=board_display, inline=False)
         embed.set_footer(text=f"{6 - game.attempts_used} tries left [{filled}{empty}]")
         
@@ -474,7 +508,7 @@ async def leaderboard_global(interaction: discord.Interaction):
     
     try:
         response = bot.supabase_client.table('user_stats_v2') \
-            .select('user_id, multi_wins, xp, multi_wr') \
+            .select('user_id, multi_wins, xp, multi_wr, active_badge') \
             .order('multi_wr', desc=True) \
             .limit(50) \
             .execute()
@@ -482,7 +516,7 @@ async def leaderboard_global(interaction: discord.Interaction):
         if not response.data:
             return await interaction.followup.send("No records found in global leaderboard.", ephemeral=True)
             
-        results = [(r['user_id'], r['multi_wins'], r['xp'], r['multi_wr']) for r in response.data]
+        results = [(r['user_id'], r['multi_wins'], r['xp'], r['multi_wr'], r.get('active_badge')) for r in response.data]
         
     except Exception as e:
         print(f"Global Leaderboard Error: {e}")

@@ -170,6 +170,15 @@ class SoloView(ui.View):
     async def guess_button(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_modal(SoloGuessModal(self.bot, self.game, self))
 
+    @ui.button(label="End Game", style=discord.ButtonStyle.danger, emoji="🛑")
+    async def end_game_button(self, interaction: discord.Interaction, button: ui.Button):
+        # End the game manually
+        if interaction.user.id in self.bot.solo_games:
+            self.bot.solo_games.pop(interaction.user.id, None)
+            
+        self.disable_all()
+        await interaction.response.edit_message(content=f"⛔ **Game Ended by User.**\nThe word was **{self.game.secret.upper()}**.", view=self, embed=None)
+
 # --- EXISTING VIEWS ---
 
 class LeaderboardView(discord.ui.View):
@@ -208,12 +217,12 @@ class LeaderboardView(discord.ui.View):
                 # Updated Structure: (Rank, Name, Wins, XP, WR, TierIcon, ActiveBadge)
                 rank, name, wins, xp, wr, icon, badge = row
                 
-                # Show badge if exists
-                badge_str = f"{badge} " if badge else ""
+                # Show badge if exists (Suffix Style)
+                badge_str = f" {badge}" if badge else ""
                 
                 medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"`#{rank}`")
                 
-                description_lines.append(f"{medal} {icon} **{badge_str}{name}**\n   > WR: **{wr}** | XP: {xp} | Wins: {wins}")
+                description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}** | Wins: {wins}")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)}")
