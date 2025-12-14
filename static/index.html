@@ -1,148 +1,297 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Wordle Game Bot - The ultimate Discord bot for playing Wordle with your friends! Features dual game modes, global leaderboards, and permanent stats tracking.">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
-    <title>Wordle Game Bot</title>
+    <title>Wordle Game Bot - Discord's Best Wordle Experience</title>
+
+    <!-- Fonts & Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
- 
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            line-height: 1.6; 
-            color: #333; /* Base text color */
-            max-width: 900px; /* Constrained width */
-            margin: 0 auto; 
-            padding: 20px; 
-            background-color: #f9f9f9; /* Light gray background */
-        }
-        header { 
-            text-align: center; 
-            padding: 10px 0; 
-            border-bottom: 2px solid #ddd; 
-            margin-bottom: 10px; /* Added spacing */
-        }
-        h1 { color: #5c6bc0; font-size: 2.5em; margin-bottom: 8px; } /* Primary title color */
-        .logo { margin-bottom: 10px; }
-        .logo img { max-width: 150px; height: 40px; width: 40px; border-radius: 8px; }
-        footer { 
-            margin-top: 40px; 
-            padding-top: 20px; 
-            text-align: center; 
-            font-size: 0.9em; 
-            color: #777; 
-            border-top: 1px solid #ddd; 
-        }
-                .container {
-            
-            padding: 0 20px; 
-            text-align: center;
-        }
-        
-        .tagline { 
-            font-size: 1.3em;
-            color: #7f8c8d; 
-            margin-top: 5px;
-        }
-        
-        /* CTA BUTTON */
-        .cta-button { 
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 18px 40px;
-            background-color: #5865F2; /* Official Discord Blue */
-            color: white; 
-            border-radius: 8px; 
-            font-weight: 700; 
-            font-size: 1.3em; 
-            transition: background-color 0.3s, transform 0.2s; 
-            margin: 20px 0;
-            text-decoration: none;
-        }
-        .cta-button i { margin-right: 12px; font-size: 1.5em; }
-        .cta-button:hover { 
-            background-color: #4b57d9; 
-            transform: translateY(-2px);
-        }
 
-        /* FEATURES LIST */
-        .features {
-            list-style-type: none;
-            padding: 0;
-            margin: 30px 0 40px;
-            text-align: left;
-            width: 80%; /* Constrain list width slightly */
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        .features li {
-            font-size: 1.1em;
-            margin-bottom: 15px;
-            padding-left: 1.8em;
-            position: relative;
-        }
-        .features li strong { color: #4db6ac; } /* Accent color for feature titles */
-        .features li:before {
-            content: '🐙'; 
-            color: #4db6ac; 
-            font-size: 1.3em;
-            position: absolute;
-            left: 0;
-            line-height: 1.4;
-        }
-        
-        /* Footer Links */
-        footer a { color: #5c6bc0; text-decoration: none; margin: 0 10px; }
-        footer a:hover { text-decoration: underline; }
-
-        /* Mobile Adjustments */
-        @media (max-width: 600px) {
-            .container { padding: 0 10px; }
-            h1 { font-size: 2em; }
-            .cta-button { font-size: 1.1em; padding: 15px 30px; }
-            .features { width: 95%; }
-        }
-    </style>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-
-    <header>
-        <div class="logo">
-            <img src="icon.png" alt="Bot Logo" height="40" width="40"/>
-        </div>
-        <h1>Wordle Game Bot</h1>
-    </header>
-
-    <div class="container">
-        
-        <a href="https://discord.com/oauth2/authorize?client_id=1446184470251048991&scope=bot" class="cta-button" target="_blank">
-            <i class="fab fa-discord"></i>
-            Add Wordle Game to Discord
-        </a>
-
-        <section>
-            <ul class="features">
-                <li><strong>Dual Game Modes:</strong> For when you're feeling either <b>Simple</b> or <b>dangerously</b> clever.</li>
-                <li><strong>Global Leaderboards:</strong> Prove you're the smartest <b>Octopus</b> in the server.</li>
-                <li><strong>Permanent Stats:</strong> Your wins, losses, and bragging rights are securely stored.</li>
-                <li><strong>Zero Spam:</strong> It only speaks when commanded. Silence guaranteed between games.</li>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="container nav-content">
+            <a href="/" class="nav-logo">
+                <img src="icon.png" alt="Wordle Bot Logo">
+                <span>Wordle Bot</span>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="/privacy">Privacy</a></li>
+                <li><a href="/terms">Terms</a></li>
             </ul>
-        </section>
+        </div>
+    </nav>
 
-    </div>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="float-animation">
+                <img src="icon.png" alt="Wordle Bot"
+                    style="width: 120px; height: 120px; border-radius: 24px; margin-bottom: 2rem; box-shadow: 0 8px 32px rgba(88, 101, 242, 0.4);">
+            </div>
 
-    <footer>
-        <p>For any questions, please contact <b>Ortsx256@proton.me</b>.</p>
-        <p>&copy; 2025 Wordle Game Bot. All rights reserved.</p>
-        <p>
-            <a href="/terms">Terms of Service</a> | 
-            <a href="/privacy">Privacy Policy</a>
-        </p>
-	<p><a href="https://www.flaticon.com/free-icons/octopus" title="octopus icons">Octopus icons created by Whitevector - Flaticon</a></p>
+            <h1 class="hero-title">
+                Wordle Game Bot
+            </h1>
+
+            <p class="hero-subtitle">
+                The ultimate Discord Wordle experience. 🐙<br>
+                Challenge your friends, climb the leaderboards, and prove you're the smartest octopus in the server.
+            </p>
+
+            <a href="https://discord.com/oauth2/authorize?client_id=1446184470251048991&scope=bot"
+                class="btn btn-primary" target="_blank">
+                <i class="fab fa-discord"></i>
+                Add to Discord
+            </a>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="stat-item">
+            <div class="stat-number">2</div>
+            <div class="stat-label">Game Modes</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">∞</div>
+            <div class="stat-label">Five-Letter Words</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-number">0</div>
+            <div class="stat-label">Spam Messages</div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="container">
+        <div class="text-center mb-xl">
+            <h2 class="text-gradient">Why Choose Wordle Bot?</h2>
+            <p style="color: var(--text-secondary); font-size: 1.2rem;">Packed with features to make your Wordle games
+                unforgettable</p>
+        </div>
+
+        <div class="features-grid">
+            <!-- Feature 1 -->
+            <div class="feature-card glass-card">
+                <div class="feature-icon">🎮</div>
+                <h3 class="feature-title">Dual Game Modes</h3>
+                <p class="feature-description">
+                    Choose between <strong>Simple</strong> mode for casual fun or <strong>Classic</strong> mode for
+                    dangerously clever challenges. Something for everyone!
+                </p>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="feature-card glass-card">
+                <div class="feature-icon">🏆</div>
+                <h3 class="feature-title">Global Leaderboards</h3>
+                <p class="feature-description">
+                    Climb the ranks! Track your performance across servers with global and server-specific leaderboards.
+                    Show off your Wordle mastery.
+                </p>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="feature-card glass-card">
+                <div class="feature-icon">💾</div>
+                <h3 class="feature-title">Permanent Stats</h3>
+                <p class="feature-description">
+                    Your wins, losses, and bragging rights are securely stored. Track your progress over time with
+                    detailed statistics.
+                </p>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="feature-card glass-card">
+                <div class="feature-icon">🕵️</div>
+                <h3 class="feature-title">Solo Mode</h3>
+                <p class="feature-description">
+                    Practice in private! Play solo games to sharpen your skills without the pressure of public
+                    leaderboards.
+                </p>
+            </div>
+
+            <!-- Feature 5 -->
+            <div class="feature-card glass-card">
+                <div class="feature-icon">🎯</div>
+                <h3 class="feature-title">Smart Word Pool</h3>
+                <p class="feature-description">
+                    Never see the same word twice (well, for a long time). Our system tracks used words per server to
+                    keep games fresh.
+                </p>
+            </div>
+
+            <!-- Feature 6 -->
+            <div class="feature-card glass-card">
+                <div class="feature-icon">🔇</div>
+                <h3 class="feature-title">Zero Spam</h3>
+                <p class="feature-description">
+                    The bot only speaks when commanded. Guaranteed silence between games. No annoying notifications or
+                    unnecessary messages.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Screenshots Showcase Section -->
+    <section class="screenshots-section container">
+        <div class="text-center mb-xl">
+            <h2 class="text-gradient">See It In Action</h2>
+            <p style="color: var(--text-secondary); font-size: 1.2rem;">
+                Real screenshots from Discord showing the bot in all its glory
+            </p>
+        </div>
+
+
+        <!-- Screenshot 1: Solo Mode -->
+        <div class="screenshot-item">
+            <div class="screenshot-content">
+                <span class="screenshot-label">🕵️ Private Practice</span>
+                <h3 class="screenshot-title">Solo Mode</h3>
+                <p class="screenshot-description">
+                    Play Wordle privately without the pressure of public leaderboards. Perfect for practicing your
+                    skills, testing strategies, or just having fun on your own time.
+                </p>
+                <ul class="screenshot-list">
+                    <li>Ephemeral messages - only you can see them</li>
+                    <li>Interactive buttons for seamless gameplay</li>
+                    <li>Full keyboard status tracking</li>
+                    <li>Easy "End Game" option anytime</li>
+                </ul>
+            </div>
+            <div class="screenshot-image-wrapper">
+                <img src="screenshot-solo.png" alt="Solo Wordle Mode" class="screenshot-image">
+            </div>
+        </div>
+
+        <!-- Screenshot 2: Victory Screen -->
+        <div class="screenshot-item">
+            <div class="screenshot-content">
+                <span class="screenshot-label">🏆 Rewarding Wins</span>
+                <h3 class="screenshot-title">Victory & Rewards</h3>
+                <p class="screenshot-description">
+                    Experience the thrill of victory with instant XP rewards and Wordle Rating updates. Every win counts
+                    toward your progression and ranking on the leaderboards.
+                </p>
+                <ul class="screenshot-list">
+                    <li>Instant XP rewards for victories</li>
+                    <li>Real-time Wordle Rating (WR) updates</li>
+                    <li>Dynamic flavor text based on attempts</li>
+                    <li>Beautiful victory embeds with final board</li>
+                </ul>
+            </div>
+            <div class="screenshot-image-wrapper">
+                <img src="screenshot-victory.png" alt="Victory Screen" class="screenshot-image">
+            </div>
+        </div>
+
+        <!-- Screenshot 3: Level Up -->
+        <div class="screenshot-item">
+            <div class="screenshot-content">
+                <span class="screenshot-label">📈 Progression System</span>
+                <h3 class="screenshot-title">Level Up & Grow</h3>
+                <p class="screenshot-description">
+                    Track your progress with a comprehensive leveling system. Earn XP from every game and watch yourself
+                    climb through the ranks with satisfying level-up notifications.
+                </p>
+                <ul class="screenshot-list">
+                    <li>Rewarding XP and level-up system</li>
+                    <li>Detailed game statistics tracking</li>
+                    <li>Performance-based scoring</li>
+                    <li>Clear progression indicators</li>
+                </ul>
+            </div>
+            <div class="screenshot-image-wrapper">
+                <img src="screenshot-levelup.png" alt="Level Up System" class="screenshot-image">
+            </div>
+        </div>
+
+        <!-- Screenshot 4: Leaderboard -->
+        <div class="screenshot-item">
+            <div class="screenshot-content">
+                <span class="screenshot-label">🌍 Global Competition</span>
+                <h3 class="screenshot-title">Competitive Leaderboards</h3>
+                <p class="screenshot-description">
+                    Compete with players worldwide or within your server. Climb the ranks, showcase your tier badges,
+                    and prove you're the ultimate Wordle champion.
+                </p>
+                <ul class="screenshot-list">
+                    <li>Global and server-specific leaderboards</li>
+                    <li>Tier badges and ranking medals</li>
+                    <li>Detailed WR and wins tracking</li>
+                    <li>Paginated for easy browsing</li>
+                </ul>
+            </div>
+            <div class="screenshot-image-wrapper">
+                <img src="screenshot-leaderboard.jpg" alt="Global Leaderboard" class="screenshot-image">
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="container text-center mt-xl mb-xl">
+        <div class="glass-card" style="padding: 3rem;">
+            <h2 class="mb-md">Ready to Start Playing?</h2>
+            <p class="mb-lg" style="font-size: 1.2rem; color: var(--text-secondary);">
+                Join thousands of players already enjoying the best Wordle experience on Discord
+            </p>
+            <a href="https://discord.com/oauth2/authorize?client_id=1446184470251048991&scope=bot"
+                class="btn btn-primary" target="_blank">
+                <i class="fab fa-discord"></i>
+                Add Wordle Bot Now
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="/terms">Terms of Service</a>
+                <a href="/privacy">Privacy Policy</a>
+                <a href="mailto:Ortsx256@proton.me">Contact</a>
+            </div>
+
+            <p class="footer-text">
+                &copy; 2025 Wordle Game Bot. All rights reserved.
+            </p>
+
+            <p class="footer-text" style="margin-top: 0.5rem;">
+                <a href="https://www.flaticon.com/free-icons/octopus" title="octopus icons"
+                    style="color: var(--text-muted);">
+                    Octopus icons created by Whitevector - Flaticon
+                </a>
+            </p>
+        </div>
     </footer>
 
+    <!-- Smooth Scroll Polyfill for older browsers -->
+    <script>
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
 </body>
+
 </html>
