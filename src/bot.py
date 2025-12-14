@@ -300,11 +300,13 @@ async def solo(interaction: discord.Interaction):
     embed = discord.Embed(title="Solo Wordle | Attempt 0/6", color=discord.Color.gold())
     embed.description = "This game is **private**. Only you can see it.\nUse the button below to guess."
     embed.add_field(name="Board", value=board_display, inline=False)
-    embed.add_field(name="Keyboard", value=keypad, inline=False)
     embed.set_footer(text=f"6 tries left {progress_bar}")
     
+    # Keyboard in message content to avoid 1024 char limit
+    message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+    
     view = SoloView(bot, game, interaction.user)
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await interaction.response.send_message(content=message_content, embed=embed, view=view, ephemeral=True)
 
 @bot.tree.command(name="show_solo", description="Show your active solo game (if dismissed via Ephemeral).")
 async def show_solo(interaction: discord.Interaction):
@@ -324,11 +326,13 @@ async def show_solo(interaction: discord.Interaction):
     
     embed = discord.Embed(title=f"Solo Wordle | Attempt {game.attempts_used}/6", color=discord.Color.gold())
     embed.add_field(name="Board", value=board_display, inline=False)
-    embed.add_field(name="Keyboard", value=keypad, inline=False)
     embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
     
+    # Keyboard in message content to avoid 1024 char limit
+    message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+    
     view = SoloView(bot, game, interaction.user)
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await interaction.response.send_message(content=message_content, embed=embed, view=view, ephemeral=True)
 
 @bot.tree.command(name="cancel_solo", description="Cancel your active solo game.")
 async def cancel_solo(interaction: discord.Interaction):

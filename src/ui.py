@@ -115,8 +115,8 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 # Clean up game
                 self.bot.solo_games.pop(interaction.user.id, None)
                 
-                # CRITICAL FIX: Send the updated message
-                await interaction.response.edit_message(embed=embed, view=self.view_ref)
+                # CRITICAL FIX: Send the updated message (clear content)
+                await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
             elif game_over:
                 embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
@@ -130,17 +130,20 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 self.view_ref.disable_all()
                 self.bot.solo_games.pop(interaction.user.id, None)
                 
-                # CRITICAL FIX: Send the updated message
-                await interaction.response.edit_message(embed=embed, view=self.view_ref)
+                # CRITICAL FIX: Send the updated message (clear content)
+                await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
             else:
+                # Ongoing game - show board in embed, keyboard in content
                 embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/6", color=discord.Color.gold())
                 embed.add_field(name="Board", value=board_display, inline=False)
-                embed.add_field(name="Keyboard", value=keypad, inline=False)
                 embed.set_footer(text=f"{6 - self.game.attempts_used} tries left {progress_bar}")
 
-                # Update the message (Embed + View)
-                await interaction.response.edit_message(embed=embed, view=self.view_ref)
+                # Keyboard in message content to avoid 1024 char limit
+                message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+
+                # Update the message (Content + Embed + View)
+                await interaction.response.edit_message(content=message_content, embed=embed, view=self.view_ref)
             
         except Exception as e:
             import traceback
