@@ -143,11 +143,18 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 await interaction.response.edit_message(embed=embed, view=self.view_ref)
             
         except Exception as e:
+            import traceback
             print(f"ERROR in Solo Modal: {e}")
-            # Try to send ephemeral if possible, but edit_message might have failed
-            # If interaction is already responded (edit_message), we can't send another unless followup
-            # But earlier code was edit_message.
-            pass
+            print(traceback.format_exc())
+            
+            # Try to respond to the interaction if not already responded
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            except:
+                pass
 
 class SoloView(ui.View):
     def __init__(self, bot, game, user):
