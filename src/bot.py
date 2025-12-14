@@ -330,6 +330,13 @@ async def show_solo(interaction: discord.Interaction):
     view = SoloView(bot, game, interaction.user)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
+@bot.tree.command(name="cancel_solo", description="Cancel your active solo game.")
+async def cancel_solo(interaction: discord.Interaction):
+    if interaction.user.id not in bot.solo_games:
+        return await interaction.response.send_message("⚠️ No active solo game to cancel.", ephemeral=True)
+    
+    game = bot.solo_games.pop(interaction.user.id)
+    await interaction.response.send_message(f"✅ Solo game cancelled. The word was **{game.secret.upper()}**.", ephemeral=True)
 
 @bot.tree.command(name="stop_game", description="Force stop the current game.")
 async def stop_game(interaction: discord.Interaction):
