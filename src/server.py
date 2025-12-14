@@ -38,6 +38,23 @@ def run_flask_server():
     def stylesheet():
         return send_from_directory(app.static_folder, 'styles.css')
 
+    @app.route('/screenshot-leaderboard.jpg')
+    def leaderboard_ss():
+        return send_from_directory(app.static_folder, 'screenshot-leaderboard.jpg')
+
+    @app.route('/screenshot-levelup.png')
+    def levelup_ss():
+        return send_from_directory(app.static_folder, 'screenshot-levelup.png')
+
+    @app.route('/screenshot-solo.png')
+    def levelup_ss():
+        return send_from_directory(app.static_folder, 'screenshot-solo.png')
+
+    @app.route('/screenshot-victory.png')
+    def levelup_ss():
+        return send_from_directory(app.static_folder, 'screenshot-victory.png')
+
+
     # --- SERVER RUN CONFIGURATION ---
     port = int(os.environ.get('PORT', 10000))
     # Using waitress for production-ready WSGI server
