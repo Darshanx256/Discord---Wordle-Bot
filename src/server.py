@@ -47,11 +47,11 @@ def run_flask_server():
         return send_from_directory(app.static_folder, 'screenshot-levelup.png')
 
     @app.route('/screenshot-solo.png')
-    def levelup_ss():
+    def solo_ss():
         return send_from_directory(app.static_folder, 'screenshot-solo.png')
 
     @app.route('/screenshot-victory.png')
-    def levelup_ss():
+    def victory_ss():
         return send_from_directory(app.static_folder, 'screenshot-victory.png')
 
 
