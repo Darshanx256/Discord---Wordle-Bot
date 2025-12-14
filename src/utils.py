@@ -47,10 +47,40 @@ def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
                 E[key] = token
             continue
 
+        # 3) EASTER EGGS & BADGES
+        if raw_lower in ["duck", "dragon", "candy", "duck_lord_badge", "dragon_slayer_badge", "candy_rush_badge"]:
+            E[raw_lower] = token
+            continue
+
     return E
 
 # Helper to load emojis once
 EMOJIS = load_app_emojis()
+
+def get_badge_emoji(badge_type: str) -> str:
+    """Returns the full badge emoji with title for /profile, or just emoji for others."""
+    badge_map = {
+        "duck_lord_badge": ("duck_lord_badge", "Duck Lord"),
+        "dragon_slayer_badge": ("dragon_slayer_badge", "Dragon Slayer"),
+        "candy_rush_badge": ("candy_rush_badge", "Sugar Rush"),
+    }
+    if badge_type in badge_map:
+        emoji_key = badge_map[badge_type][0]
+        return EMOJIS.get(emoji_key, "")
+    return ""
+
+def get_badge_full_display(badge_type: str) -> str:
+    """Returns badge emoji + title for /profile display."""
+    badge_map = {
+        "duck_lord_badge": ("duck_lord_badge", "Duck Lord"),
+        "dragon_slayer_badge": ("dragon_slayer_badge", "Dragon Slayer"),
+        "candy_rush_badge": ("candy_rush_badge", "Sugar Rush"),
+    }
+    if badge_type in badge_map:
+        emoji_key, title = badge_map[badge_type]
+        emoji = EMOJIS.get(emoji_key, "")
+        return f"{emoji}{title}" if emoji else ""
+    return ""
 
 def calculate_score(wins, games):
     if games == 0: return 0

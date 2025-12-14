@@ -8,7 +8,7 @@ from discord.ext import commands, tasks
 from supabase import create_client, Client
 
 from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, CLASSIC_FILE, ROTATING_ACTIVITIES, TIERS
-from src.utils import calculate_score, get_win_flavor, get_tier_display
+from src.utils import calculate_score, get_win_flavor, get_tier_display, EMOJIS, get_badge_emoji, get_badge_full_display
 from src.database import (
     record_game_v2,
     fetch_user_profile_v2,
@@ -228,11 +228,13 @@ async def start(interaction: discord.Interaction):
     rng = random.randint(1, 100)
     
     if rng == 1:
-        title = "🦆 Wordle Started! (Duck Edition)"
+        duck_emoji = EMOJIS.get("duck", "🦆")
+        title = f"{duck_emoji} Wordle Started! (Duck Edition)"
         trigger_egg(bot, interaction.user.id, "duck")
         egg_msg = "\n🎉 **You found a rare Duck!** It has been added to your collection."
     elif rng == 2:
-        title = "🍬 Wordle Started! (Candy Edition)"
+        candy_emoji = EMOJIS.get("candy", "🍬")
+        title = f"{candy_emoji} Wordle Started! (Candy Edition)"
         trigger_egg(bot, interaction.user.id, "candy")
         egg_msg = "\n🍬 **Ooh! A piece of candy!** (Added to collection)"
     
@@ -264,13 +266,15 @@ async def start_classic(interaction: discord.Interaction):
     rng = random.randint(1, 200) # Rare
     
     if rng == 1: 
-        title = "🐲 Wordle Started! (Dragon Slayer Mode)"
+        dragon_emoji = EMOJIS.get("dragon", "🐲")
+        title = f"{dragon_emoji} Wordle Started! (Dragon Slayer Mode)"
         trigger_egg(bot, interaction.user.id, "dragon")
-        egg_msg = "\n🔥 **A DRAGON APPEARS!** (Added to collection)"
+        egg_msg = f"\n🔥 **A DRAGON APPEARS!** (Added to collection)"
     elif rng == 2:
-        title = "🍬 Wordle Started! (Candy Edition)"
+        candy_emoji = EMOJIS.get("candy", "🍬")
+        title = f"{candy_emoji} Wordle Started! (Candy Edition)"
         trigger_egg(bot, interaction.user.id, "candy")
-        egg_msg = "\n🍬 **Sweeeet! Found a candy.**"
+        egg_msg = f"\n🍬 **Sweeeet! Found a candy.**"
         
     embed = discord.Embed(title=title, color=discord.Color.dark_gold())
     embed.description = f"**Hard Mode!** 6 attempts.{egg_msg}"
@@ -404,9 +408,10 @@ async def guess(interaction: discord.Interaction, word: str):
          active_badge = b_res.data[0]['active_badge'] if b_res.data else None
     except:
          active_badge = None
-         
-    badge_str = f" {active_badge}" if active_badge else ""
     
+    # Display only emoji in /guess (not full badge name)
+    badge_str = f" {get_badge_emoji(active_badge)}" if active_badge else ""
+
     if win:
         time_taken = (datetime.datetime.now() - game.start_time).total_seconds()
         flavor = get_win_flavor(game.attempts_used)
@@ -425,9 +430,8 @@ async def guess(interaction: discord.Interaction, word: str):
         # 1. Award Winner
         res = record_game_v2(bot, interaction.user.id, interaction.guild_id, 'MULTI', 'win', game.attempts_used, time_taken)
         if res:
-             xp_show = f"**{res.get('xp_gain',0)}** 💠" # Updated with diamond dot emoji
-             embed.add_field(name="Winner Rewards", value=f"➕ {xp_show} XP | 📈 WR: {res.get('multi_wr')}", inline=False)
-             
+             xp_gain = res.get('xp_gain', 0)
+             embed.add_field(name="Winner Rewards", value=f"+ {xp_gain} XP | 📈 WR: {res.get('multi_wr')}", inline=False)            
              if res.get('level_up'):
                  lvl = res['level_up']
                  await interaction.channel.send(f"🔼 **LEVEL UP!** {interaction.user.mention} is now **Level {lvl}**! 🔼")
@@ -569,8 +573,9 @@ async def profile(interaction: discord.Interaction):
     # Badge Display
     badge_str = ""
     if p.get('active_badge'):
-        badge_str = f"Permission Badge: **{p['active_badge']}**\n"
-    
+        badge_full = get_badge_full_display(p['active_badge'])
+        badge_str = f"Permission Badge: {badge_full}\n" if badge_full else ""
+  
     # Tier info
     tier = p.get('tier', {})
     tier_name = tier.get('name', 'Unranked')
@@ -620,30 +625,33 @@ async def shop(interaction: discord.Interaction):
     
     async def buy_duck(inter: discord.Interaction):
         if duck_count >= 4:
-            # Set Active Badge
-             bot.supabase_client.table('user_stats_v2').update({'active_badge': '🦆 Duck Lord'}).eq('user_id', interaction.user.id).execute()
-             await inter.response.send_message("✅ Equipped **Duck Lord** Badge!", ephemeral=True)
+            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'duck_lord_badge'}).eq('user_id', interaction.user.id).execute()
+            await inter.response.send_message("✅ Equipped Duck Lord Badge!", ephemeral=True)
         else:
-             await inter.response.send_message(f"❌ Need 4 Ducks. You have {duck_count}.", ephemeral=True)
+            await inter.response.send_message(f"❌ Need 4 Ducks. You have {duck_count}.", ephemeral=True)
 
     async def buy_dragon(inter: discord.Interaction):
         if dragon_count >= 2:
-             bot.supabase_client.table('user_stats_v2').update({'active_badge': '🐲 Dragon Slayer'}).eq('user_id', interaction.user.id).execute()
-             await inter.response.send_message("✅ Equipped **Dragon Slayer** Badge!", ephemeral=True)
+            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'dragon_slayer_badge'}).eq('user_id', interaction.user.id).execute()
+            await inter.response.send_message("✅ Equipped Dragon Slayer Badge!", ephemeral=True)
         else:
-             await inter.response.send_message(f"❌ Need 2 Dragons. You have {dragon_count}.", ephemeral=True)
+            await inter.response.send_message(f"❌ Need 2 Dragons. You have {dragon_count}.", ephemeral=True)
 
     async def buy_candy(inter: discord.Interaction):
         if candy_count >= 3:
-             bot.supabase_client.table('user_stats_v2').update({'active_badge': '🍬 Sugar Rush'}).eq('user_id', interaction.user.id).execute()
-             await inter.response.send_message("✅ Equipped **Sugar Rush** Badge!", ephemeral=True)
+            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'candy_rush_badge'}).eq('user_id', interaction.user.id).execute()
+            await inter.response.send_message("✅ Equipped Sugar Rush Badge!", ephemeral=True)
         else:
-             await inter.response.send_message(f"❌ Need 3 Candies. You have {candy_count}.", ephemeral=True)
-             
+            await inter.response.send_message(f"❌ Need 3 Candies. You have {candy_count}.", ephemeral=True)
+
     async def unequip(inter: discord.Interaction):
-        bot.supabase_client.table('user_stats_v2').update({'active_badge': None}).eq('user_id', interaction.user.id).execute()
-        await inter.response.send_message("✅ Badge unequipped.", ephemeral=True)
-    
+        current_badge = p.get('active_badge')
+        if not current_badge:
+            await inter.response.send_message("⚠️ No badge equipped.", ephemeral=True)
+        else:
+            bot.supabase_client.table('user_stats_v2').update({'active_badge': None}).eq('user_id', interaction.user.id).execute()
+            await inter.response.send_message("✅ Badge unequipped.", ephemeral=True)
+               
     b1 = discord.ui.Button(label="Duck Lord Badge (4 Ducks)", style=discord.ButtonStyle.primary, disabled=(duck_count < 4))
     b1.callback = buy_duck
     
@@ -662,7 +670,10 @@ async def shop(interaction: discord.Interaction):
     view.add_item(b4)
     
     embed = discord.Embed(title="🛒 Collection Shop", description="Equip badges based on your findings!", color=discord.Color.gold())
-    embed.add_field(name="Your Inventory", value=f"🦆 Ducks: {duck_count}\n🐲 Dragons: {dragon_count}\n🍬 Candies: {candy_count}", inline=False)
-    
+    duck_emoji = EMOJIS.get("duck", "🦆")
+    dragon_emoji = EMOJIS.get("dragon", "🐲")
+    candy_emoji = EMOJIS.get("candy", "🍬")
+    embed.add_field(name="Your Inventory", value=f"{duck_emoji} Ducks: {duck_count}\n{dragon_emoji} Dragons: {dragon_count}\n{candy_emoji} Candies: {candy_count}", inline=False)
+
     await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
