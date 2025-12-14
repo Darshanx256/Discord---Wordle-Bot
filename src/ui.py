@@ -3,7 +3,7 @@ import random
 import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
-from src.utils import EMOJIS, get_tier_display, get_win_flavor # Added utils
+from src.utils import EMOJIS, get_tier_display, get_win_flavor, get_badge_emoji # Added utils
 
 def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) -> str:
     #egg start
@@ -228,7 +228,9 @@ class LeaderboardView(discord.ui.View):
                 rank, name, wins, xp, wr, icon, badge = row
                 
                 # Show badge if exists (Suffix Style)
-                badge_str = f" {badge}" if badge else ""
+                from src.utils import get_badge_emoji
+                badge_emoji = get_badge_emoji(badge) if badge else ""
+                badge_str = f" {badge_emoji}" if badge_emoji else ""
                 
                 medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"`#{rank}`")
                 
