@@ -292,9 +292,16 @@ async def solo(interaction: discord.Interaction):
     game = WordleGame(secret, 0, interaction.user, 0) # Dummy Channel/Msg ID
     bot.solo_games[interaction.user.id] = game
     
-    embed = discord.Embed(title="🕵️ Solo Wordle", color=discord.Color.dark_grey())
+    # Initial board and keyboard display
+    board_display = "No guesses yet."
+    keypad = get_markdown_keypad_status(game.used_letters, bot, interaction.user.id)
+    progress_bar = "[○○○○○○]"
+    
+    embed = discord.Embed(title="Solo Wordle | Attempt 0/6", color=discord.Color.gold())
     embed.description = "This game is **private**. Only you can see it.\nUse the button below to guess."
-    embed.set_footer(text="6 attempts")
+    embed.add_field(name="Board", value=board_display, inline=False)
+    embed.add_field(name="Keyboard", value=keypad, inline=False)
+    embed.set_footer(text=f"6 tries left {progress_bar}")
     
     view = SoloView(bot, game, interaction.user)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
