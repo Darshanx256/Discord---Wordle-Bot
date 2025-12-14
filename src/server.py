@@ -34,6 +34,10 @@ def run_flask_server():
     def icon():
         return send_from_directory(app.static_folder, 'icon.png')
 
+    @app.route('/styles.css')
+    def stylesheet():
+        return send_from_directory(app.static_folder, 'styles.css')
+
     # --- SERVER RUN CONFIGURATION ---
     port = int(os.environ.get('PORT', 10000))
     # Using waitress for production-ready WSGI server
