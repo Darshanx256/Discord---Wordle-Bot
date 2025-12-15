@@ -18,6 +18,7 @@ class WordleBot(commands.Bot):
         self.games = {}
         self.solo_games = {}
         self.stopped_games = set()
+        self.egg_cooldowns = {}
         self.secrets = []
         self.hard_secrets = []
         self.valid_set = set()

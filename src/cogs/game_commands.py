@@ -5,7 +5,7 @@ import asyncio
 import discord
 from discord.ext import commands
 from src.game import WordleGame
-from src.database import get_next_secret, get_next_classic_secret, trigger_egg
+from src.database import get_next_secret, get_next_classic_secret
 from src.utils import EMOJIS
 from src.ui import SoloView, get_markdown_keypad_status
 
@@ -27,25 +27,9 @@ class GameCommands(commands.Cog):
 
         secret = get_next_secret(self.bot, ctx.guild.id)
 
-        # Easter Egg Trigger
         title = "✨ Wordle Started! (Simple)"
-        egg_msg = ""
-        import random
-        rng = random.randint(1, 100)
-
-        if rng == 1:
-            duck_emoji = EMOJIS.get("duck", "🦆")
-            title = f"{duck_emoji} Wordle Started! (Duck Edition)"
-            trigger_egg(self.bot, ctx.author.id, "duck")
-            egg_msg = "\n🎉 **You found a rare Duck!** It has been added to your collection."
-        elif rng == 2:
-            candy_emoji = EMOJIS.get("candy", "🍬")
-            title = f"{candy_emoji} Wordle Started! (Candy Edition)"
-            trigger_egg(self.bot, ctx.author.id, "candy")
-            egg_msg = "\n🍬 **Ooh! A piece of candy!** (Added to collection)"
-
         embed = discord.Embed(title=title, color=discord.Color.blue())
-        embed.description = f"A simple **5-letter word** has been chosen. **6 attempts** total.{egg_msg}"
+        embed.description = f"A simple **5-letter word** has been chosen. **6 attempts** total."
         embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
 
         msg = await ctx.send(embed=embed)
@@ -68,23 +52,8 @@ class GameCommands(commands.Cog):
         secret = get_next_classic_secret(self.bot, ctx.guild.id)
 
         title = "⚔️ Wordle Started! (Classic)"
-        egg_msg = ""
-        import random
-        rng = random.randint(1, 200)
-
-        if rng == 1:
-            dragon_emoji = EMOJIS.get("dragon", "🐲")
-            title = f"{dragon_emoji} Wordle Started! (Dragon Slayer Mode)"
-            trigger_egg(self.bot, ctx.author.id, "dragon")
-            egg_msg = f"\n🔥 **A DRAGON APPEARS!** (Added to collection)"
-        elif rng == 2:
-            candy_emoji = EMOJIS.get("candy", "🍬")
-            title = f"{candy_emoji} Wordle Started! (Candy Edition)"
-            trigger_egg(self.bot, ctx.author.id, "candy")
-            egg_msg = f"\n🍬 **Sweeeet! Found a candy.**"
-
         embed = discord.Embed(title=title, color=discord.Color.dark_gold())
-        embed.description = f"**Hard Mode!** 6 attempts.{egg_msg}"
+        embed.description = f"**Hard Mode!** 6 attempts."
         embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
 
         msg = await ctx.send(embed=embed)

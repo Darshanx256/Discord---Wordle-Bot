@@ -14,17 +14,10 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) 
             "\n> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
             "> 🦆 You summoned a RARE Duck of Luck!"
         )
-        if bot and user_id:
-            from src.database import trigger_egg
-            trigger_egg(bot, user_id, "duck")
-            
     elif rng == 2:
         extra_line = "\n> *The letters are watching you...* 👁️"
     elif rng == 3:
         extra_line = "\n> *Does this keyboard feel sticky to you?* 🍬"
-        if bot and user_id:
-            from src.database import trigger_egg
-            trigger_egg(bot, user_id, "candy")
     #egg end
 
     """Generates the stylized keypad using Discord Markdown."""

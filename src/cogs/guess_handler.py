@@ -3,11 +3,13 @@ Guess handler cog: /guess command with win/loss logic
 """
 import asyncio
 import datetime
+import random
 import discord
 from discord.ext import commands
-from src.utils import get_badge_emoji, get_cached_username
+from src.utils import get_badge_emoji, get_cached_username, EMOJIS
 from src.ui import get_markdown_keypad_status
 from src.handlers.game_logic import handle_game_win, handle_game_loss
+from src.database import trigger_egg
 
 
 class GuessHandler(commands.Cog):
@@ -36,6 +38,49 @@ class GuessHandler(commands.Cog):
             return await ctx.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
         pat, win, game_over = game.process_turn(g_word, ctx.author)
+
+        # Attempt Easter Egg trigger (rate-limited per-user to avoid farming)
+        try:
+            now_ts = datetime.datetime.now().timestamp()
+            last = self.bot.egg_cooldowns.get(ctx.author.id, 0)
+            COOLDOWN = 600  # seconds per user between egg attempts
+            if now_ts - last >= COOLDOWN:
+                # update last attempt time immediately to prevent races
+                self.bot.egg_cooldowns[ctx.author.id] = now_ts
+
+                egg = None
+                egg_emoji = None
+                # Classic vs Simple detection
+                is_classic = game.secret in getattr(self.bot, 'hard_secrets', [])
+
+                if is_classic:
+                    # Classic rarer dragon + candy
+                    if random.randint(1, 2000) == 1:
+                        egg = 'dragon'
+                    elif random.randint(1, 1000) == 1:
+                        egg = 'candy'
+                else:
+                    # Simple mode: duck rarer per-guess, candy somewhat rarer
+                    if random.randint(1, 1000) == 1:
+                        egg = 'duck'
+                    elif random.randint(1, 500) == 1:
+                        egg = 'candy'
+
+                if egg:
+                    egg_emoji = EMOJIS.get(egg, '🎉')
+                    # Trigger DB update in background thread
+                    try:
+                        asyncio.create_task(asyncio.to_thread(trigger_egg, self.bot, ctx.author.id, egg))
+                    except Exception:
+                        pass
+
+                    # Notify channel briefly (non-ephemeral)
+                    try:
+                        await ctx.channel.send(f"{egg_emoji} **{ctx.author.display_name}** found a **{egg.replace('_', ' ').title()}**! It has been added to your collection.")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id)
         filled = "●" * game.attempts_used
