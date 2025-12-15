@@ -139,3 +139,35 @@ def get_level_progress(total_xp: int):
     # Chunk 4: 61+ (500 XP each)
     l_gain = curr // 500
     return lvl + l_gain, curr % 500, 500
+
+
+async def get_cached_username(bot, user_id: int) -> str:
+    """
+    Get user display name from cache or fetch from Discord.
+    Prioritizes cache, local cache, bot cache, then API.
+    Returns user ID as string if all fail.
+    """
+    # 1. Check bot's in-memory cache
+    if user_id in bot.name_cache:
+        return bot.name_cache[user_id]
+    
+    # 2. Try bot's get_user (cached locally)
+    try:
+        user = bot.get_user(user_id)
+        if user:
+            bot.name_cache[user_id] = user.display_name
+            return user.display_name
+    except:
+        pass
+    
+    # 3. Try to fetch from Discord API
+    try:
+        user = await bot.fetch_user(user_id)
+        if user:
+            bot.name_cache[user_id] = user.display_name
+            return user.display_name
+    except:
+        pass
+    
+    # 4. Fallback
+    return str(user_id)

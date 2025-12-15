@@ -5,7 +5,7 @@ import asyncio
 import datetime
 import discord
 from src.database import record_game_v2
-from src.utils import get_badge_emoji, get_win_flavor
+from src.utils import get_badge_emoji, get_win_flavor, get_cached_username
 
 
 async def handle_game_win(bot, game, interaction, winner_user, cid):
@@ -101,10 +101,12 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
             except:
                 badge_map = {}
 
+        # Fetch all names concurrently using cache
+        name_tasks = [get_cached_username(bot, uid) for uid, *_ in participant_rows]
+        names = await asyncio.gather(*name_tasks)
+        
         lines = []
-        for uid, outcome_key, xp_v, wr_v in participant_rows:
-            member = bot.get_user(uid)
-            name = getattr(member, 'display_name', str(uid))
+        for (uid, outcome_key, xp_v, wr_v), name in zip(participant_rows, names):
             badge_key = badge_map.get(uid)
             badge_emoji = get_badge_emoji(badge_key) if badge_key else ''
             wr_part = f" | WR: {wr_v}" if wr_v is not None else ""

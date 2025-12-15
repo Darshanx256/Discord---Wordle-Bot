@@ -5,7 +5,7 @@ import asyncio
 import datetime
 import discord
 from discord.ext import commands
-from src.utils import get_badge_emoji
+from src.utils import get_badge_emoji, get_cached_username
 from src.ui import get_markdown_keypad_status
 from src.handlers.game_logic import handle_game_win, handle_game_loss
 
@@ -116,10 +116,12 @@ class GuessHandler(commands.Cog):
                         except:
                             badge_map = {}
 
+                    # Fetch all names concurrently using cache
+                    name_tasks = [get_cached_username(self.bot, uid) for uid, *_ in participant_rows]
+                    names = await asyncio.gather(*name_tasks)
+                    
                     lines = []
-                    for uid, outcome_key, xp_v, wr_v in participant_rows:
-                        member = self.bot.get_user(uid)
-                        name = getattr(member, 'display_name', str(uid))
+                    for (uid, outcome_key, xp_v, wr_v), name in zip(participant_rows, names):
                         badge_key = badge_map.get(uid)
                         badge_emoji = get_badge_emoji(badge_key) if badge_key else ''
                         wr_part = f" | WR: {wr_v}" if wr_v is not None else ""

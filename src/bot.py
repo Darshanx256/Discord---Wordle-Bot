@@ -31,6 +31,7 @@ class WordleBot(commands.Bot):
         await self.load_cogs()
         await self.tree.sync()
         self.cleanup_task.start()
+        self.cache_clear_task.start()
         self.db_ping_task.start()
         self.activity_loop.start()
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
@@ -131,6 +132,14 @@ class WordleBot(commands.Bot):
 
         for uid in solo_remove:
             self.solo_games.pop(uid, None)
+
+    @tasks.loop(hours=48)
+    async def cache_clear_task(self):
+        """Clear name cache every 2 days to ensure fresh data."""
+        await self.wait_until_ready()
+        old_size = len(self.name_cache)
+        self.name_cache.clear()
+        print(f"🗑️ Cache cleared: removed {old_size} cached names at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     @tasks.loop(hours=96)
     async def db_ping_task(self):
