@@ -237,7 +237,7 @@ class LeaderboardView(discord.ui.View):
                 description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}** | Wins: {wins}")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)}")
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)} | Names updated every 2 days")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
