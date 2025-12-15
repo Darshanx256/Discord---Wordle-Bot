@@ -8,6 +8,8 @@ from discord.ext import commands, tasks
 from supabase import create_client, Client
 
 from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, CLASSIC_FILE, ROTATING_ACTIVITIES
+from src.database import fetch_user_profile_v2
+from src.utils import EMOJIS, get_badge_emoji
 
 # ========= BOT SETUP =========
 class WordleBot(commands.Bot):

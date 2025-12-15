@@ -48,8 +48,7 @@ class GameCommands(commands.Cog):
         embed.description = f"A simple **5-letter word** has been chosen. **6 attempts** total.{egg_msg}"
         embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
 
-        await ctx.send(embed=embed)
-        msg = await ctx.original_response()
+        msg = await ctx.send(embed=embed)
 
         # Init Game
         self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
@@ -88,8 +87,7 @@ class GameCommands(commands.Cog):
         embed.description = f"**Hard Mode!** 6 attempts.{egg_msg}"
         embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
 
-        await ctx.send(embed=embed)
-        msg = await ctx.original_response()
+        msg = await ctx.send(embed=embed)
         self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
         print(f"DEBUG: Classic Game STARTED in Channel {cid}. Active Games: {list(self.bot.games.keys())}")
 
