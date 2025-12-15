@@ -11,7 +11,7 @@ class HelpCommands(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="help", description="How to play and command guide.")
-    async def help_command(self, ctx):
+    async def help_cmd(self, ctx):
         view = HelpView(ctx.author)
         await ctx.send(embed=view.create_embed(), view=view, ephemeral=True)
 

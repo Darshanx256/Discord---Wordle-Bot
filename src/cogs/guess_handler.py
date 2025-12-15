@@ -54,29 +54,30 @@ class GuessHandler(commands.Cog):
                 is_classic = game.secret in getattr(self.bot, 'hard_secrets', [])
 
                 if is_classic:
-                    # Classic rarer dragon + candy
-                    if random.randint(1, 2000) == 1:
+                    # Classic mode: dragon 1/1000, candy 1/100
+                    if random.randint(1, 1000) == 1:
                         egg = 'dragon'
-                    elif random.randint(1, 1000) == 1:
+                    elif random.randint(1, 100) == 1:
                         egg = 'candy'
                 else:
-                    # Simple mode: duck rarer per-guess, candy somewhat rarer
-                    if random.randint(1, 1000) == 1:
+                    # Simple mode: duck 1/100, candy 1/100
+                    if random.randint(1, 100) == 1:
                         egg = 'duck'
-                    elif random.randint(1, 500) == 1:
+                    elif random.randint(1, 100) == 1:
                         egg = 'candy'
 
                 if egg:
                     egg_emoji = EMOJIS.get(egg, '🎉')
-                    # Trigger DB update in background thread
+                    # Trigger DB update in background thread (increments eggs dict)
                     try:
                         asyncio.create_task(asyncio.to_thread(trigger_egg, self.bot, ctx.author.id, egg))
                     except Exception:
                         pass
 
-                    # Notify channel briefly (non-ephemeral)
+                    # Notify channel with custom emoji
                     try:
-                        await ctx.channel.send(f"{egg_emoji} **{ctx.author.display_name}** found a **{egg.replace('_', ' ').title()}**! It has been added to your collection.")
+                        egg_display_name = egg.replace('_', ' ').title()
+                        await ctx.channel.send(f"{egg_emoji} **{ctx.author.display_name}** found a **{egg_display_name}**! It has been added to your collection.")
                     except Exception:
                         pass
         except Exception:

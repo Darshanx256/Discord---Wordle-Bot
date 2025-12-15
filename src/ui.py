@@ -10,14 +10,32 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) 
     extra_line = ""
     rng = random.randint(1, 100)
     if rng == 1:
+        egg = 'duck'
+        egg_emoji = EMOJIS.get('duck', '🦆')
         extra_line = (
-            "\n> **🎉 RARE DUCK OF LUCK SUMMONED! 🎉**\n"
-            "> 🦆 You summoned a RARE Duck of Luck!"
+            f"\n> **{egg_emoji} RARE DUCK OF LUCK SUMMONED! {egg_emoji}**\n"
+            f"> You summoned a RARE Duck of Luck!"
         )
-    elif rng == 2:
-        extra_line = "\n> *The letters are watching you...* 👁️"
-    elif rng == 3:
-        extra_line = "\n> *Does this keyboard feel sticky to you?* 🍬"
+        if bot and user_id:
+            from src.database import trigger_egg
+            try:
+                trigger_egg(bot, user_id, egg)
+            except:
+                pass
+            
+    elif rng <= 8:  # Increased from ~1/100 to ~7/100
+        eye_emoji = EMOJIS.get('eyes', '👁️') if 'eyes' in EMOJIS else '👁️'
+        extra_line = f"\n> *The letters are watching you...* {eye_emoji}"
+    elif rng <= 10:
+        egg = 'candy'
+        egg_emoji = EMOJIS.get('candy', '🍬')
+        extra_line = f"\n> *Does this keyboard feel sticky to you?* {egg_emoji}"
+        if bot and user_id:
+            from src.database import trigger_egg
+            try:
+                trigger_egg(bot, user_id, egg)
+            except:
+                pass
     #egg end
 
     """Generates the stylized keypad using Discord Markdown."""
@@ -342,12 +360,16 @@ class HelpView(discord.ui.View):
             candy_emoji = EMOJIS.get("candy", "🍬")
             
             embed.add_field(name="🎁 Easter Eggs & Badges", value=(
-                f"**Easter Eggs** (Rare Drops):\n"
-                f"{duck_emoji} Duck - Random in Simple Mode (1/100)\n"
-                f"{dragon_emoji} Dragon - Random in Classic Mode (1/200)\n"
-                f"{candy_emoji} Candy - Rare in any mode\n\n"
-                "Collect them in your inventory! View via `/profile`\n\n"
-                "**Badges** are cosmetic awards earned through gameplay.\n"
+                f"**Easter Eggs** (Rare Drops during `/guess`):\n"
+                f"{duck_emoji} Duck - Simple Mode Only (1/100 per guess)\n"
+                f"{dragon_emoji} Dragon - Classic Mode Only (1/1000 per guess)\n"
+                f"{candy_emoji} Candy - Both Modes (1/100 per guess)\n\n"
+                f"**Keyboard Effects** (UI flavor text):\n"
+                f"{duck_emoji} Rare Duck - 1/100 chance\n"
+                f"👁️ Letters Watching - 7/100 chance\n"
+                f"{candy_emoji} Sticky Keyboard - 2/100 chance\n\n"
+                "Collect eggs in your inventory! View via `/profile`\n\n"
+                "**Badges** are purchasable cosmetics at `/shop`.\n"
                 "Display your favorite badge on your profile!"
             ), inline=False)
             
