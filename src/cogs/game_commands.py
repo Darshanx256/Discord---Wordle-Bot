@@ -6,8 +6,8 @@ import discord
 from discord.ext import commands
 from src.game import WordleGame
 from src.database import get_next_secret, get_next_classic_secret, trigger_egg
-from src.utils import EMOJIS, get_markdown_keypad_status
-from src.ui import SoloView
+from src.utils import EMOJIS
+from src.ui import SoloView, get_markdown_keypad_status
 
 
 class GameCommands(commands.Cog):

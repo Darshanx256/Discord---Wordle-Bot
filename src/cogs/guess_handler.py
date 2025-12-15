@@ -5,7 +5,8 @@ import asyncio
 import datetime
 import discord
 from discord.ext import commands
-from src.utils import get_markdown_keypad_status, get_badge_emoji
+from src.utils import get_badge_emoji
+from src.ui import get_markdown_keypad_status
 from src.handlers.game_logic import handle_game_win, handle_game_loss
 
 
