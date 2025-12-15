@@ -117,7 +117,10 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
 
     breakdown.set_footer(text="Thanks for playing — rewards applied instantly.")
 
-    return embed, breakdown, winner_user, res
+    # Only return breakdown if there are participants to show
+    breakdown_to_send = breakdown if participant_rows else None
+
+    return embed, breakdown_to_send, winner_user, res
 
 
 async def handle_game_loss(bot, game, interaction, cid):

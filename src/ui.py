@@ -293,7 +293,7 @@ class HelpView(discord.ui.View):
         if self.page == 1:
             # BASIC PAGE
             embed = discord.Embed(title="📚 Wordle Bot Guide (Basic)", color=discord.Color.blue())
-            embed.description = "A global, competitive Wordle bot for Discord."
+            embed.description = "A global, competitive Wordle bot for Discord with XP, ranking tiers, and Easter eggs!"
             
             embed.add_field(name="🎮 How to Play", value=(
                 "1. **Start a Game**\n"
@@ -301,19 +301,24 @@ class HelpView(discord.ui.View):
                 "   `/wordle_classic` (Harder, full dictionary)\n"
                 "   `/solo` (Private Solo Mode)\n\n"
                 "2. **Make a Guess**\n"
-                "   `/guess word:apple` (or use buttons in Solo)\n\n"
+                "   `/guess word:apple`\n\n"
                 "3. **Hints**\n"
                 "   🟩 Green: Correct letter, correct spot\n"
                 "   🟨 Yellow: Correct letter, wrong spot\n"
                 "   ⬜ Grey: Letter not in word"
             ), inline=False)
             
-            embed.add_field(name="❓ Example", value="Guess: **APPLE**\n🟩⬜🟨⬜⬜\nA is correct! P is in word but wrong spot.", inline=False)
-            embed.set_footer(text="Page 1/2 • Click 'Show More' for Advanced info")
+            # Build example with custom emojis
+            apple_example = "Guess: **APPLE**\n"
+            apple_example += f"{EMOJIS.get('block_a_green', '🟩')}{EMOJIS.get('block_p_yellow', '🟨')}{EMOJIS.get('block_p_yellow', '🟨')}{EMOJIS.get('block_l_white', '⬜')}{EMOJIS.get('block_e_white', '⬜')}\n"
+            apple_example += "**A** is correct! **P** is in word but wrong spot."
+            
+            embed.add_field(name="❓ Example", value=apple_example, inline=False)
+            embed.set_footer(text="Page 1/2 • Click 'Show More' for Advanced info & Easter Eggs")
             
         else:
             # ADVANCED PAGE
-            embed = discord.Embed(title="🧠 Wordle Bot Guide (V2)", color=discord.Color.dark_purple())
+            embed = discord.Embed(title="🧠 Wordle Bot Guide (Advanced)", color=discord.Color.dark_purple())
             
             embed.add_field(name="📜 Full Command List", value=(
                 "`/wordle` - Start Simple Game\n"
@@ -323,21 +328,44 @@ class HelpView(discord.ui.View):
                 "`/leaderboard` - Server Rankings\n"
                 "`/leaderboard_global` - Global Rankings\n"
                 "`/profile` - View your XP & WR\n"
-                "`/shop` - Buy Badge Cosmetics\n"
                 "`/stop_game` - Cancel game"
             ), inline=False)
             
-            tier_text = "\n".join([f"{t['icon']} **{t['name']}** (> {t['min_wr']} WR)" for t in TIERS])
-            embed.add_field(name="🏆 Rankings", value=f"Our new Progression System tracks Wordle Rating (WR) and XP:\n{tier_text}", inline=False)
+            tier_text = "\n".join([f"{t['icon']} **{t['name']}** (WR ≥ {t['min_wr']})" for t in TIERS])
+            embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
             
-            embed.add_field(name="🧮 Scoring", value=(
-                "XP based on activity. WR based on Skill + Activity.\n"
-                "Faster wins = More Points!"
+            embed.add_field(name="🧮 XP & Rewards", value=(
+                "**Win:** +50 XP, +120 WR\n"
+                "**4 Greens:** +40 XP, +70 WR\n"
+                "**3 Greens:** +30 XP, +50 WR\n"
+                "**2 Greens:** +20 XP, +20 WR\n"
+                "**1 Green:** +10 XP, +10 WR\n"
+                "**Participation:** +5 XP, +5 WR\n\n"
+                "⚡ **Speed Bonus:** <30s = +10 XP"
             ), inline=False)
             
-            embed.add_field(name="🔗 Useful Links", value=f"• [Vote on Top.gg]({TOP_GG_LINK})\n• Credits: Icon 'octopus' made by Whitevector - Flaticon", inline=False)
+            duck_emoji = EMOJIS.get("duck", "🦆")
+            dragon_emoji = EMOJIS.get("dragon", "🐲")
+            candy_emoji = EMOJIS.get("candy", "🍬")
             
-            embed.set_footer(text="Page 2/2")
+            embed.add_field(name="🎁 Easter Eggs & Badges", value=(
+                f"**Easter Eggs** (Rare Drops):\n"
+                f"{duck_emoji} Duck - Random in Simple Mode (1/100)\n"
+                f"{dragon_emoji} Dragon - Random in Classic Mode (1/200)\n"
+                f"{candy_emoji} Candy - Rare in any mode\n\n"
+                "Collect them in your inventory! View via `/profile`\n\n"
+                "**Badges** are cosmetic awards earned through gameplay.\n"
+                "Display your favorite badge on your profile!"
+            ), inline=False)
+            
+            embed.add_field(name="💡 Pro Tips", value=(
+                "• Start with vowel-heavy words\n"
+                "• Use Common letter patterns\n"
+                "• Speed = Bonus XP & WR\n"
+                "• Participate in Multiplayer for extra rewards"
+            ), inline=False)
+            
+            embed.set_footer(text="Page 2/2 • Have fun and climb the rankings!")
 
         return embed
 
