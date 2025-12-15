@@ -25,14 +25,13 @@ class WordleBot(commands.Bot):
     async def setup_hook(self):
         self.load_local_data()
         self.setup_db()
+        # Load cogs first so their app-commands are registered before syncing
+        await self.load_cogs()
         await self.tree.sync()
         self.cleanup_task.start()
         self.db_ping_task.start()
         self.activity_loop.start()
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
-        
-        # Load all cogs
-        await self.load_cogs()
 
     async def load_cogs(self):
         """Load all cogs from src/cogs/ directory."""
