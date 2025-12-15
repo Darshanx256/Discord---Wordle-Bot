@@ -37,7 +37,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     embed.add_field(name="Final Board", value=board_display, inline=False)
     
     # Award winner
-    res = record_game_v2(bot, winner_user.id, interaction.guild_id, 'MULTI', 'win', game.attempts_used, time_taken)
+    res = record_game_v2(bot, winner_user.id, interaction.guild.id, 'MULTI', 'win', game.attempts_used, time_taken)
     if res:
         xp_gain = res.get('xp_gain', 0)
         embed.add_field(name="Winner Rewards", value=f"+ {xp_gain} XP | 📈 WR: {res.get('multi_wr')}", inline=False)
@@ -68,7 +68,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
         else:
             outcome_key = 'participation'
 
-        pres = await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild_id, 'MULTI', outcome_key, game.attempts_used, 999)
+        pres = await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, game.attempts_used, 999)
         try:
             display_xp = pres.get('xp_gain', 0) if pres else 0
             display_wr = pres.get('multi_wr') if pres else None
@@ -158,7 +158,7 @@ async def handle_game_loss(bot, game, interaction, cid):
         else:
             outcome_key = 'participation'
 
-        pres = await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild_id, 'MULTI', outcome_key, 6, 999)
+        pres = await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, 6, 999)
         try:
             display_xp = pres.get('xp_gain', 0) if pres else 0
             display_wr = pres.get('multi_wr') if pres else None
