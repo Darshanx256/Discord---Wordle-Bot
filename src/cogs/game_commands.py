@@ -46,11 +46,17 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
 
         reveal_bool = reveal == "yes"
 
-        # Check if a custom game already exists in this channel
+        # Check if ANY game already exists in this channel (race condition protection)
         cid = interaction.channel.id
         if cid in self.bot.custom_games:
             return await interaction.response.send_message(
                 "⚠️ A custom game is already active in this channel!",
+                ephemeral=True
+            )
+        
+        if cid in self.bot.games:
+            return await interaction.response.send_message(
+                "⚠️ A regular game is already active in this channel!",
                 ephemeral=True
             )
 
