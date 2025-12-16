@@ -110,6 +110,8 @@ class GameCommands(commands.Cog):
         cid = ctx.channel.id
         if cid in self.bot.games:
             return await ctx.send("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
+        if cid in self.bot.custom_games:
+            return await ctx.send("⚠️ Custom game active. Use `/stop_game` to end it first.", ephemeral=True)
 
         secret = get_next_secret(self.bot, ctx.guild.id)
 
@@ -134,6 +136,8 @@ class GameCommands(commands.Cog):
         cid = ctx.channel.id
         if cid in self.bot.games:
             return await ctx.send("⚠️ Game already active.", ephemeral=True)
+        if cid in self.bot.custom_games:
+            return await ctx.send("⚠️ Custom game active. Use `/stop_game` to end it first.", ephemeral=True)
 
         secret = get_next_classic_secret(self.bot, ctx.guild.id)
 
@@ -204,25 +208,38 @@ class GameCommands(commands.Cog):
     async def stop_game(self, ctx):
         cid = ctx.channel.id
         game = self.bot.games.get(cid)
+        custom_game = self.bot.custom_games.get(cid)
 
-        if not game:
+        if not game and not custom_game:
             return await ctx.send("No active game to stop.", ephemeral=True)
 
-        if (ctx.author.id == game.started_by.id) or ctx.author.guild_permissions.manage_messages:
-            self.bot.stopped_games.add(cid)
-            self.bot.games.pop(cid)
-            await ctx.send(f"🛑 Game stopped. Word: **{game.secret.upper()}**.")
+        # Handle regular game
+        if game:
+            if (ctx.author.id == game.started_by.id) or ctx.author.guild_permissions.manage_messages:
+                self.bot.stopped_games.add(cid)
+                self.bot.games.pop(cid)
+                await ctx.send(f"🛑 Game stopped. Word: **{game.secret.upper()}**.")
 
-            async def _clear_stopped(ch_id):
-                await asyncio.sleep(300)
-                try:
-                    self.bot.stopped_games.discard(ch_id)
-                except:
-                    pass
+                async def _clear_stopped(ch_id):
+                    await asyncio.sleep(300)
+                    try:
+                        self.bot.stopped_games.discard(ch_id)
+                    except:
+                        pass
 
-            asyncio.create_task(_clear_stopped(cid))
-        else:
-            await ctx.send("❌ Only Starter or Admin can stop it.", ephemeral=True)
+                asyncio.create_task(_clear_stopped(cid))
+            else:
+                await ctx.send("❌ Only Starter or Admin can stop it.", ephemeral=True)
+            return
+
+        # Handle custom game
+        if custom_game:
+            if (ctx.author.id == custom_game.started_by.id) or ctx.author.guild_permissions.manage_messages:
+                self.bot.custom_games.pop(cid)
+                await ctx.send(f"🛑 Custom game stopped. Word: **{custom_game.secret.upper()}**.")
+            else:
+                await ctx.send("❌ Only Starter or Admin can stop it.", ephemeral=True)
+            return
 
     @commands.hybrid_command(name="custom", description="Start a custom Wordle game with your own word.")
     async def custom_mode(self, ctx):
@@ -233,7 +250,7 @@ class GameCommands(commands.Cog):
 
         # Check if a custom game already exists
         if cid in self.bot.custom_games:
-            return await ctx.send("⚠️ A custom game is already active in this channel!", ephemeral=True)
+            return await ctx.send("⚠️ A custom game is already active in this channel! Use `/stop_game` to end it.", ephemeral=True)
 
         # Check if a regular game already exists
         if cid in self.bot.games:
