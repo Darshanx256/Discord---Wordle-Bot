@@ -17,6 +17,7 @@ class WordleBot(commands.Bot):
         super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
         self.games = {}
         self.solo_games = {}
+        self.custom_games = {}  # Custom mode games
         self.stopped_games = set()
         self.egg_cooldowns = {}
         self.secrets = []
@@ -124,6 +125,16 @@ class WordleBot(commands.Bot):
 
         for cid in to_remove:
             self.games.pop(cid, None)
+
+        # Clean up custom games
+        custom_remove = []
+        for cid, game in self.custom_games.items():
+            delta = now - game.last_interaction
+            if delta.total_seconds() > 86400:  # 24 hours
+                custom_remove.append(cid)
+
+        for cid in custom_remove:
+            self.custom_games.pop(cid, None)
 
         solo_remove = []
         for uid, sgame in self.solo_games.items():

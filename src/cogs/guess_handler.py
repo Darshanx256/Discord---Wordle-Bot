@@ -24,12 +24,19 @@ class GuessHandler(commands.Cog):
 
         cid = ctx.channel.id
         game = self.bot.games.get(cid)
+        custom_game = self.bot.custom_games.get(cid)
         g_word = word.lower().strip()
 
-        print(f"DEBUG: Guess in Channel {cid}. Active: {list(self.bot.games.keys())}")
+        print(f"DEBUG: Guess in Channel {cid}. Active: {list(self.bot.games.keys())} | Custom: {list(self.bot.custom_games.keys())}")
 
-        if not game:
+        # Check which game type is active
+        is_custom = False
+        if custom_game:
+            game = custom_game
+            is_custom = True
+        elif not game:
             return await ctx.send("⚠️ No active game.", ephemeral=True)
+
         if game.is_duplicate(g_word):
             return await ctx.send(f"⚠️ **{g_word.upper()}** already guessed!", ephemeral=True)
         if len(g_word) != 5 or not g_word.isalpha():
@@ -99,6 +106,62 @@ class GuessHandler(commands.Cog):
 
         badge_str = f" {get_badge_emoji(active_badge)}" if active_badge else ""
 
+        if is_custom:
+            # ========= CUSTOM GAME LOGIC =========
+            if win:
+                # Winner found the word
+                filled = "●" * game.attempts_used
+                empty = "○" * (6 - game.attempts_used)
+                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+
+                embed = discord.Embed(
+                    title="🏆 VICTORY!",
+                    color=discord.Color.green()
+                )
+                embed.description = f"**{ctx.author.display_name}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
+                embed.add_field(name="Final Board", value=board_display, inline=False)
+                embed.set_footer(text=f"Attempts: {filled}{empty} | Custom mode (no rewards)")
+
+                # Clean up
+                self.bot.custom_games.pop(cid, None)
+                await ctx.send(content=message_content, embed=embed)
+
+            elif game_over:
+                # Game over - all attempts used
+                filled = "●" * game.attempts_used
+                empty = "○" * (6 - game.attempts_used)
+                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+
+                embed = discord.Embed(
+                    title="💀 GAME OVER",
+                    color=discord.Color.red()
+                )
+                
+                # Check if reveal was enabled
+                reveal_text = f"The word was **{game.secret.upper()}**." if game.reveal_on_loss else "Better luck next time!"
+                embed.description = reveal_text
+                embed.add_field(name="Final Board", value=board_display, inline=False)
+                embed.set_footer(text=f"Attempts: {filled}{empty} | Custom mode (no rewards)")
+
+                # Clean up
+                self.bot.custom_games.pop(cid, None)
+                await ctx.send(content=message_content, embed=embed)
+
+            else:
+                # Just a turn in custom game
+                filled = "●" * game.attempts_used
+                empty = "○" * (6 - game.attempts_used)
+                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+                
+                embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
+                embed.description = f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`"
+                embed.add_field(name="Current Board", value=board_display, inline=False)
+                embed.set_footer(text=f"{6 - game.attempts_used} tries left [{filled}{empty}]")
+                await ctx.send(content=message_content, embed=embed)
+
+            return  # Exit - no DB recording for custom mode
+
+        # ========= REGULAR GAME LOGIC =========
         if win:
             # Identify actual winner from history
             winner_user = None
@@ -111,7 +174,7 @@ class GuessHandler(commands.Cog):
                 winner_user = ctx.author
 
             # Handle win: award winner + participants, send breakdown
-            main_embed, breakdown_embed, _, res = await handle_game_win(
+            main_embed, breakdown_embed, _, res, level_ups = await handle_game_win(
                 self.bot, game, ctx, winner_user, cid
             )
 
@@ -129,6 +192,15 @@ class GuessHandler(commands.Cog):
                     t_name = res['tier_up']['name']
                     t_icon = res['tier_up']['icon']
                     await ctx.channel.send(f"🎉 **PROMOTION!** {winner_user.mention} has reached **{t_icon} {t_name}** Tier! 🎉")
+            
+            # Send level up messages for participants
+            if level_ups:
+                for uid, lvl in level_ups:
+                    try:
+                        participant = await self.bot.fetch_user(uid)
+                        await ctx.channel.send(f"🔼 **LEVEL UP!** {participant.mention} is now **Level {lvl}**! 🔼")
+                    except Exception:
+                        pass
 
             self.bot.games.pop(cid, None)
             await ctx.send(content=message_content, embed=main_embed)
@@ -142,7 +214,16 @@ class GuessHandler(commands.Cog):
 
         elif game_over:
             # Handle loss: award all participants
-            main_embed, participant_rows = await handle_game_loss(self.bot, game, ctx, cid)
+            main_embed, participant_rows, level_ups = await handle_game_loss(self.bot, game, ctx, cid)
+
+            # Send level up messages for all participants
+            if level_ups:
+                for uid, lvl in level_ups:
+                    try:
+                        participant = await self.bot.fetch_user(uid)
+                        await ctx.channel.send(f"🔼 **LEVEL UP!** {participant.mention} is now **Level {lvl}**! 🔼")
+                    except Exception:
+                        pass
 
             self.bot.games.pop(cid, None)
             await ctx.send(content=message_content, embed=main_embed)

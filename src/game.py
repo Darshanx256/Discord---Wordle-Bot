@@ -5,7 +5,8 @@ from src.utils import EMOJIS
 # ========= 4. GAME CLASS =========
 class WordleGame:
     __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
-                 'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time')
+                 'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time',
+                 'reveal_on_loss')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
@@ -20,6 +21,7 @@ class WordleGame:
         self.last_interaction = datetime.datetime.now()
         self.start_time = datetime.datetime.now()
         self.message_id = message_id
+        self.reveal_on_loss = True  # Default for custom games
 
     @property
     def attempts_used(self): return len(self.history)

@@ -45,6 +45,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     # Award participants and collect data
     others = game.participants - {winner_user.id}
     participant_rows = []
+    level_ups = []  # Collect level ups for all participants
     
     for uid in others:
         max_greens = 0
@@ -72,6 +73,9 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
         try:
             display_xp = pres.get('xp_gain', 0) if pres else 0
             display_wr = pres.get('multi_wr') if pres else None
+            # Collect level up for this participant
+            if pres and pres.get('level_up'):
+                level_ups.append((uid, pres['level_up']))
         except:
             display_xp = 0
             display_wr = None
@@ -122,14 +126,14 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     # Only return breakdown if there are participants to show
     breakdown_to_send = breakdown if participant_rows else None
 
-    return embed, breakdown_to_send, winner_user, res
+    return embed, breakdown_to_send, winner_user, res, level_ups
 
 
 async def handle_game_loss(bot, game, interaction, cid):
     """
     Handle a game loss: award all participants based on their best greens.
     
-    Returns: (embed, participant_rows_list)
+    Returns: (embed, participant_rows_list, level_ups_list)
     """
     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
     embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
@@ -138,6 +142,7 @@ async def handle_game_loss(bot, game, interaction, cid):
 
     # Award per-player based on best guess
     participant_rows = []
+    level_ups = []  # Collect level ups for all participants
     for uid in game.participants:
         max_greens = 0
         for h in game.history:
@@ -164,9 +169,12 @@ async def handle_game_loss(bot, game, interaction, cid):
         try:
             display_xp = pres.get('xp_gain', 0) if pres else 0
             display_wr = pres.get('multi_wr') if pres else None
+            # Collect level up for this participant
+            if pres and pres.get('level_up'):
+                level_ups.append((uid, pres['level_up']))
         except:
             display_xp = 0
             display_wr = None
         participant_rows.append((uid, outcome_key, display_xp, display_wr))
 
-    return embed, participant_rows
+    return embed, participant_rows, level_ups
