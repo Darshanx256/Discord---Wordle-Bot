@@ -151,7 +151,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 embed.set_footer(text=f"{6 - self.game.attempts_used} tries left {progress_bar}")
 
                 # Keyboard in message content to avoid 1024 char limit
-                message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+                message_content = f"**Keyboard Status:**\n{keypad}"
 
                 # Update the message (Content + Embed + View)
                 await interaction.response.edit_message(content=message_content, embed=embed, view=self.view_ref)
