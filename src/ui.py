@@ -58,7 +58,7 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) 
             
         output_lines.append(line.strip())
 
-    output_lines[1] = u"\u2007\u2007" + output_lines[1]
+    output_lines[1] = u"\u2007" + output_lines[1]
     output_lines[2] = u"\u2007\u2007\u2007\u2007" + output_lines[2] 
     keypad_display = "\n".join(output_lines)
         
