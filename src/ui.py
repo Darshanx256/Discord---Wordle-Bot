@@ -9,7 +9,7 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) 
     #egg start
     extra_line = ""
     rng = random.randint(1, 100)
-    if rng == 1:
+    if rng <= 90:
         egg = 'duck'
         egg_emoji = EMOJIS.get('duck', '🦆')
         extra_line = (
