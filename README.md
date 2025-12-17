@@ -1,4 +1,4 @@
-# 🟩 Discord Wordle Bot (V2 Beta)
+# 🟩 Discord Wordle Bot (V2)
 
 A feature-rich, competitive Wordle bot for Discord, featuring a dual-track progression system (Rating & XP), cosmetic shop, and private solo modes.
 
@@ -23,7 +23,7 @@ Discord---Wordle-Bot/
 └── requirements.txt    # 📦 Dependencies
 ```
 
-## 🧩 New Features (Beta)
+## 🧩 New Features
 
 ### 📈 Progression System
 - **Wordle Rating (WR)**: Skill-based ladder (Separate Solo vs Multiplayer).
@@ -39,26 +39,6 @@ Discord---Wordle-Bot/
 - **Shop**: Unlock badges like "Duck Lord" or "Dragon Slayer".
 - **Collection**: Find rare easter eggs (Ducks, Dragons) randomly in games.
 - **Anti-Grind**: Daily soft-caps to encourage consistency over spam.
-
-## 🚀 How to Run
-
-1.  **Install Dependencies**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-2.  **Configure Environment** (`.env`)
-    ```env
-    DISCORD_TOKEN=your_token
-    SUPABASE_URL=your_db_url
-    SUPABASE_KEY=your_db_key
-    ```
-    *(Run SQL from `supabase.txt` in your Database first)*
-
-3.  **Start the Bot**
-    ```bash
-    python wordle_bot.py
-    ```
 
 ## 🎮 Commands
 
@@ -85,4 +65,4 @@ Discord---Wordle-Bot/
 - **Concurrency**: Async fetching for large leaderboards.
 
 ---
-*Created with ❤️ by the Wordle Bot Team.*
+*Created with ❤️ by the Wordle Bot Team.* (ONE MAN)

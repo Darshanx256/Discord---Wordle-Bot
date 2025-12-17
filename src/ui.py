@@ -340,6 +340,8 @@ class HelpView(discord.ui.View):
                 "`/leaderboard_global` - Global Rankings\n"
                 "`/profile` - View your XP & WR\n"
                 "`/stop_game` - Cancel game"
+                "`/custom` - To set up a custom game in server"
+                "`/shop` - To equip badges"
             ), inline=False)
             
             tier_text = "\n".join([f"{t['icon']} **{t['name']}** (WR ≥ {t['min_wr']})" for t in TIERS])
@@ -363,11 +365,7 @@ class HelpView(discord.ui.View):
                 f"**Easter Eggs** (Rare Drops during `/guess`):\n"
                 f"{duck_emoji} Duck - Simple Mode Only (1/100 per guess)\n"
                 f"{dragon_emoji} Dragon - Classic Mode Only (1/1000 per guess)\n"
-                f"{candy_emoji} Candy - Both Modes (1/100 per guess)\n\n"
-                f"**Keyboard Effects** (UI flavor text):\n"
-                f"{duck_emoji} Rare Duck - 1/100 chance\n"
-                f"👁️ Letters Watching - 7/100 chance\n"
-                f"{candy_emoji} Sticky Keyboard - 2/100 chance\n\n"
+                f"{candy_emoji} Candy - Both Modes (1/100 - 3/100 per guess)\n\n"
                 "Collect eggs in your inventory! View via `/profile`\n\n"
                 "**Badges** are purchasable cosmetics at `/shop`.\n"
                 "Display your favorite badge on your profile!"
