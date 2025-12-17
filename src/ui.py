@@ -23,10 +23,10 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) 
             except:
                 pass
             
-    elif rng == 1:  
+    elif rng <= 4:  
         eye_emoji = EMOJIS.get('eyes', '👁️') if 'eyes' in EMOJIS else '👁️'
         extra_line = f"\n> *The letters are watching you...* {eye_emoji}"
-    elif rng <= 10:
+    elif rng <= 7:
         egg = 'candy'
         egg_emoji = EMOJIS.get('candy', '🍬')
         extra_line = f"\n> *Does this keyboard feel sticky to you?* {egg_emoji}"
