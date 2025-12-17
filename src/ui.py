@@ -339,8 +339,8 @@ class HelpView(discord.ui.View):
                 "`/leaderboard` - Server Rankings\n"
                 "`/leaderboard_global` - Global Rankings\n"
                 "`/profile` - View your XP & WR\n"
-                "`/stop_game` - Cancel game"
-                "`/custom` - To set up a custom game in server"
+                "`/stop_game` - Cancel game\n"
+                "`/custom` - To set up a custom game in server\n"
                 "`/shop` - To equip badges"
             ), inline=False)
             
