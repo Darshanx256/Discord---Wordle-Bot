@@ -132,7 +132,7 @@ class GameCommands(commands.Cog):
         self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
         print(f"DEBUG: Game STARTED in Channel {cid}. Active Games: {list(self.bot.games.keys())}")
 
-    @commands.hybrid_command(name="wordle_classic", description="Start a Classic game (Hard word list).")
+    @commands.hybrid_command(name="wordle_classic", description="Start a Classic game (Harder word list).")
     async def start_classic(self, ctx):
         if not ctx.guild:
             return await ctx.send("❌ Command must be used in a server.", ephemeral=True)
@@ -174,7 +174,7 @@ class GameCommands(commands.Cog):
         embed.add_field(name="Board", value=board_display, inline=False)
         embed.set_footer(text=f"6 tries left {progress_bar}")
 
-        message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+        message_content = f"**Keyboard Status:**\n{keypad}"
 
         view = SoloView(self.bot, game, ctx.author)
         await ctx.send(content=message_content, embed=embed, view=view, ephemeral=True)
@@ -197,7 +197,7 @@ class GameCommands(commands.Cog):
         embed.add_field(name="Board", value=board_display, inline=False)
         embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
 
-        message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+        message_content = f"**Keyboard Status:**\n{keypad}"
 
         view = SoloView(self.bot, game, ctx.author)
         await ctx.send(content=message_content, embed=embed, view=view, ephemeral=True)
