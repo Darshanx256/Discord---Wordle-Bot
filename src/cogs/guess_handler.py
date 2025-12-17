@@ -95,7 +95,7 @@ class GuessHandler(commands.Cog):
         empty = "○" * (6 - game.attempts_used)
         board_display = "\n".join([f"{h['pattern']}" for h in game.history])
 
-        message_content = f"⌨️ **Keyboard Status:**\n{keypad}"
+        message_content = f"**Keyboard Status:**\n{keypad}"
 
         # Fetch player badge
         try:
