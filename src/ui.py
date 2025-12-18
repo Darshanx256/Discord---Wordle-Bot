@@ -344,8 +344,20 @@ class HelpView(discord.ui.View):
                 "`/shop` - To equip badges"
             ), inline=False)
             
-            tier_text = "\n".join([f"{t['icon']} **{t['name']}** (WR ≥ {t['min_wr']})" for t in TIERS])
-            embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
+            tier_text = "\n".join(
+                [f"{t['icon']} **{t['name']}** (WR ≥ {t['min_wr']})" for t in TIERS]
+            )
+
+            tier_text += (
+                "\n\n**Daily Soft Cap:** WR rewards diminish after you reach the daily limit."
+            )
+
+            embed.add_field(
+                name="🏆 Ranking Tiers",
+                value=tier_text,
+                inline=False
+            )
+
             
             embed.add_field(name="🧮 XP & Rewards", value=(
                 "**Win:** +50 XP, +120 WR\n"
