@@ -3,13 +3,6 @@ import sys
 from src.config import TOKEN, SUPABASE_URL, SUPABASE_KEY
 from src.server import run_flask_server
 from src.bot import bot
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(
-    command_prefix="!",
-    intents=intents
-)
 
 if not TOKEN: 
     print("❌ FATAL: DISCORD_TOKEN not found.")
