@@ -349,7 +349,7 @@ class HelpView(discord.ui.View):
             )
 
             tier_text += (
-                "\n\n**Daily Soft Cap:** WR rewards diminish after you reach the daily limit."
+                "\n**Daily Soft Cap:** WR rewards diminish after you reach the daily limit.\n"
             )
 
             embed.add_field(
