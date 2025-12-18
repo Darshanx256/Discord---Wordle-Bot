@@ -52,9 +52,9 @@ MPS_SPEED = { # Bonus for correct solve time
 # TIERS
 TIERS = [
     {"name": "Grandmaster", "icon": "💎", "min_wr": 2800, "req": "60% WR, <3.9 Avg"},
-    {"name": "Master",      "icon": "⚜️", "min_wr": 2300, "req": "58% WR, <4.0 Avg"},
-    {"name": "Elite",       "icon": "⚔️", "min_wr": 1600, "req": "52% WR, <4.4 Avg"},
-    {"name": "Challenger",  "icon": "🛡️", "min_wr": 900,  "req": "15 Solves"}
+    {"name": "Master",      "icon": "⚜️", "min_wr": 1600, "req": "58% WR, <4.0 Avg"},
+    {"name": "Elite",       "icon": "⚔️", "min_wr": 900, "req": "52% WR, <4.4 Avg"},
+    {"name": "Challenger",  "icon": "🛡️", "min_wr": 0,  "req": "15 Solves"}
 ]
 
 
