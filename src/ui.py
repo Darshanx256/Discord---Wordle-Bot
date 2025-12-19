@@ -345,10 +345,10 @@ class HelpView(discord.ui.View):
             ), inline=False)
             
             tier_text = "\n".join([
-                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** (WR ≥ {t['min_wr']}) — *{int((1-t.get('multiplier', 1.0))*100)}% Reward Reduction*" 
+                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** (WR ≥ {t['min_wr']})" 
                 for t in TIERS
             ])
-            tier_text += "\n\n**Daily Soft Cap:** Rewards diminish after daily gain thresholds (500/700 WR)."
+            tier_text += "\n\n**Daily Soft Cap:** Rewards diminish after daily gain thresholds."
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
             
             embed.add_field(name="🧮 XP & Rewards", value=(
