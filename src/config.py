@@ -49,13 +49,19 @@ MPS_SPEED = { # Bonus for correct solve time
     30: 20, 40: 10
 }
 
-# TIERS
-TIERS = [
-    {"name": "Grandmaster", "icon": "💎", "min_wr": 2800, "req": "60% WR, <3.9 Avg"},
-    {"name": "Master",      "icon": "⚜️", "min_wr": 1600, "req": "58% WR, <4.0 Avg"},
-    {"name": "Elite",       "icon": "⚔️", "min_wr": 900, "req": "52% WR, <4.4 Avg"},
-    {"name": "Challenger",  "icon": "🛡️", "min_wr": 0,  "req": "15 Solves"}
-]
+# TIERS (Includes multipliers for reward reduction)
+# "at challenger, 20% reward reduction, next tier, another 10%... and so on"
+# Challenger: 0.8x, Elite: 0.7x, Master: 0.6x, Grandmaster: 0.5x, Legend: 0.4x
+    {"name": "Legend",      "icon": "legend_tier", "min_wr": 3900, "multiplier": 0.40, "req": "Top 1%"},
+    {"name": "Grandmaster", "icon": "💎", "min_wr": 2800, "multiplier": 0.50, "req": "60% WR, <3.9 Avg"},
+    {"name": "Master",      "icon": "⚜️", "min_wr": 1600, "multiplier": 0.60, "req": "58% WR, <4.0 Avg"},
+    {"name": "Elite",       "icon": "⚔️", "min_wr": 900,  "multiplier": 0.70, "req": "52% WR, <4.4 Avg"},
+    {"name": "Challenger",  "icon": "🛡️", "min_wr": 0,    "multiplier": 0.80, "req": "15 Solves"}
+
+# ANTI-GRIND SYSTEM
+DAILY_CAP_1 = 500  # -50% Reward if > 500 Daily WR
+DAILY_CAP_2 = 700  # -50% Additional (Total 75% drop) if > 700 Daily WR
+
 
 
 # --- LINKS & ASSETS ---

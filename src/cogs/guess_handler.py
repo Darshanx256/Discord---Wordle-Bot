@@ -174,7 +174,7 @@ class GuessHandler(commands.Cog):
                 winner_user = ctx.author
 
             # Handle win: award winner + participants, send breakdown
-            main_embed, breakdown_embed, _, res, level_ups = await handle_game_win(
+            main_embed, breakdown_embed, _, res, level_ups, tier_ups = await handle_game_win(
                 self.bot, game, ctx, winner_user, cid
             )
 
@@ -202,6 +202,17 @@ class GuessHandler(commands.Cog):
                     except Exception:
                         pass
 
+            # Send tier up messages for participants
+            if tier_ups:
+                for uid, tier_info in tier_ups:
+                    try:
+                        participant = await self.bot.fetch_user(uid)
+                        t_name = tier_info['name']
+                        t_icon = tier_info['icon']
+                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{t_icon} {t_name}** Tier! 🎉")
+                    except Exception:
+                        pass
+
             self.bot.games.pop(cid, None)
             await ctx.send(content=message_content, embed=main_embed)
 
@@ -214,7 +225,7 @@ class GuessHandler(commands.Cog):
 
         elif game_over:
             # Handle loss: award all participants
-            main_embed, participant_rows, level_ups = await handle_game_loss(self.bot, game, ctx, cid)
+            main_embed, participant_rows, level_ups, tier_ups = await handle_game_loss(self.bot, game, ctx, cid)
 
             # Send level up messages for all participants
             if level_ups:
@@ -222,6 +233,17 @@ class GuessHandler(commands.Cog):
                     try:
                         participant = await self.bot.fetch_user(uid)
                         await ctx.channel.send(f"🔼 **LEVEL UP!** {participant.mention} is now **Level {lvl}**! 🔼")
+                    except Exception:
+                        pass
+
+            # Send tier up messages for all participants
+            if tier_ups:
+                for uid, tier_info in tier_ups:
+                    try:
+                        participant = await self.bot.fetch_user(uid)
+                        t_name = tier_info['name']
+                        t_icon = tier_info['icon']
+                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{t_icon} {t_name}** Tier! 🎉")
                     except Exception:
                         pass
 

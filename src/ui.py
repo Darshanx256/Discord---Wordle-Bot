@@ -344,20 +344,9 @@ class HelpView(discord.ui.View):
                 "`/shop` - To equip badges"
             ), inline=False)
             
-            tier_text = "\n".join(
-                [f"{t['icon']} **{t['name']}** (WR ≥ {t['min_wr']})" for t in TIERS]
-            )
-
-            tier_text += (
-                "\n**Daily Soft Cap:** WR rewards diminish after you reach the daily limit.\n"
-            )
-
-            embed.add_field(
-                name="🏆 Ranking Tiers",
-                value=tier_text,
-                inline=False
-            )
-
+            tier_text = "\n".join([f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** (WR ≥ {t['min_wr']})" for t in TIERS])
+            tier_text += "\n\n**Daily Soft Cap:** Rewards diminish after daily gain thresholds (500/700 WR)."
+            embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
             
             embed.add_field(name="🧮 XP & Rewards", value=(
                 "**Win:** +50 XP, +120 WR\n"
@@ -365,7 +354,8 @@ class HelpView(discord.ui.View):
                 "**3 Greens:** +30 XP, +50 WR\n"
                 "**2 Greens:** +20 XP, +20 WR\n"
                 "**1 Green:** +10 XP, +10 WR\n"
-                "**Participation:** +5 XP, +5 WR\n\n"
+                "**Participation:** +5 XP, +5 WR\n"
+                "**GM+ Loss/Part:** -15 WR (Negative Rating)\n\n"
                 "⚡ **Speed Bonus:** <30s = +10 XP"
             ), inline=False)
             

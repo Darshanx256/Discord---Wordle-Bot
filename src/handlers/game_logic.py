@@ -12,11 +12,11 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     """
     Handle a game win: award winner + participants, send breakdown embed.
     
-    Returns: (embed, breakdown_embed, winner_user, res_dict)
+    Returns: (embed, breakdown_embed, winner_user, res_dict, level_ups, tier_ups)
     """
     if cid in bot.stopped_games:
         bot.stopped_games.discard(cid)
-        return None, None, None, None  # Game was stopped, no reward
+        return None, None, None, None, None, None  # Game was stopped, no reward
 
     time_taken = (datetime.datetime.now() - game.start_time).total_seconds()
     flavor = get_win_flavor(game.attempts_used)
@@ -46,6 +46,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     others = game.participants - {winner_user.id}
     participant_rows = []
     level_ups = []  # Collect level ups for all participants
+    tier_ups = []   # Collect tier ups for all participants
     
     for uid in others:
         max_greens = 0
@@ -76,6 +77,9 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
             # Collect level up for this participant
             if pres and pres.get('level_up'):
                 level_ups.append((uid, pres['level_up']))
+            # Collect tier up for this participant
+            if pres and pres.get('tier_up'):
+                tier_ups.append((uid, pres['tier_up']))
         except:
             display_xp = 0
             display_wr = None
@@ -126,14 +130,14 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     # Only return breakdown if there are participants to show
     breakdown_to_send = breakdown if participant_rows else None
 
-    return embed, breakdown_to_send, winner_user, res, level_ups
+    return embed, breakdown_to_send, winner_user, res, level_ups, tier_ups
 
 
 async def handle_game_loss(bot, game, interaction, cid):
     """
     Handle a game loss: award all participants based on their best greens.
     
-    Returns: (embed, participant_rows_list, level_ups_list)
+    Returns: (embed, participant_rows_list, level_ups_list, tier_ups_list)
     """
     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
     embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
@@ -143,6 +147,7 @@ async def handle_game_loss(bot, game, interaction, cid):
     # Award per-player based on best guess
     participant_rows = []
     level_ups = []  # Collect level ups for all participants
+    tier_ups = []   # Collect tier ups for all participants
     for uid in game.participants:
         max_greens = 0
         for h in game.history:
@@ -172,9 +177,12 @@ async def handle_game_loss(bot, game, interaction, cid):
             # Collect level up for this participant
             if pres and pres.get('level_up'):
                 level_ups.append((uid, pres['level_up']))
+            # Collect tier up
+            if pres and pres.get('tier_up'):
+                tier_ups.append((uid, pres['tier_up']))
         except:
             display_xp = 0
             display_wr = None
         participant_rows.append((uid, outcome_key, display_xp, display_wr))
 
-    return embed, participant_rows, level_ups
+    return embed, participant_rows, level_ups, tier_ups

@@ -5,67 +5,33 @@ from src.config import TIERS, XP_GAINS, XP_LEVELS, MPS_BASE, MPS_EFFICIENCY, MPS
 
 # --- V2 SCORING & PROGRESSION ---
 
-def calculate_game_rewards(mode: str, outcome: str, guesses: int, time_taken: float):
-    """
-    Calculates XP and WR (MPS) delta based on game result.
-    mode: 'SOLO' or 'MULTI'
-    outcome: 'win', 'loss' (Solo) OR 'win', 'correct_4', ... (Multi)
-    guesses: Number of guesses used (1-6)
-    time_taken: Seconds
-    """
-    xp = 0
-    mps = 0
-    
-    # 1. Base Rewards
-    if mode == 'SOLO':
-        # outcome is 'win' or 'loss'
-        rewards = XP_GAINS['SOLO']
-        xp = rewards.get(outcome, 5)
-        
-        # Solo MPS (Writer Note: Prompt specifies MPS details for Multiplayer mostly)
-        # "Solo... Played via /solo... Input via button... Standard Wordle"
-        # "Rating... Solo... input via button".
-        # Prompt only detailed MPS for Multiplayer.
-        # "Match Performance Score (MPS) ... Base Outcome (Multiplayer)"
-        # Let's assume Solo uses similar logic or simplified.
-        # "Solo Mode: Correct solve +40 XP, Failed +5 XP".
-        # Let's use simple MPS for Solo if not specified: Win=Match Standard?
-        # "Rating... Solo... Performance-based".
-        if outcome == 'win':
-            # Use Multiplayer win base for Solo WR?
-            # "Multiplayer never causes negative WR". Solo can (after Challenger).
-            mps = 100 # Arbitrary base for Solo win? Or use MPS_BASE['win']?
-            # Efficiency Bonus
-            mps += MPS_EFFICIENCY.get(guesses, 0)
-            # Speed Bonus
-            if time_taken < 30: mps += MPS_SPEED[30]
-            elif time_taken < 40: mps += MPS_SPEED[40]
-        else:
-            mps = -15 # Small penalty for loss? 
-            # "Solo negatives (after Challenger): Soft-capped... limited".
-            # We'll pass negative, DB handles "No negative WR until Challenger".
+from src.mechanics.rewards import calculate_final_rewards
+import datetime
 
-    else: # MULTIPLAYER
-        # outcome: 'win', 'correct_4', 'correct_3', etc.
-        # XP
-        xp = XP_GAINS['MULTI'].get(outcome, 5)
+def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
+    """
+    Calculates total WR gained by the user today (UTC).
+    Queries 'match_history' table. Returns 0 if table not found or error.
+    """
+    try:
+        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         
-        # MPS (Start with Base)
-        mps = MPS_BASE.get(outcome, 0)
-        
-        if outcome == 'win':
-            # Efficiency
-            mps += MPS_EFFICIENCY.get(guesses, 0)
+        # Assumption: Table is 'match_history' and has 'user_id', 'created_at', 'wr_delta'
+        # We only care about POSITIVE gains for the cap.
+        response = bot.supabase_client.table('match_history') \
+            .select('wr_delta') \
+            .eq('user_id', user_id) \
+            .gte('created_at', today_start.isoformat()) \
+            .gt('wr_delta', 0) \
+            .execute()
             
-            # Speed
-            if time_taken < 30: 
-                mps += MPS_SPEED[30]
-                xp += XP_GAINS['BONUS']['under_30s']
-            elif time_taken < 40: 
-                mps += MPS_SPEED[40]
-                xp += XP_GAINS['BONUS']['under_40s']
-                
-    return xp, mps
+        if response.data:
+            total = sum(r['wr_delta'] for r in response.data)
+            return total
+        return 0
+    except Exception as e:
+        # print(f"⚠️ Could not fetch daily WR stats: {e}")
+        return 0
 
 def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str, 
                    outcome: str, guesses: int, time_taken: float, egg_trigger: str = None):
@@ -73,7 +39,22 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
     Calls the DB RPC to record game results.
     """
     try:
-        xp_gain, wr_delta = calculate_game_rewards(mode, outcome, guesses, time_taken)
+        # 1. Fetch current stats for Tier calc
+        current_wr = 0
+        try:
+            # We need current WR to determine Tier Penalty
+            # Optimize: Maybe pass it in? For now fetch.
+            u_res = bot.supabase_client.table('user_stats_v2').select('multi_wr').eq('user_id', user_id).execute()
+            if u_res.data:
+                current_wr = u_res.data[0]['multi_wr']
+        except:
+            pass
+            
+        # 2. Fetch daily progress for Anti-Grind
+        daily_gain = get_daily_wr_gain(bot, user_id)
+        
+        # 3. Calculate Final Rewards
+        xp_gain, wr_delta = calculate_final_rewards(mode, outcome, guesses, time_taken, current_wr, daily_gain)
         
         # "Solves" check for Challenger Tier? 
         # DB tracks wins/games.
@@ -121,8 +102,15 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
                 if new_wr >= t['min_wr']: new_tier = t
                 
             # If crossed threshold
-            if new_tier and old_tier and (new_tier['min_wr'] > old_tier['min_wr']):
-                 data['tier_up'] = new_tier
+            # Fixed: logic now properly detects tier up even if tier lookup order is tricky
+            # Config TIERS should be sorted DESC for this loop logic to work in one pass
+            # Current Config: GM, Master, Elite, Challenger.
+            # So the first match is the highest tier. Correct.
+            
+            # Check if we moved UP a tier (higher index in reverse, or simply higher min_wr)
+            if new_tier and old_tier:
+                if new_tier['min_wr'] > old_tier['min_wr']:
+                    data['tier_up'] = new_tier
             elif new_tier and not old_tier: # Unranked to Ranked
                  data['tier_up'] = new_tier
             

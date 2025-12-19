@@ -18,3 +18,8 @@ diagnose.py
 FINAL_AUDIT_REPORT.md
 AUDIT_REPORT.md
 IMPLEMENTATION_SUMMARY.txt
+
+# Tests and Audits
+tests/
+debug_rewards.py
+inspect_db.py

@@ -47,8 +47,8 @@ def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
                 E[key] = token
             continue
 
-        # 3) EASTER EGGS & BADGES
-        if raw_lower in ["eyes", "duck", "dragon", "candy", "duck_lord_badge", "dragon_slayer_badge", "candy_rush_badge"]:
+        # 3) EASTER EGGS & BADGES & TIERS
+        if raw_lower in ["eyes", "duck", "dragon", "candy", "duck_lord_badge", "dragon_slayer_badge", "candy_rush_badge", "legend_tier"]:
             E[raw_lower] = token
             continue
 
