@@ -39,18 +39,13 @@ def calculate_base_rewards(mode: str, outcome: str, guesses: int, time_taken: fl
 
 def get_tier_multiplier(current_wr: int) -> float:
     """Returns the reward multiplier based on current tier."""
-    # Find highest matching tier
-    # TIERS are ordered desc, but config shows desc order? 
-    # Config: GM(2800), Master(1600), Elite(900), Challenger(0)
-    # We should iterate and find the first one that matches min_wr
+    # Robustness: Sort TIERS descending by min_wr to find highest match first
+    sorted_tiers = sorted(TIERS, key=lambda x: x['min_wr'], reverse=True)
     
-    for tier in TIERS:
+    for tier in sorted_tiers:
         if current_wr >= tier['min_wr']:
             return tier.get('multiplier', 1.0)
             
-    # If below Challenger (unranked? or just fallback)
-    # The config says Challenger 0+, so everyone is at least Challenger if ranked?
-    # Assume 1.0 if not found (Unranked?)
     return 1.0
 
 def apply_anti_grind(xp: int, wr: int, daily_wr_gain: int) -> tuple[int, int]:
@@ -60,9 +55,12 @@ def apply_anti_grind(xp: int, wr: int, daily_wr_gain: int) -> tuple[int, int]:
     """
     multiplier = 1.0
     
-    if daily_wr_gain >= DAILY_CAP_2:
+    # Safety: ensure non-negative daily gain
+    safe_daily = max(0, daily_wr_gain)
+    
+    if safe_daily >= DAILY_CAP_2:
         multiplier = 0.25 # Drop 50% then another 50% = 25% remaining
-    elif daily_wr_gain >= DAILY_CAP_1:
+    elif safe_daily >= DAILY_CAP_1:
         multiplier = 0.50 # Drop 50%
         
     final_xp = int(xp * multiplier)
@@ -80,8 +78,15 @@ def calculate_final_rewards(mode: str, outcome: str, guesses: int, time_taken: f
     # 1. Base
     xp, wr = calculate_base_rewards(mode, outcome, guesses, time_taken)
     
-    # Check if High Tier (>= 2800) for negative rating penalty on non-wins
-    is_high_tier = (current_wr >= 2800)
+    # Check if High Tier for negative rating penalty on non-wins
+    # Dynamic: Find GM threshold from TIERS
+    gm_threshold = 2800 # Fallback
+    for t in TIERS:
+        if t['name'] == 'Grandmaster':
+            gm_threshold = t['min_wr']
+            break
+            
+    is_high_tier = (current_wr >= gm_threshold)
     
     if is_high_tier and outcome not in ['win', 'correct_4', 'correct_3', 'correct_2', 'correct_1']:
          # This covers 'loss' (Solo) and 'participation' (Multi)

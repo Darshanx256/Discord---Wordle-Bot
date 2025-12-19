@@ -97,21 +97,20 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
             old_tier = None
             new_tier = None
             
+            # Check Tier Cross - Ensure we find the HIGHEST tier first
+            # We assume TIERS is High -> Low WR
             for t in TIERS:
-                if old_wr >= t['min_wr']: old_tier = t
-                if new_wr >= t['min_wr']: new_tier = t
+                if old_tier is None and old_wr >= t['min_wr']: 
+                    old_tier = t
+                if new_tier is None and new_wr >= t['min_wr']: 
+                    new_tier = t
+                if old_tier and new_tier: break
                 
-            # If crossed threshold
-            # Fixed: logic now properly detects tier up even if tier lookup order is tricky
-            # Config TIERS should be sorted DESC for this loop logic to work in one pass
-            # Current Config: GM, Master, Elite, Challenger.
-            # So the first match is the highest tier. Correct.
-            
-            # Check if we moved UP a tier (higher index in reverse, or simply higher min_wr)
+            # If crossed threshold UP
             if new_tier and old_tier:
                 if new_tier['min_wr'] > old_tier['min_wr']:
                     data['tier_up'] = new_tier
-            elif new_tier and not old_tier: # Unranked to Ranked
+            elif new_tier and not old_tier: # Transition from unranked (-ve or 0)
                  data['tier_up'] = new_tier
             
             old_lvl = calculate_level(old_xp)

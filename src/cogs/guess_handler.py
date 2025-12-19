@@ -197,7 +197,8 @@ class GuessHandler(commands.Cog):
             if level_ups:
                 for uid, lvl in level_ups:
                     try:
-                        participant = await self.bot.fetch_user(uid)
+                        # Optimization: get_user first
+                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
                         await ctx.channel.send(f"🔼 **LEVEL UP!** {participant.mention} is now **Level {lvl}**! 🔼")
                     except Exception:
                         pass
@@ -206,10 +207,13 @@ class GuessHandler(commands.Cog):
             if tier_ups:
                 for uid, tier_info in tier_ups:
                     try:
-                        participant = await self.bot.fetch_user(uid)
+                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
                         t_name = tier_info['name']
                         t_icon = tier_info['icon']
-                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{t_icon} {t_name}** Tier! 🎉")
+                        # Resolve icon if it's a key
+                        from src.utils import EMOJIS
+                        icon_display = EMOJIS.get(t_icon, t_icon)
+                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{icon_display} {t_name}** Tier! 🎉")
                     except Exception:
                         pass
 
@@ -231,7 +235,7 @@ class GuessHandler(commands.Cog):
             if level_ups:
                 for uid, lvl in level_ups:
                     try:
-                        participant = await self.bot.fetch_user(uid)
+                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
                         await ctx.channel.send(f"🔼 **LEVEL UP!** {participant.mention} is now **Level {lvl}**! 🔼")
                     except Exception:
                         pass
@@ -240,10 +244,12 @@ class GuessHandler(commands.Cog):
             if tier_ups:
                 for uid, tier_info in tier_ups:
                     try:
-                        participant = await self.bot.fetch_user(uid)
+                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
                         t_name = tier_info['name']
                         t_icon = tier_info['icon']
-                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{t_icon} {t_name}** Tier! 🎉")
+                        from src.utils import EMOJIS
+                        icon_display = EMOJIS.get(t_icon, t_icon)
+                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{icon_display} {t_name}** Tier! 🎉")
                     except Exception:
                         pass
 
