@@ -264,7 +264,7 @@ class GuessHandler(commands.Cog):
                         pass
 
             self.bot.games.pop(cid, None)
-            await ctx.send(content=message_content, embed=main_embed)
+            await ctx.send(content=message_content, embed=main_embed, view=view)
 
             # Optionally send breakdown for loss too (show participant rewards)
             try:
