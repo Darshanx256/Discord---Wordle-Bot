@@ -32,14 +32,30 @@ class WordleBot(commands.Bot):
         self.supabase_client: Client = None
 
     def get_custom_prefix(self, bot, message):
-        """Only allow '-' as a prefix if it's followed by 'g ' AND a game is active."""
-        if message.content.lower().startswith("-g "):
-            # Memory Efficiency: Ignore '-g' if no game is active in this context
+        """Only allow '-' as a prefix if it's followed by 'g' (the guess shortcut)."""
+        content = message.content.lower()
+        if content.startswith("-g ") or content.startswith("-g"):
+            # Only allow if a game is active
             cid = message.channel.id
             uid = message.author.id
             if (cid in self.games) or (cid in self.custom_games) or (uid in self.solo_games):
                 return "-"
-        return [] # No prefix for other commands or if no game active
+        
+        # No prefix for anything else (makes the bot essentially slash-only except for -g)
+        return []
+
+    async def on_command_error(self, ctx, error):
+        """Silently ignore command errors from unintended prefix triggers."""
+        if isinstance(error, commands.CommandNotFound):
+            return # Silence "-wordle" or other typos
+        if isinstance(error, commands.CheckFailure):
+            return
+        
+        # For other errors, log them if they aren't interaction timeouts
+        if "Unknown interaction" in str(error):
+            return
+            
+        print(f"⚠️ Command Error in {ctx.command}: {error}")
 
     async def setup_hook(self):
         self.load_local_data()

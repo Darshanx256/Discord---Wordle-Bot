@@ -72,8 +72,13 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         # Clean up any "stopped" state for this channel so wins are rewarded
         self.bot.stopped_games.discard(cid)
 
+        # Respond to modal (already deferred if we added it, but let's just use send_message early or defer)
+        # Actually, let's defer early in on_submit
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
         # Respond to modal
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "✅ Custom game set up! Game is starting...",
             ephemeral=True
         )
@@ -112,14 +117,20 @@ class GameCommands(commands.Cog):
 
     @commands.hybrid_command(name="wordle", description="Start a new game (Simple word list).")
     async def start(self, ctx):
+        if not ctx.interaction:
+            return # Only allow slash command, ignore prefix like -wordle
         await start_multiplayer_game(self.bot, ctx, is_classic=False)
 
     @commands.hybrid_command(name="wordle_classic", description="Start a Classic game (Harder word list).")
     async def start_classic(self, ctx):
+        if not ctx.interaction:
+            return # Only allow slash command, ignore prefix like -wordle_classic
         await start_multiplayer_game(self.bot, ctx, is_classic=True)
 
     @commands.hybrid_command(name="solo", description="Play a private game (Ephemeral).")
     async def solo(self, ctx):
+        if not ctx.interaction: return
+        await ctx.defer(ephemeral=True)
         if ctx.author.id in self.bot.solo_games:
             return await ctx.send("⚠️ You already have a solo game running!", ephemeral=True)
 
@@ -166,6 +177,8 @@ class GameCommands(commands.Cog):
 
     @commands.hybrid_command(name="cancel_solo", description="Cancel your active solo game.")
     async def cancel_solo(self, ctx):
+        if not ctx.interaction: return
+        await ctx.defer(ephemeral=True)
         if ctx.author.id not in self.bot.solo_games:
             return await ctx.send("⚠️ No active solo game to cancel.", ephemeral=True)
 
@@ -174,12 +187,14 @@ class GameCommands(commands.Cog):
 
     @commands.hybrid_command(name="stop_game", description="Force stop the current game.")
     async def stop_game(self, ctx):
+        if not ctx.interaction: return
+        await ctx.defer()
         cid = ctx.channel.id
         game = self.bot.games.get(cid)
         custom_game = self.bot.custom_games.get(cid)
 
         if not game and not custom_game:
-            return await ctx.send("No active game to stop.", ephemeral=True)
+            return await ctx.send("No active game to stop.")
 
         # Handle regular game
         if game:
@@ -211,6 +226,8 @@ class GameCommands(commands.Cog):
 
     @commands.hybrid_command(name="custom", description="Start a custom Wordle game with your own word.")
     async def custom_mode(self, ctx):
+        if not ctx.interaction: return
+        await ctx.defer(ephemeral=True)
         if not ctx.guild:
             return await ctx.send("❌ Command must be used in a server.", ephemeral=True)
 

@@ -230,23 +230,33 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
     author = interaction_or_ctx.user if is_interaction else interaction_or_ctx.author
     cid = channel.id
 
-    if not guild:
-        msg = "❌ Command must be used in a server."
-        if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
-        else: await interaction_or_ctx.send(msg, ephemeral=True)
-        return
-
     # 2. Check existence
     if cid in bot.games:
         msg = "⚠️ A game is already active in this channel! Use `/stop_game` to end it."
-        if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+        if is_interaction: 
+            if not interaction_or_ctx.response.is_done():
+                await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            else:
+                await interaction_or_ctx.followup.send(msg, ephemeral=True)
         else: await interaction_or_ctx.send(msg, ephemeral=True)
         return
     if cid in bot.custom_games:
         msg = "⚠️ A custom game is already active. Use `/stop_game` first."
-        if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+        if is_interaction:
+            if not interaction_or_ctx.response.is_done():
+                await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            else:
+                await interaction_or_ctx.followup.send(msg, ephemeral=True)
         else: await interaction_or_ctx.send(msg, ephemeral=True)
         return
+
+    # Defer early to prevent timeout during DB secret selection
+    if is_interaction:
+        if not interaction_or_ctx.response.is_done():
+            await interaction_or_ctx.response.defer()
+    else:
+        # For hybrid/prefix commands
+        await interaction_or_ctx.defer()
 
     # 3. Secret Selection
     if is_classic:
@@ -299,6 +309,9 @@ class PlayAgainView(discord.ui.View):
 
     @discord.ui.button(label="Play Again", style=discord.ButtonStyle.primary, emoji="🔄")
     async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Defer immediately to prevent timeout
+        await interaction.response.defer()
+        
         # Start a new game using the same settings
         await start_multiplayer_game(self.bot, interaction, self.is_classic)
         self.stop()
