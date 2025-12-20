@@ -4,7 +4,8 @@ Shared game logic for handling wins, losses, and reward distribution in multipla
 import asyncio
 import datetime
 import discord
-from src.database import record_game_v2
+from src.game import WordleGame
+from src.database import record_game_v2, get_next_secret, get_next_classic_secret
 from src.utils import get_badge_emoji, get_win_flavor, get_cached_username
 
 
@@ -186,3 +187,95 @@ async def handle_game_loss(bot, game, interaction, cid):
         participant_rows.append((uid, outcome_key, display_xp, display_wr))
 
     return embed, participant_rows, level_ups, tier_ups
+
+async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
+    """
+    Shared logic to start a multiplayer game (Simple or Classic).
+    Used by commands and 'Play Again' buttons.
+    """
+    # 1. Identity & Context
+    is_interaction = isinstance(interaction_or_ctx, discord.Interaction)
+    guild = interaction_or_ctx.guild if is_interaction else interaction_or_ctx.guild
+    channel = interaction_or_ctx.channel if is_interaction else interaction_or_ctx.channel
+    author = interaction_or_ctx.user if is_interaction else interaction_or_ctx.author
+    cid = channel.id
+
+    if not guild:
+        msg = "❌ Command must be used in a server."
+        if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+        else: await interaction_or_ctx.send(msg, ephemeral=True)
+        return
+
+    # 2. Check existence
+    if cid in bot.games:
+        msg = "⚠️ A game is already active in this channel! Use `/stop_game` to end it."
+        if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+        else: await interaction_or_ctx.send(msg, ephemeral=True)
+        return
+    if cid in bot.custom_games:
+        msg = "⚠️ A custom game is already active. Use `/stop_game` first."
+        if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+        else: await interaction_or_ctx.send(msg, ephemeral=True)
+        return
+
+    # 3. Secret Selection
+    if is_classic:
+        if not bot.hard_secrets:
+            msg = "❌ Classic word list missing."
+            if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            else: await interaction_or_ctx.send(msg, ephemeral=True)
+            return
+        secret = get_next_classic_secret(bot, guild.id)
+        title = "⚔️ Wordle Started! (Classic)"
+        color = discord.Color.dark_gold()
+        desc = "**Hard Mode!** 6 attempts."
+    else:
+        if not bot.secrets:
+            msg = "❌ Simple word list missing."
+            if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            else: await interaction_or_ctx.send(msg, ephemeral=True)
+            return
+        secret = get_next_secret(bot, guild.id)
+        title = "✨ Wordle Started! (Simple)"
+        color = discord.Color.blue()
+        desc = "A simple **5-letter word** has been chosen. **6 attempts** total."
+
+    # 4. Announcement
+    embed = discord.Embed(title=title, color=color, description=desc)
+    embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
+    
+    if is_interaction:
+        if not interaction_or_ctx.response.is_done():
+            await interaction_or_ctx.response.send_message(embed=embed)
+            msg = await interaction_or_ctx.original_response()
+        else:
+            msg = await interaction_or_ctx.followup.send(embed=embed)
+    else:
+        msg = await interaction_or_ctx.send(embed=embed)
+
+    # 5. Initialize
+    bot.games[cid] = WordleGame(secret, cid, author, msg.id)
+    bot.games[cid].difficulty = 1 if is_classic else 0 # 0=Simple, 1=Classic
+    bot.stopped_games.discard(cid)
+    # print(f"DEBUG: {'Classic ' if is_classic else ''}Game STARTED in {cid}.")
+    return bot.games[cid]
+
+
+class PlayAgainView(discord.ui.View):
+    def __init__(self, bot, is_classic: bool):
+        super().__init__(timeout=300)
+        self.bot = bot
+        self.is_classic = is_classic
+
+    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.primary, emoji="🔄")
+    async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Start a new game using the same settings
+        await start_multiplayer_game(self.bot, interaction, self.is_classic)
+        self.stop()
+        
+        # Disable the button after use to prevent multiple clicks
+        try:
+            button.disabled = True
+            await interaction.message.edit(view=self)
+        except:
+            pass

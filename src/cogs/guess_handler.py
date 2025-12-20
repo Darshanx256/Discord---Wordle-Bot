@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands
 from src.utils import get_badge_emoji, get_cached_username, EMOJIS
 from src.ui import get_markdown_keypad_status
-from src.handlers.game_logic import handle_game_win, handle_game_loss
+from src.handlers.game_logic import handle_game_win, handle_game_loss, PlayAgainView
 from src.database import trigger_egg
 
 
@@ -181,7 +181,12 @@ class GuessHandler(commands.Cog):
             if main_embed is None:
                 # Game was stopped early
                 return await ctx.send("⚠️ This game was stopped early — no rewards are given.")
-
+            
+            # Add "Play Again" button for multiplayer games
+            view = None
+            if game.difficulty in [0, 1]:  # Simple or Classic
+                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1))
+            
             # Send main win embed and breakdown
             if res:
                 if res.get('level_up'):
@@ -218,7 +223,7 @@ class GuessHandler(commands.Cog):
                         pass
 
             self.bot.games.pop(cid, None)
-            await ctx.send(content=message_content, embed=main_embed)
+            await ctx.send(content=message_content, embed=main_embed, view=view)
 
             # Send breakdown as separate message
             if breakdown_embed:
@@ -230,6 +235,11 @@ class GuessHandler(commands.Cog):
         elif game_over:
             # Handle loss: award all participants
             main_embed, participant_rows, level_ups, tier_ups = await handle_game_loss(self.bot, game, ctx, cid)
+
+            # Add "Play Again" button for multiplayer games
+            view = None
+            if game.difficulty in [0, 1]:  # Simple or Classic
+                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1))
 
             # Send level up messages for all participants
             if level_ups:

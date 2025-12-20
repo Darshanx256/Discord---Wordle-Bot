@@ -9,6 +9,7 @@ from src.game import WordleGame
 from src.database import get_next_secret, get_next_classic_secret
 from src.utils import EMOJIS
 from src.ui import SoloView, get_markdown_keypad_status
+from src.handlers.game_logic import start_multiplayer_game
 
 
 # ========= CUSTOM MODE MODAL =========
@@ -111,55 +112,11 @@ class GameCommands(commands.Cog):
 
     @commands.hybrid_command(name="wordle", description="Start a new game (Simple word list).")
     async def start(self, ctx):
-        if not ctx.guild:
-            return await ctx.send("❌ Command must be used in a server.", ephemeral=True)
-        if not self.bot.secrets:
-            return await ctx.send("❌ Simple word list missing.", ephemeral=True)
-
-        cid = ctx.channel.id
-        if cid in self.bot.games:
-            return await ctx.send("⚠️ Game already active. Use `/stop_game` to end it.", ephemeral=True)
-        if cid in self.bot.custom_games:
-            return await ctx.send("⚠️ Custom game active. Use `/stop_game` to end it first.", ephemeral=True)
-
-        secret = get_next_secret(self.bot, ctx.guild.id)
-
-        title = "✨ Wordle Started! (Simple)"
-        embed = discord.Embed(title=title, color=discord.Color.blue())
-        embed.description = f"A simple **5-letter word** has been chosen. **6 attempts** total."
-        embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
-
-        msg = await ctx.send(embed=embed)
-
-        # Init Game
-        self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
-        self.bot.stopped_games.discard(cid)
-        print(f"DEBUG: Game STARTED in Channel {cid}. Active Games: {list(self.bot.games.keys())}")
+        await start_multiplayer_game(self.bot, ctx, is_classic=False)
 
     @commands.hybrid_command(name="wordle_classic", description="Start a Classic game (Harder word list).")
     async def start_classic(self, ctx):
-        if not ctx.guild:
-            return await ctx.send("❌ Command must be used in a server.", ephemeral=True)
-        if not self.bot.hard_secrets:
-            return await ctx.send("❌ Classic word list missing.", ephemeral=True)
-
-        cid = ctx.channel.id
-        if cid in self.bot.games:
-            return await ctx.send("⚠️ Game already active.", ephemeral=True)
-        if cid in self.bot.custom_games:
-            return await ctx.send("⚠️ Custom game active. Use `/stop_game` to end it first.", ephemeral=True)
-
-        secret = get_next_classic_secret(self.bot, ctx.guild.id)
-
-        title = "⚔️ Wordle Started! (Classic)"
-        embed = discord.Embed(title=title, color=discord.Color.dark_gold())
-        embed.description = f"**Hard Mode!** 6 attempts."
-        embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
-
-        msg = await ctx.send(embed=embed)
-        self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
-        self.bot.stopped_games.discard(cid)
-        print(f"DEBUG: Classic Game STARTED in Channel {cid}. Active Games: {list(self.bot.games.keys())}")
+        await start_multiplayer_game(self.bot, ctx, is_classic=True)
 
     @commands.hybrid_command(name="solo", description="Play a private game (Ephemeral).")
     async def solo(self, ctx):
