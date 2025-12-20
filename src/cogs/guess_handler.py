@@ -16,7 +16,7 @@ class GuessHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="guess", description="Guess a 5-letter word.")
+    @commands.hybrid_command(name="guess", aliases=["g"], description="Guess a 5-letter word.")
     async def guess(self, ctx, word: str):
         await ctx.defer()
         if not ctx.guild:

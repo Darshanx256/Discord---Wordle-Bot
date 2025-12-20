@@ -14,7 +14,12 @@ from src.utils import EMOJIS, get_badge_emoji
 # ========= BOT SETUP =========
 class WordleBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", intents=discord.Intents(guilds=True))
+        # We need message_content intent for the -g prefix shortcut
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.guilds = True
+
+        super().__init__(command_prefix=self.get_custom_prefix, intents=intents)
         self.games = {}
         self.solo_games = {}
         self.custom_games = {}  # Custom mode games
@@ -25,6 +30,12 @@ class WordleBot(commands.Bot):
         self.valid_set = set()
         self.name_cache = {}
         self.supabase_client: Client = None
+
+    def get_custom_prefix(self, bot, message):
+        """Only allow '-' as a prefix if it's followed by 'g ' (shortcut for /guess)."""
+        if message.content.lower().startswith("-g "):
+            return "-"
+        return [] # No prefix for other commands to keep them slash-only
 
     async def setup_hook(self):
         self.load_local_data()

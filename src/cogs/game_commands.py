@@ -83,7 +83,7 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             color=discord.Color.teal()
         )
         embed.description = f"A 5-letter custom wordle has been set up by **{self.user.display_name}**\n**6 attempts** total"
-        embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
+        embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
 
         await interaction.channel.send(embed=embed)
 
@@ -127,7 +127,7 @@ class GameCommands(commands.Cog):
         title = "✨ Wordle Started! (Simple)"
         embed = discord.Embed(title=title, color=discord.Color.blue())
         embed.description = f"A simple **5-letter word** has been chosen. **6 attempts** total."
-        embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
+        embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
 
         msg = await ctx.send(embed=embed)
 
@@ -154,7 +154,7 @@ class GameCommands(commands.Cog):
         title = "⚔️ Wordle Started! (Classic)"
         embed = discord.Embed(title=title, color=discord.Color.dark_gold())
         embed.description = f"**Hard Mode!** 6 attempts."
-        embed.add_field(name="How to Play", value="`/guess word:xxxxx`", inline=False)
+        embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
 
         msg = await ctx.send(embed=embed)
         self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
@@ -275,7 +275,7 @@ class GameCommands(commands.Cog):
         embed.add_field(
             name="How it works?",
             value="• Click **Set Up** button below and enter a 5-letter word\n"
-                  "• A wordle match would start, others can use `/guess` to make a guess\n"
+                  "• A wordle match would start, others can use `/guess` or `-g` to make a guess\n"
                   "• This mode gives **no XP** or **WR** score",
             inline=False
         )
