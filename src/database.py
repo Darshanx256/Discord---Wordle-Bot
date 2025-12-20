@@ -34,24 +34,28 @@ def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
         return 0
 
 def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str, 
-                   outcome: str, guesses: int, time_taken: float, egg_trigger: str = None):
+                   outcome: str, guesses: int, time_taken: float, 
+                   egg_trigger: str = None, pre_wr: int = None, pre_daily: int = None):
     """
     Calls the DB RPC to record game results.
+    Allows passing pre_wr and pre_daily to skip redundant fetches (Performance).
     """
     try:
-        # 1. Fetch current stats for Tier calc
-        current_wr = 0
-        try:
-            # We need current WR to determine Tier Penalty
-            # Optimize: Maybe pass it in? For now fetch.
-            u_res = bot.supabase_client.table('user_stats_v2').select('multi_wr').eq('user_id', user_id).execute()
-            if u_res.data:
-                current_wr = u_res.data[0]['multi_wr']
-        except:
-            pass
+        # 1. Fetch current stats for Tier calc (if not pre-fetched)
+        current_wr = pre_wr
+        if current_wr is None:
+            try:
+                # We need current WR to determine Tier Penalty
+                u_res = bot.supabase_client.table('user_stats_v2').select('multi_wr').eq('user_id', user_id).execute()
+                if u_res.data:
+                    current_wr = u_res.data[0]['multi_wr']
+                else:
+                    current_wr = 0
+            except:
+                current_wr = 0
             
-        # 2. Fetch daily progress for Anti-Grind
-        daily_gain = get_daily_wr_gain(bot, user_id)
+        # 2. Fetch daily progress for Anti-Grind (if not pre-fetched)
+        daily_gain = pre_daily if pre_daily is not None else get_daily_wr_gain(bot, user_id)
         
         # 3. Calculate Final Rewards
         xp_gain, wr_delta = calculate_final_rewards(mode, outcome, guesses, time_taken, current_wr, daily_gain)

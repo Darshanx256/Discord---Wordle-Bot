@@ -187,50 +187,46 @@ class GuessHandler(commands.Cog):
             if game.difficulty in [0, 1]:  # Simple or Classic
                 view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1))
             
-            # Send main win embed and breakdown
+            # Collect all announcements for bundling
+            announcements = []
+            
+            # Winner progression
             if res:
                 if res.get('level_up'):
-                    lvl = res['level_up']
-                    await ctx.channel.send(f"🔼 **LEVEL UP!** {winner_user.mention} is now **Level {lvl}**! 🔼")
-
+                    announcements.append(f"🔼 **LEVEL UP!** {winner_user.mention} is now **Level {res['level_up']}**!")
                 if res.get('tier_up'):
-                    t_name = res['tier_up']['name']
-                    t_icon = res['tier_up']['icon']
-                    await ctx.channel.send(f"🎉 **PROMOTION!** {winner_user.mention} has reached **{t_icon} {t_name}** Tier! 🎉")
+                    t_icon = EMOJIS.get(res['tier_up']['icon'], res['tier_up']['icon'])
+                    announcements.append(f"🎉 **PROMOTION!** {winner_user.mention} reached **{t_icon} {res['tier_up']['name']}** Tier!")
             
-            # Send level up messages for participants
-            if level_ups:
-                for uid, lvl in level_ups:
-                    try:
-                        # Optimization: get_user first
-                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
-                        await ctx.channel.send(f"🔼 **LEVEL UP!** {participant.mention} is now **Level {lvl}**! 🔼")
-                    except Exception:
-                        pass
+            # Participants progression
+            # Optimization: Pre-fetch all user objects in parallel if needed, but get_user is fast
+            for uid, lvl in level_ups:
+                u = self.bot.get_user(uid)
+                if u: announcements.append(f"🔼 **LEVEL UP!** {u.mention} is now **Level {lvl}**!")
+            
+            for uid, t_info in tier_ups:
+                u = self.bot.get_user(uid)
+                if u:
+                    t_icon = EMOJIS.get(t_info['icon'], t_info['icon'])
+                    announcements.append(f"🎉 **PROMOTION!** {u.mention} reached **{t_icon} {t_info['name']}** Tier!")
 
-            # Send tier up messages for participants
-            if tier_ups:
-                for uid, tier_info in tier_ups:
-                    try:
-                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
-                        t_name = tier_info['name']
-                        t_icon = tier_info['icon']
-                        # Resolve icon if it's a key
-                        from src.utils import EMOJIS
-                        icon_display = EMOJIS.get(t_icon, t_icon)
-                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{icon_display} {t_name}** Tier! 🎉")
-                    except Exception:
-                        pass
+            # Prepare final sends
+            tasks = []
+            
+            # 1. Main victory embed (with Play Again view)
+            tasks.append(ctx.send(content=message_content, embed=main_embed, view=view))
+            
+            # 2. Breakdown embed (if any)
+            if breakdown_embed:
+                tasks.append(ctx.channel.send(embed=breakdown_embed))
+                
+            # 3. Bundled announcements (if any)
+            if announcements:
+                ann_embed = discord.Embed(title="✨ Progression Updates", description="\n".join(announcements), color=discord.Color.gold())
+                tasks.append(ctx.channel.send(embed=ann_embed))
 
             self.bot.games.pop(cid, None)
-            await ctx.send(content=message_content, embed=main_embed, view=view)
-
-            # Send breakdown as separate message
-            if breakdown_embed:
-                try:
-                    await ctx.channel.send(embed=breakdown_embed)
-                except Exception:
-                    pass
+            await asyncio.gather(*tasks)
 
         elif game_over:
             # Handle loss: award all participants
@@ -241,32 +237,21 @@ class GuessHandler(commands.Cog):
             if game.difficulty in [0, 1]:  # Simple or Classic
                 view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1))
 
-            # Send level up messages for all participants
-            if level_ups:
-                for uid, lvl in level_ups:
-                    try:
-                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
-                        await ctx.channel.send(f"🔼 **LEVEL UP!** {participant.mention} is now **Level {lvl}**! 🔼")
-                    except Exception:
-                        pass
-
-            # Send tier up messages for all participants
-            if tier_ups:
-                for uid, tier_info in tier_ups:
-                    try:
-                        participant = self.bot.get_user(uid) or await self.bot.fetch_user(uid)
-                        t_name = tier_info['name']
-                        t_icon = tier_info['icon']
-                        from src.utils import EMOJIS
-                        icon_display = EMOJIS.get(t_icon, t_icon)
-                        await ctx.channel.send(f"🎉 **PROMOTION!** {participant.mention} has reached **{icon_display} {t_name}** Tier! 🎉")
-                    except Exception:
-                        pass
+            # Bundled Announcements
+            announcements = []
+            for uid, lvl in level_ups:
+                u = self.bot.get_user(uid)
+                if u: announcements.append(f"🔼 **LEVEL UP!** {u.mention} is now **Level {lvl}**!")
+            for uid, t_info in tier_ups:
+                u = self.bot.get_user(uid)
+                if u:
+                    t_icon = EMOJIS.get(t_info['icon'], t_info['icon'])
+                    announcements.append(f"🎉 **PROMOTION!** {u.mention} reached **{t_icon} {t_info['name']}** Tier!")
 
             self.bot.games.pop(cid, None)
-            await ctx.send(content=message_content, embed=main_embed, view=view)
-
-            # Optionally send breakdown for loss too (show participant rewards)
+            
+            # Logic for Loss breakdown (existing)
+            breakdown = None
             try:
                 breakdown = discord.Embed(title="🎖️ Game Over - Rewards", color=discord.Color.greyple())
                 if participant_rows:
@@ -279,9 +264,8 @@ class GuessHandler(commands.Cog):
                                 for r in b_resp.data:
                                     badge_map[r['user_id']] = r.get('active_badge')
                         except:
-                            badge_map = {}
+                            pass
 
-                    # Fetch all names concurrently using cache
                     name_tasks = [get_cached_username(self.bot, uid) for uid, *_ in participant_rows]
                     names = await asyncio.gather(*name_tasks)
                     
@@ -293,14 +277,22 @@ class GuessHandler(commands.Cog):
                         lines.append(f"{name} {badge_emoji} — {outcome_key.replace('_', ' ').title()}: +{xp_v} XP{wr_part}")
 
                     participants_text = "\n".join(lines)
-                    if len(participants_text) > 900:
-                        participants_text = participants_text[:900] + "\n..."
+                    if len(participants_text) > 900: participants_text = participants_text[:900] + "\n..."
                     breakdown.add_field(name="Participants", value=participants_text, inline=False)
-
                 breakdown.set_footer(text="Rewards applied instantly.")
-                await ctx.channel.send(embed=breakdown)
-            except Exception:
+            except:
                 pass
+
+            # Prepare final sends
+            tasks = []
+            tasks.append(ctx.send(content=message_content, embed=main_embed, view=view))
+            if breakdown:
+                tasks.append(ctx.channel.send(embed=breakdown))
+            if announcements:
+                ann_embed = discord.Embed(title="✨ Progression Updates", description="\n".join(announcements), color=discord.Color.gold())
+                tasks.append(ctx.channel.send(embed=ann_embed))
+
+            await asyncio.gather(*tasks)
 
         else:
             # Just a turn

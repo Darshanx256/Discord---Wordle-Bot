@@ -22,34 +22,53 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     time_taken = (datetime.datetime.now() - game.start_time).total_seconds()
     flavor = get_win_flavor(game.attempts_used)
     
+    # 1. BATCH FETCH STATS for all participants (Winner + Others)
+    all_participants = list(game.participants)
+    stats_map = {} # {uid: {'wr': 1200, 'badge': '...', 'daily': 50}}
+    
+    try:
+        # Fetch WR and Badges
+        s_res = bot.supabase_client.table('user_stats_v2').select('user_id, multi_wr, active_badge').in_('user_id', all_participants).execute()
+        for r in s_res.data:
+            stats_map[r['user_id']] = {'wr': r['multi_wr'], 'badge': r['active_badge'], 'daily': 0}
+            
+        # Fetch Daily Gains (match_history table)
+        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        h_res = bot.supabase_client.table('match_history').select('user_id, wr_delta').in_('user_id', all_participants).gte('created_at', today_start.isoformat()).gt('wr_delta', 0).execute()
+        for r in h_res.data:
+            uid = r['user_id']
+            if uid in stats_map:
+                stats_map[uid]['daily'] += r['wr_delta']
+    except Exception as e:
+        print(f"⚠️ Batch fetch error: {e}")
+
+    winner_stats = stats_map.get(winner_user.id, {'wr': 0, 'badge': None, 'daily': 0})
+    win_badge = winner_stats['badge']
+    
     # Main win embed
     embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
-    
-    # Fetch winner badge for display
-    try:
-        b_res_win = bot.supabase_client.table('user_stats_v2').select('active_badge').eq('user_id', winner_user.id).execute()
-        win_badge = b_res_win.data[0]['active_badge'] if b_res_win.data else None
-    except:
-        win_badge = None
 
     win_badge_str = f" {get_badge_emoji(win_badge)}" if win_badge else ""
     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
     embed.description = f"**{winner_user.mention}{win_badge_str}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
     embed.add_field(name="Final Board", value=board_display, inline=False)
     
-    # Award winner
-    res = record_game_v2(bot, winner_user.id, interaction.guild.id, 'MULTI', 'win', game.attempts_used, time_taken)
+    # Award winner with pre-fetched stats
+    res = record_game_v2(
+        bot, winner_user.id, interaction.guild.id, 'MULTI', 'win', 
+        game.attempts_used, time_taken, 
+        pre_wr=winner_stats['wr'], pre_daily=winner_stats['daily']
+    )
     if res:
         xp_gain = res.get('xp_gain', 0)
         embed.add_field(name="Winner Rewards", value=f"+ {xp_gain} XP | 📈 WR: {res.get('multi_wr')}", inline=False)
     
-    # Award participants and collect data
-    others = game.participants - {winner_user.id}
-    participant_rows = []
-    level_ups = []  # Collect level ups for all participants
-    tier_ups = []   # Collect tier ups for all participants
+    # Award participants concurrently
+    others = list(game.participants - {winner_user.id})
+    participant_data = []
     
-    for uid in others:
+    # Pre-calculate outcome keys to parallelize DB calls
+    async def process_participant(uid):
         max_greens = 0
         for h in game.history:
             if getattr(h.get('user'), 'id', None) == uid:
@@ -58,32 +77,38 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
                 if greens > max_greens:
                     max_greens = greens
 
-        if max_greens >= 5:
-            outcome_key = 'win'
-        elif max_greens == 4:
-            outcome_key = 'correct_4'
-        elif max_greens == 3:
-            outcome_key = 'correct_3'
-        elif max_greens == 2:
-            outcome_key = 'correct_2'
-        elif max_greens == 1:
-            outcome_key = 'correct_1'
-        else:
-            outcome_key = 'participation'
+        if max_greens >= 5: outcome_key = 'win'
+        elif max_greens == 4: outcome_key = 'correct_4'
+        elif max_greens == 3: outcome_key = 'correct_3'
+        elif max_greens == 2: outcome_key = 'correct_2'
+        elif max_greens == 1: outcome_key = 'correct_1'
+        else: outcome_key = 'participation'
 
-        pres = await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, game.attempts_used, 999)
-        try:
-            display_xp = pres.get('xp_gain', 0) if pres else 0
-            display_wr = pres.get('multi_wr') if pres else None
-            # Collect level up for this participant
-            if pres and pres.get('level_up'):
-                level_ups.append((uid, pres['level_up']))
-            # Collect tier up for this participant
-            if pres and pres.get('tier_up'):
-                tier_ups.append((uid, pres['tier_up']))
-        except:
-            display_xp = 0
-            display_wr = None
+        # DB operations in threads since record_game_v2 is blocking (via calculate_final_rewards)
+        p_stats = stats_map.get(uid, {'wr': 0, 'badge': None, 'daily': 0})
+        pres = await asyncio.to_thread(
+            record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, 
+            game.attempts_used, 999, pre_wr=p_stats['wr'], pre_daily=p_stats['daily']
+        )
+        return (uid, outcome_key, pres)
+
+    # Gather all participant rewards in parallel
+    if others:
+        results = await asyncio.gather(*(process_participant(uid) for uid in others))
+    else:
+        results = []
+
+    participant_rows = []
+    level_ups = []
+    tier_ups = []
+
+    for uid, outcome_key, pres in results:
+        display_xp = pres.get('xp_gain', 0) if pres else 0
+        display_wr = pres.get('multi_wr') if pres else None
+        if pres and pres.get('level_up'):
+            level_ups.append((uid, pres['level_up']))
+        if pres and pres.get('tier_up'):
+            tier_ups.append((uid, pres['tier_up']))
         participant_rows.append((uid, outcome_key, display_xp, display_wr))
 
     # Build breakdown embed
@@ -98,17 +123,8 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     )
 
     if participant_rows:
-        # Batch fetch badges
-        all_uids = [uid for uid, *_ in participant_rows]
-        badge_map = {}
-        if all_uids:
-            try:
-                b_resp = bot.supabase_client.table('user_stats_v2').select('user_id, active_badge').in_('user_id', all_uids).execute()
-                if b_resp.data:
-                    for r in b_resp.data:
-                        badge_map[r['user_id']] = r.get('active_badge')
-            except:
-                badge_map = {}
+        # Use our pre-fetched stats_map for badges
+        badge_map = {uid: stats_map[uid]['badge'] for uid in stats_map if stats_map[uid].get('badge')}
 
         # Fetch all names concurrently using cache
         name_tasks = [get_cached_username(bot, uid) for uid, *_ in participant_rows]
@@ -145,11 +161,25 @@ async def handle_game_loss(bot, game, interaction, cid):
     embed.description = f"The word was **{game.secret.upper()}**."
     embed.add_field(name="Final Board", value=board_display, inline=False)
 
-    # Award per-player based on best guess
-    participant_rows = []
-    level_ups = []  # Collect level ups for all participants
-    tier_ups = []   # Collect tier ups for all participants
-    for uid in game.participants:
+    # BATCH FETCH STATS for all participants
+    all_participants = list(game.participants)
+    stats_map = {}
+    try:
+        s_res = bot.supabase_client.table('user_stats_v2').select('user_id, multi_wr, active_badge').in_('user_id', all_participants).execute()
+        for r in s_res.data:
+            stats_map[r['user_id']] = {'wr': r['multi_wr'], 'badge': r['active_badge'], 'daily': 0}
+        
+        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        h_res = bot.supabase_client.table('match_history').select('user_id, wr_delta').in_('user_id', all_participants).gte('created_at', today_start.isoformat()).gt('wr_delta', 0).execute()
+        for r in h_res.data:
+            uid = r['user_id']
+            if uid in stats_map:
+                stats_map[uid]['daily'] += r['wr_delta']
+    except Exception as e:
+        print(f"⚠️ Batch fetch error: {e}")
+
+    # Award per-player concurrently
+    async def process_participant(uid):
         max_greens = 0
         for h in game.history:
             if getattr(h.get('user'), 'id', None) == uid:
@@ -158,32 +188,32 @@ async def handle_game_loss(bot, game, interaction, cid):
                 if greens > max_greens:
                     max_greens = greens
 
-        if max_greens >= 5:
-            outcome_key = 'win'
-        elif max_greens == 4:
-            outcome_key = 'correct_4'
-        elif max_greens == 3:
-            outcome_key = 'correct_3'
-        elif max_greens == 2:
-            outcome_key = 'correct_2'
-        elif max_greens == 1:
-            outcome_key = 'correct_1'
-        else:
-            outcome_key = 'participation'
+        if max_greens >= 5: outcome_key = 'win'
+        elif max_greens == 4: outcome_key = 'correct_4'
+        elif max_greens == 3: outcome_key = 'correct_3'
+        elif max_greens == 2: outcome_key = 'correct_2'
+        elif max_greens == 1: outcome_key = 'correct_1'
+        else: outcome_key = 'participation'
 
-        pres = await asyncio.to_thread(record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, 6, 999)
-        try:
-            display_xp = pres.get('xp_gain', 0) if pres else 0
-            display_wr = pres.get('multi_wr') if pres else None
-            # Collect level up for this participant
-            if pres and pres.get('level_up'):
-                level_ups.append((uid, pres['level_up']))
-            # Collect tier up
-            if pres and pres.get('tier_up'):
-                tier_ups.append((uid, pres['tier_up']))
-        except:
-            display_xp = 0
-            display_wr = None
+        p_stats = stats_map.get(uid, {'wr': 0, 'badge': None, 'daily': 0})
+        pres = await asyncio.to_thread(
+            record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, 
+            6, 999, pre_wr=p_stats['wr'], pre_daily=p_stats['daily']
+        )
+        return (uid, outcome_key, pres)
+
+    results = await asyncio.gather(*(process_participant(uid) for uid in game.participants))
+
+    participant_rows = []
+    level_ups = []
+    tier_ups = []
+    for uid, outcome_key, pres in results:
+        display_xp = pres.get('xp_gain', 0) if pres else 0
+        display_wr = pres.get('multi_wr') if pres else None
+        if pres and pres.get('level_up'):
+            level_ups.append((uid, pres['level_up']))
+        if pres and pres.get('tier_up'):
+            tier_ups.append((uid, pres['tier_up']))
         participant_rows.append((uid, outcome_key, display_xp, display_wr))
 
     return embed, participant_rows, level_ups, tier_ups
