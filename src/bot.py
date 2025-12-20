@@ -131,15 +131,15 @@ class WordleBot(commands.Bot):
             activity = discord.Activity(type=act_data["type"], name=act_data["name"])
             await self.change_presence(activity=activity)
 
-    @tasks.loop(minutes=60)
+    @tasks.loop(minutes=30)
     async def cleanup_task(self):
         """Clean up stale games and solo games."""
         now = datetime.datetime.now()
         to_remove = []
         
         for cid, game in self.games.items():
-            delta = now - game.last_interaction
-            if delta.total_seconds() > 86400:  # 24 hours
+            delta = now - game.start_time
+            if delta.total_seconds() > 10800:  # 3 hours
                 to_remove.append(cid)
                 try:
                     channel = self.get_channel(cid)
@@ -160,8 +160,8 @@ class WordleBot(commands.Bot):
         # Clean up custom games
         custom_remove = []
         for cid, game in self.custom_games.items():
-            delta = now - game.last_interaction
-            if delta.total_seconds() > 86400:  # 24 hours
+            delta = now - game.start_time
+            if delta.total_seconds() > 10800:  # 3 hours
                 custom_remove.append(cid)
 
         for cid in custom_remove:
@@ -169,8 +169,8 @@ class WordleBot(commands.Bot):
 
         solo_remove = []
         for uid, sgame in self.solo_games.items():
-            delta = now - sgame.last_interaction
-            if delta.total_seconds() > 86400:
+            delta = now - sgame.start_time
+            if delta.total_seconds() > 10800: # 3 hours
                 solo_remove.append(uid)
 
         for uid in solo_remove:
