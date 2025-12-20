@@ -68,6 +68,9 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         game.reveal_on_loss = reveal_bool  # Add reveal flag
         self.bot.custom_games[cid] = game
 
+        # Clean up any "stopped" state for this channel so wins are rewarded
+        self.bot.stopped_games.discard(cid)
+
         # Respond to modal
         await interaction.response.send_message(
             "✅ Custom game set up! Game is starting...",
@@ -130,6 +133,7 @@ class GameCommands(commands.Cog):
 
         # Init Game
         self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
+        self.bot.stopped_games.discard(cid)
         print(f"DEBUG: Game STARTED in Channel {cid}. Active Games: {list(self.bot.games.keys())}")
 
     @commands.hybrid_command(name="wordle_classic", description="Start a Classic game (Harder word list).")
@@ -154,6 +158,7 @@ class GameCommands(commands.Cog):
 
         msg = await ctx.send(embed=embed)
         self.bot.games[cid] = WordleGame(secret, cid, ctx.author, msg.id)
+        self.bot.stopped_games.discard(cid)
         print(f"DEBUG: Classic Game STARTED in Channel {cid}. Active Games: {list(self.bot.games.keys())}")
 
     @commands.hybrid_command(name="solo", description="Play a private game (Ephemeral).")
