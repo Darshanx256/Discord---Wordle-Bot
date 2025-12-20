@@ -19,7 +19,7 @@ class WordleBot(commands.Bot):
         intents.message_content = True
         intents.guilds = True
 
-        super().__init__(command_prefix=self.get_custom_prefix, intents=intents)
+        super().__init__(command_prefix=self.get_custom_prefix, intents=intents, max_messages=10)
         self.games = {}
         self.solo_games = {}
         self.custom_games = {}  # Custom mode games
@@ -32,10 +32,14 @@ class WordleBot(commands.Bot):
         self.supabase_client: Client = None
 
     def get_custom_prefix(self, bot, message):
-        """Only allow '-' as a prefix if it's followed by 'g ' (shortcut for /guess)."""
+        """Only allow '-' as a prefix if it's followed by 'g ' AND a game is active."""
         if message.content.lower().startswith("-g "):
-            return "-"
-        return [] # No prefix for other commands to keep them slash-only
+            # Memory Efficiency: Ignore '-g' if no game is active in this context
+            cid = message.channel.id
+            uid = message.author.id
+            if (cid in self.games) or (cid in self.custom_games) or (uid in self.solo_games):
+                return "-"
+        return [] # No prefix for other commands or if no game active
 
     async def setup_hook(self):
         self.load_local_data()
