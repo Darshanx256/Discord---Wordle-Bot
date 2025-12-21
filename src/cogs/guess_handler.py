@@ -25,7 +25,8 @@ class GuessHandler(commands.Cog):
         cid = ctx.channel.id
         game = self.bot.games.get(cid)
         custom_game = self.bot.custom_games.get(cid)
-        g_word = word.lower().strip()
+        # Strip all whitespace first (handles "-g     dance" case)
+        g_word = word.strip().lower()
 
         print(f"DEBUG: Guess in Channel {cid}. Active: {list(self.bot.games.keys())} | Custom: {list(self.bot.custom_games.keys())}")
 

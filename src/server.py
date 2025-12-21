@@ -1,5 +1,6 @@
 import os
-from flask import Flask, send_from_directory
+import json
+from flask import Flask, send_from_directory, jsonify
 
 def run_flask_server():
     # Determine absolute path to the static folder (one level up from src)
@@ -53,6 +54,25 @@ def run_flask_server():
     @app.route('/screenshot-victory.png')
     def victory_ss():
         return send_from_directory(app.static_folder, 'screenshot-victory.png')
+
+    # API endpoint for bot stats
+    @app.route('/api/stats')
+    def api_stats():
+        stats_file = os.path.join(app.static_folder, 'bot_stats.json')
+        try:
+            if os.path.exists(stats_file):
+                with open(stats_file, 'r') as f:
+                    return jsonify(json.load(f))
+        except:
+            pass
+        # Return defaults if file doesn't exist
+        return jsonify({
+            'server_count': 0,
+            'simple_words': 600,
+            'classic_words': 2800,
+            'total_words': 13000,
+            'last_updated': None
+        })
 
 
     # --- SERVER RUN CONFIGURATION ---

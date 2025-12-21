@@ -67,6 +67,7 @@ class WordleBot(commands.Bot):
         self.cache_clear_task.start()
         self.db_ping_task.start()
         self.activity_loop.start()
+        self.stats_update_task.start()
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
     async def load_cogs(self):
@@ -198,9 +199,90 @@ class WordleBot(commands.Bot):
             except Exception as e:
                 print(f"⚠️ DB Ping Task Failed: {e}")
 
+    @tasks.loop(hours=6)
+    async def stats_update_task(self):
+        """Update bot stats every 6 hours for the webpage."""
+        await self.wait_until_ready()
+        try:
+            import json
+            import os
+            
+            stats = {
+                'server_count': len(self.guilds),
+                'simple_words': len(self.secrets),
+                'classic_words': len(self.hard_secrets),
+                'total_words': len(self.valid_set),
+                'last_updated': datetime.datetime.utcnow().isoformat()
+            }
+            
+            # Write to shared file that Flask server can read
+            stats_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            stats_file = os.path.join(stats_dir, 'static', 'bot_stats.json')
+            
+            with open(stats_file, 'w') as f:
+                json.dump(stats, f)
+                
+            print(f"📊 Stats updated: {stats['server_count']} servers, {stats['total_words']} words")
+        except Exception as e:
+            print(f"⚠️ Stats update failed: {e}")
+
 
 # Initialize Bot
 bot = WordleBot()
+
+
+# ========= WELCOME MESSAGE EVENT =========
+@bot.event
+async def on_guild_join(guild):
+    """Send a welcome message when the bot joins a new server."""
+    # Try to find the best channel to send welcome message
+    target_channel = None
+    
+    # Priority: System channel > first channel with 'general'/'announce' in name > first text channel
+    if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
+        target_channel = guild.system_channel
+    else:
+        for channel in guild.text_channels:
+            if channel.permissions_for(guild.me).send_messages:
+                name_lower = channel.name.lower()
+                if 'general' in name_lower or 'announce' in name_lower or 'welcome' in name_lower:
+                    target_channel = channel
+                    break
+        
+        # Fallback: first available text channel
+        if not target_channel:
+            for channel in guild.text_channels:
+                if channel.permissions_for(guild.me).send_messages:
+                    target_channel = channel
+                    break
+    
+    if target_channel:
+        embed = discord.Embed(
+            title="🎉 Thank you for adding Wordle Game Bot!",
+            color=discord.Color.green()
+        )
+        embed.description = (
+            "A competitive Wordle experience with XP, ranking tiers, Easter eggs, and global leaderboards!\n\n"
+            "**Getting Started:**\n"
+            "• Use `/help` for full command list and how to play\n"
+            "• Start a game with `/wordle` (Simple) or `/wordle_classic` (Hard)\n"
+            "• Make guesses with `/guess word:xxxxx` or `-g xxxxx`"
+        )
+        embed.add_field(
+            name="📌 Channel Setup",
+            value=(
+                "The bot can play in **any channel** it has access to.\n"
+                "Simply use commands in your desired channel — no additional setup required!\n"
+                "*Tip: Create a `#wordle` channel for dedicated games.*"
+            ),
+            inline=False
+        )
+        embed.set_footer(text="🔇 This is the only server message • Minimal spam, minimal permissions")
+        
+        try:
+            await target_channel.send(embed=embed)
+        except:
+            pass  # Silently fail if we can't send
 
 
 # Run bot

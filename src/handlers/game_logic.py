@@ -280,16 +280,18 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
         color = discord.Color.blue()
         desc = "A simple **5-letter word** has been chosen. **6 attempts** total."
 
-    # 4. Announcement
+    # 4. Announcement - Add participation line
     embed = discord.Embed(title=title, color=color, description=desc)
     embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
+    embed.set_footer(text="Everyone in this channel can participate.")
     
     if is_interaction:
         if not interaction_or_ctx.response.is_done():
             await interaction_or_ctx.response.send_message(embed=embed)
             msg = await interaction_or_ctx.original_response()
         else:
-            msg = await interaction_or_ctx.followup.send(embed=embed)
+            # Button click (already deferred) - send to channel directly (no reply)
+            msg = await channel.send(embed=embed)
     else:
         msg = await interaction_or_ctx.send(embed=embed)
 

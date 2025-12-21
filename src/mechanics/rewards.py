@@ -78,21 +78,9 @@ def calculate_final_rewards(mode: str, outcome: str, guesses: int, time_taken: f
     # 1. Base
     xp, wr = calculate_base_rewards(mode, outcome, guesses, time_taken)
     
-    # Check if High Tier for negative rating penalty on non-wins
-    # Dynamic: Find GM threshold from TIERS
-    gm_threshold = 2800 # Fallback
-    for t in TIERS:
-        if t['name'] == 'Grandmaster':
-            gm_threshold = t['min_wr']
-            break
-            
-    is_high_tier = (current_wr >= gm_threshold)
+    # Tier-based deduction: Apply multiplier to all rewards (no more fixed -15 penalty)
+    # All outcomes use tier multiplier for both XP and WR
     
-    if is_high_tier and outcome not in ['win', 'correct_4', 'correct_3', 'correct_2', 'correct_1']:
-         # This covers 'loss' (Solo) and 'participation' (Multi)
-         # Force negative WR penalty
-         wr = -15
-         
     # Apply modifiers
     t_mult = get_tier_multiplier(current_wr)
     

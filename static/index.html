@@ -60,11 +60,15 @@
     <!-- Stats Section -->
     <section class="stats">
         <div class="stat-item">
+            <div class="stat-number" id="stat-servers">-</div>
+            <div class="stat-label">Servers</div>
+        </div>
+        <div class="stat-item">
             <div class="stat-number">4</div>
             <div class="stat-label">Game Modes</div>
         </div>
         <div class="stat-item">
-            <div class="stat-number">∞</div>
+            <div class="stat-number" id="stat-words">∞</div>
             <div class="stat-label">Five-Letter Words</div>
         </div>
         <div class="stat-item">
@@ -319,6 +323,31 @@
                 }
             });
         });
+
+        // Fetch and display live bot stats
+        (async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                if (response.ok) {
+                    const stats = await response.json();
+                    
+                    // Update server count
+                    const serversEl = document.getElementById('stat-servers');
+                    if (serversEl && stats.server_count > 0) {
+                        serversEl.textContent = stats.server_count.toLocaleString();
+                    }
+                    
+                    // Update word count 
+                    const wordsEl = document.getElementById('stat-words');
+                    if (wordsEl && stats.total_words) {
+                        wordsEl.textContent = stats.total_words.toLocaleString() + '+';
+                    }
+                }
+            } catch (e) {
+                // Silently fail - stats will show defaults
+                console.log('Stats not available');
+            }
+        })();
     </script>
 </body>
 

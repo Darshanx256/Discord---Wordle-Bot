@@ -328,62 +328,57 @@ class HelpView(discord.ui.View):
             embed.set_footer(text="Page 1/2 • Click 'Show More' for Advanced info & Easter Eggs")
             
         else:
-            # ADVANCED PAGE
+            # ADVANCED PAGE - Improved Layout
             embed = discord.Embed(title="🧠 Wordle Bot Guide (Advanced)", color=discord.Color.dark_purple())
+            embed.description = "Deep dive into commands, tiers, and collectibles!"
             
-            embed.add_field(name="📜 Full Command List", value=(
-                "`/wordle` - Start Simple Game\n"
-                "`/wordle_classic` - Start Hard Game\n"
-                "`/solo` - Private Game\n"
-                "`/guess [word]` - Submit guess (or `-g [word]`)\n"
-                "`/leaderboard` - Server Rankings\n"
-                "`/leaderboard_global` - Global Rankings\n"
-                "`/profile` - View your XP & WR\n"
-                "`/stop_game` - Cancel game\n"
-                "`/custom` - To set up a custom game in server\n"
-                "`/shop` - To equip badges"
-            ), inline=False)
+            # Commands Section - Two columns for better organization
+            embed.add_field(name="🎮 Game Commands", value=(
+                "`/wordle` — Simple Game\n"
+                "`/wordle_classic` — Hard Game\n"
+                "`/solo` — Private Game\n"
+                "`/custom` — Set Custom Word\n"
+                "`/stop_game` — Cancel Game"
+            ), inline=True)
             
+            embed.add_field(name="📊 Stats & Profile", value=(
+                "`/guess` or `-g` — Guess\n"
+                "`/profile` — Your Stats\n"
+                "`/leaderboard` — Server Ranks\n"
+                "`/leaderboard_global` — Global\n"
+                "`/shop` — Equip Badges"
+            ), inline=True)
+            
+            # Tiers Section
             tier_text = "\n".join([
-                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** (WR ≥ {t['min_wr']})" 
+                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** — WR ≥ {t['min_wr']}" 
                 for t in TIERS
             ])
-            tier_text += "\n\n**Daily Soft Cap:** Rewards diminish after daily gain thresholds."
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
             
-            embed.add_field(name="🧮 XP & Rewards", value=(
-                "**Win:** +50 XP, +120 WR\n"
-                "**4 Greens:** +40 XP, +70 WR\n"
-                "**3 Greens:** +30 XP, +50 WR\n"
-                "**2 Greens:** +20 XP, +20 WR\n"
-                "**1 Green:** +10 XP, +10 WR\n"
-                "**Participation:** +5 XP, +5 WR\n"
-                "**GM & Legend Loss/Part:** -15 WR (Rating Loss)\n\n"
-                "⚡ **Speed Bonus:** <30s = +10 XP"
-            ), inline=False)
-            
+            # Easter Eggs Section
             duck_emoji = EMOJIS.get("duck", "🦆")
             dragon_emoji = EMOJIS.get("dragon", "🐲")
             candy_emoji = EMOJIS.get("candy", "🍬")
             
             embed.add_field(name="🎁 Easter Eggs & Badges", value=(
-                f"**Easter Eggs** (Rare Drops during `/guess`):\n"
-                f"{duck_emoji} Duck - Simple Mode Only (1/100 per guess)\n"
-                f"{dragon_emoji} Dragon - Classic Mode Only (1/1000 per guess)\n"
-                f"{candy_emoji} Candy - Both Modes (1/100 - 3/100 per guess)\n\n"
-                "Collect eggs in your inventory! View via `/profile`\n\n"
-                "**Badges** are purchasable cosmetics at `/shop`.\n"
-                "Display your favorite badge on your profile!"
+                f"**Rare Drops during `/guess`:**\n"
+                f"{duck_emoji} **Duck** — Simple Mode (1/100)\n"
+                f"{dragon_emoji} **Dragon** — Classic Mode (1/1000)\n"
+                f"{candy_emoji} **Candy** — Both Modes (1/100)\n\n"
+                "View your collection via `/profile`\n"
+                "Unlock **Badges** in `/shop`!"
             ), inline=False)
             
+            # Pro Tips
             embed.add_field(name="💡 Pro Tips", value=(
-                "• Start with vowel-heavy words\n"
-                "• Use Common letter patterns\n"
-                "• Speed = Bonus XP & WR\n"
-                "• Participate in Multiplayer for extra rewards"
+                "• Start with vowel-heavy words (AUDIO, RAISE)\n"
+                "• Speed matters — faster solves = bonus rewards\n"
+                "• Higher tiers receive scaled rewards\n"
+                "• Participate in Multiplayer for extra XP"
             ), inline=False)
             
-            embed.set_footer(text="Page 2/2 • Have fun and climb the rankings!")
+            embed.set_footer(text="Page 2/2 • Climb the global leaderboard!")
 
         return embed
 
