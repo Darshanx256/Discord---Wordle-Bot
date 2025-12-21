@@ -272,7 +272,7 @@ async def on_guild_join(guild):
             name="📌 Channel Setup",
             value=(
                 "The bot can play in **any channel** it has access to.\n"
-                "Simply use commands in your desired channel — no additional setup required!\n"
+                "Simply use commands in your desired channel. No additional setup required!\n"
                 "*Tip: Create a `#wordle` channel for dedicated games.*"
             ),
             inline=False
