@@ -56,7 +56,7 @@ Discord---Wordle-Bot/
 ## 🏆 Ranking Rules
 
 - **XP**: Earned from all games. +50 XP for Win, +10 XP per letter.
-- **WR (Rating)**: Based on Wins, Speed (<30s bonus), and Efficiency (fewer guesses).
+- **WR (Rating)**: Based on Wins, Speed (<60s bonus), and Efficiency (fewer guesses).
 - **Penalties**: None for Multi. High-rank Solo players risk WR slightly.
 
 ## ⚡ Performance

@@ -248,7 +248,7 @@ class LeaderboardView(discord.ui.View):
                 description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}** | Wins: {wins}")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)} | Names updated every 2 days")
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)} | Name changes take up to 48 hours to reflect")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -304,19 +304,20 @@ class HelpView(discord.ui.View):
         if self.page == 1:
             # BASIC PAGE
             embed = discord.Embed(title="📚 Wordle Bot Guide (Basic)", color=discord.Color.blue())
-            embed.description = "A global, competitive Wordle bot for Discord with XP, ranking tiers, and Easter eggs!"
+            embed.description = "A fun and engaging Wordle bot for Discord with various different game modes, level-up system and leaderboards!"
             
             embed.add_field(name="🎮 How to Play", value=(
-                "1. **Start a Game**\n"
-                "   `/wordle` (Simple 5-letter words)\n"
-                "   `/wordle_classic` (Harder, full dictionary)\n"
-                "   `/solo` (Private Solo Mode)\n\n"
-                "2. **Make a Guess**\n"
-                "   `/guess word:apple` or `-g apple`\n\n"
-                "3. **Hints**\n"
-                "   🟩 Green: Correct letter, correct spot\n"
-                "   🟨 Yellow: Correct letter, wrong spot\n"
-                "   ⬜ Grey: Letter not in word"
+                "**1. Start a Game**\n"
+                "• `/wordle` — Simple 5-letter words\n"
+                "• `/wordle_classic` — Harder, full dictionary\n"
+                "• `/custom` — Custom word in channel\n"
+                "• `/solo` — Private Solo Mode\n\n"
+                "**2. Make a Guess**\n"
+                "• `/guess word:apple` or `-g apple`\n\n"
+                "**3. Hints**\n"
+                "🟩 Correct letter, correct spot\n"
+                "🟨 Correct letter, wrong spot\n"
+                "⬜ Letter not in word"
             ), inline=False)
             
             # Build example with custom emojis
@@ -338,11 +339,11 @@ class HelpView(discord.ui.View):
                 "`/wordle_classic` — Hard Game\n"
                 "`/solo` — Private Game\n"
                 "`/custom` — Set Custom Word\n"
+                "`/guess` or `-g` — Guess\n"
                 "`/stop_game` — Cancel Game"
             ), inline=True)
             
             embed.add_field(name="📊 Stats & Profile", value=(
-                "`/guess` or `-g` — Guess\n"
                 "`/profile` — Your Stats\n"
                 "`/leaderboard` — Server Ranks\n"
                 "`/leaderboard_global` — Global\n"

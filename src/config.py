@@ -35,7 +35,7 @@ XP_GAINS = {
     'MULTI': {
         'win': 50, 'correct_4': 40, 'correct_3': 30, 'correct_2': 20, 'correct_1': 10, 'participation': 5
     },
-    'BONUS': {'under_30s': 10, 'under_40s': 5}
+    'BONUS': {'under_60s': 10, 'under_90s': 5}
 }
 
 # MATCH PERFORMANCE SCORE (MPS) - WR Calculation
@@ -46,7 +46,7 @@ MPS_EFFICIENCY = { # Bonus for Nth guess win
     1: 50, 2: 40, 3: 30, 4: 20, 5: 10, 6: 5
 }
 MPS_SPEED = { # Bonus for correct solve time
-    30: 20, 40: 10
+    60: 20, 90: 10
 }
 
 # TIERS (Includes multipliers for reward reduction)

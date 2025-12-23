@@ -63,6 +63,9 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
         xp_gain = res.get('xp_gain', 0)
         embed.add_field(name="Winner Rewards", value=f"+ {xp_gain} XP | 📈 WR: {res.get('multi_wr')}", inline=False)
     
+    # Add time taken to footer
+    embed.set_footer(text=f"⏱️ Solved in {time_taken:.1f}s")
+    
     # Award participants concurrently
     others = list(game.participants - {winner_user.id})
     participant_data = []

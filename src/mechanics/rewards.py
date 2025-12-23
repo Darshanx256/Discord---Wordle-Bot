@@ -1,5 +1,8 @@
 from src.config import XP_GAINS, MPS_BASE, MPS_EFFICIENCY, MPS_SPEED, TIERS, DAILY_CAP_1, DAILY_CAP_2
 
+# Pre-sort TIERS by min_wr descending for efficient tier lookups
+_SORTED_TIERS = sorted(TIERS, key=lambda x: x['min_wr'], reverse=True)
+
 def calculate_base_rewards(mode: str, outcome: str, guesses: int, time_taken: float):
     """
     Calculates base XP and WR (MPS) before any penalties.
@@ -17,8 +20,8 @@ def calculate_base_rewards(mode: str, outcome: str, guesses: int, time_taken: fl
             # Solo Win Base: 100 (Assumed standard)
             mps = 100 
             mps += MPS_EFFICIENCY.get(guesses, 0)
-            if time_taken < 30: mps += MPS_SPEED[30]
-            elif time_taken < 40: mps += MPS_SPEED[40]
+            if time_taken < 60: mps += MPS_SPEED[60]
+            elif time_taken < 90: mps += MPS_SPEED[90]
         else:
             mps = -15 
 
@@ -28,21 +31,18 @@ def calculate_base_rewards(mode: str, outcome: str, guesses: int, time_taken: fl
         
         if outcome == 'win':
             mps += MPS_EFFICIENCY.get(guesses, 0)
-            if time_taken < 30: 
-                mps += MPS_SPEED[30]
-                xp += XP_GAINS['BONUS']['under_30s']
-            elif time_taken < 40: 
-                mps += MPS_SPEED[40]
-                xp += XP_GAINS['BONUS']['under_40s']
+            if time_taken < 60: 
+                mps += MPS_SPEED[60]
+                xp += XP_GAINS['BONUS']['under_60s']
+            elif time_taken < 90: 
+                mps += MPS_SPEED[90]
+                xp += XP_GAINS['BONUS']['under_90s']
                 
     return xp, mps
 
 def get_tier_multiplier(current_wr: int) -> float:
     """Returns the reward multiplier based on current tier."""
-    # Robustness: Sort TIERS descending by min_wr to find highest match first
-    sorted_tiers = sorted(TIERS, key=lambda x: x['min_wr'], reverse=True)
-    
-    for tier in sorted_tiers:
+    for tier in _SORTED_TIERS:
         if current_wr >= tier['min_wr']:
             return tier.get('multiplier', 1.0)
             

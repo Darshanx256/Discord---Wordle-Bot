@@ -68,7 +68,7 @@
             <div class="stat-label">Game Modes</div>
         </div>
         <div class="stat-item">
-            <div class="stat-number" id="stat-words">∞</div>
+            <div class="stat-number">14k+</div>
             <div class="stat-label">Five-Letter Words</div>
         </div>
         <div class="stat-item">
@@ -140,7 +140,8 @@
                 <div class="feature-icon">📈</div>
                 <h3 class="feature-title">Level-up System</h3>
                 <p class="feature-description">
-                    A very fun level up system based on XP rewards during games, where, every participant is rewarded fairly.
+                    A very fun level up system based on XP rewards during games, where, every participant is rewarded
+                    fairly.
                 </p>
             </div>
 
@@ -169,7 +170,8 @@
                 <div class="feature-icon">🪄</div>
                 <h3 class="feature-title">Regular Updates</h3>
                 <p class="feature-description">
-                    The bot is updated regularly with new features (I accept feature requests), enhancements an stability fixes.
+                    The bot is updated regularly with new features (I accept feature requests), enhancements an
+                    stability fixes.
                 </p>
             </div>
 
@@ -330,17 +332,11 @@
                 const response = await fetch('/api/stats');
                 if (response.ok) {
                     const stats = await response.json();
-                    
+
                     // Update server count
                     const serversEl = document.getElementById('stat-servers');
                     if (serversEl && stats.server_count > 0) {
                         serversEl.textContent = stats.server_count.toLocaleString();
-                    }
-                    
-                    // Update word count 
-                    const wordsEl = document.getElementById('stat-words');
-                    if (wordsEl && stats.total_words) {
-                        wordsEl.textContent = stats.total_words.toLocaleString() + '+';
                     }
                 }
             } catch (e) {

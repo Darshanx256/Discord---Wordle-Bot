@@ -140,7 +140,7 @@ class WordleBot(commands.Bot):
         
         for cid, game in self.games.items():
             delta = now - game.start_time
-            if delta.total_seconds() > 10800:  # 3 hours
+            if delta.total_seconds() > 21600:  # 6 hours
                 to_remove.append(cid)
                 try:
                     channel = self.get_channel(cid)
@@ -162,7 +162,7 @@ class WordleBot(commands.Bot):
         custom_remove = []
         for cid, game in self.custom_games.items():
             delta = now - game.start_time
-            if delta.total_seconds() > 10800:  # 3 hours
+            if delta.total_seconds() > 21600:  # 6 hours
                 custom_remove.append(cid)
 
         for cid in custom_remove:
@@ -171,7 +171,7 @@ class WordleBot(commands.Bot):
         solo_remove = []
         for uid, sgame in self.solo_games.items():
             delta = now - sgame.start_time
-            if delta.total_seconds() > 10800: # 3 hours
+            if delta.total_seconds() > 21600:  # 6 hours
                 solo_remove.append(uid)
 
         for uid in solo_remove:
@@ -262,7 +262,7 @@ async def on_guild_join(guild):
             color=discord.Color.green()
         )
         embed.description = (
-            "A competitive Wordle experience with XP, ranking tiers, Easter eggs, and global leaderboards!\n\n"
+            "An engaging Wordle experience with various different game modes, level-up system and leaderboards!\n\n"
             "**Getting Started:**\n"
             "• Use `/help` for full command list and how to play\n"
             "• Start a game with `/wordle` (Simple) or `/wordle_classic` (Hard)\n"
