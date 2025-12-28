@@ -13,25 +13,26 @@ def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
     Calculates total WR gained by the user today (UTC).
     Queries 'match_history' table. Returns 0 if table not found or error.
     """
-    try:
-        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        
-        # Assumption: Table is 'match_history' and has 'user_id', 'created_at', 'wr_delta'
-        # We only care about POSITIVE gains for the cap.
-        response = bot.supabase_client.table('match_history') \
-            .select('wr_delta') \
-            .eq('user_id', user_id) \
-            .gte('created_at', today_start.isoformat()) \
-            .gt('wr_delta', 0) \
-            .execute()
-            
-        if response.data:
-            total = sum(r['wr_delta'] for r in response.data)
-            return total
-        return 0
-    except Exception as e:
-        # print(f"⚠️ Could not fetch daily WR stats: {e}")
-        return 0
+    # try:
+    #     today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    #     
+    #     # Assumption: Table is 'match_history' and has 'user_id', 'created_at', 'wr_delta'
+    #     # We only care about POSITIVE gains for the cap.
+    #     response = bot.supabase_client.table('match_history') \
+    #         .select('wr_delta') \
+    #         .eq('user_id', user_id) \
+    #         .gte('created_at', today_start.isoformat()) \
+    #         .gt('wr_delta', 0) \
+    #         .execute()
+    #         
+    #     if response.data:
+    #         total = sum(r['wr_delta'] for r in response.data)
+    #         return total
+    #     return 0
+    # except Exception as e:
+    #     # print(f"⚠️ Could not fetch daily WR stats: {e}")
+    #     return 0
+    return 0 # Temporary fix: match_history table missing
 
 def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str, 
                    outcome: str, guesses: int, time_taken: float, 
