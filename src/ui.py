@@ -3,7 +3,7 @@ import random
 import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
-from src.utils import EMOJIS, get_tier_display, get_win_flavor, get_badge_emoji # Added utils
+from src.utils import EMOJIS, get_win_flavor, get_badge_emoji # Added utils
 
 def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) -> str:
     #egg start

@@ -82,15 +82,6 @@ def get_badge_full_display(badge_type: str) -> str:
         return f"{emoji}{title}" if emoji else ""
     return ""
 
-def calculate_score(wins, games):
-    if games == 0: return 0
-    # Simple average for legacy display if needed
-    return (wins / games) * 100
-
-def get_tier_display(perc):
-    # Legacy percentile tier
-    return "🛡️", "Challenger"
-
 def get_win_flavor(attempts):
     flavors = {
         1: "🤯 INSANE!",

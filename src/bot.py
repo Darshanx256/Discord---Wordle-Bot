@@ -64,7 +64,7 @@ class WordleBot(commands.Bot):
         await self.load_cogs()
         await self.tree.sync()
         self.cleanup_task.start()
-        # self.cache_clear_task.start()
+
         self.db_ping_task.start()
         self.activity_loop.start()
         self.stats_update_task.start()
@@ -178,10 +178,7 @@ class WordleBot(commands.Bot):
         for uid in solo_remove:
             self.solo_games.pop(uid, None)
 
-    # @tasks.loop(hours=48)
-    # async def cache_clear_task(self):
-    #     """Deprecated: Replaced by smart_name_cache_loop"""
-    #     pass
+
 
     @tasks.loop(hours=96)
     async def db_ping_task(self):

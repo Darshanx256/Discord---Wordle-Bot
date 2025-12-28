@@ -1,6 +1,6 @@
 import random
 from discord.ext import commands
-from src.utils import calculate_score, get_tier_display # Keep for backward compat if needed, but we likely won't use them for V2
+
 from src.config import TIERS, XP_GAINS, XP_LEVELS, MPS_BASE, MPS_EFFICIENCY, MPS_SPEED
 
 # --- V2 SCORING & PROGRESSION ---
