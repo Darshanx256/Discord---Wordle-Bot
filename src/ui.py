@@ -203,7 +203,7 @@ class SoloView(ui.View):
 # --- EXISTING VIEWS ---
 
 class LeaderboardView(discord.ui.View):
-    def __init__(self, bot, data, title, color, interaction_user):
+    def __init__(self, bot, data, title, color, interaction_user, total_count=None):
         super().__init__(timeout=60)
         self.bot = bot
         self.data = data  
@@ -213,6 +213,7 @@ class LeaderboardView(discord.ui.View):
         self.current_page = 0
         self.items_per_page = 10
         self.total_pages = max(1, (len(data) - 1) // self.items_per_page + 1)
+        self.total_count = total_count if total_count is not None else len(data)
         self.update_buttons()
 
     def update_buttons(self):
@@ -248,7 +249,7 @@ class LeaderboardView(discord.ui.View):
                 description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}** | Wins: {wins}")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {len(self.data)} | Name changes take up to 48 hours to reflect")
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {self.total_count} | Name changes take up to 48 hours to reflect")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:

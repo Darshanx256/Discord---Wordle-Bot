@@ -64,10 +64,11 @@ class WordleBot(commands.Bot):
         await self.load_cogs()
         await self.tree.sync()
         self.cleanup_task.start()
-        self.cache_clear_task.start()
+        # self.cache_clear_task.start()
         self.db_ping_task.start()
         self.activity_loop.start()
         self.stats_update_task.start()
+        self.smart_name_cache_loop.start()
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
     async def load_cogs(self):
@@ -177,13 +178,10 @@ class WordleBot(commands.Bot):
         for uid in solo_remove:
             self.solo_games.pop(uid, None)
 
-    @tasks.loop(hours=48)
-    async def cache_clear_task(self):
-        """Clear name cache every 2 days to ensure fresh data."""
-        await self.wait_until_ready()
-        old_size = len(self.name_cache)
-        self.name_cache.clear()
-        print(f"🗑️ Cache cleared: removed {old_size} cached names at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    # @tasks.loop(hours=48)
+    # async def cache_clear_task(self):
+    #     """Deprecated: Replaced by smart_name_cache_loop"""
+    #     pass
 
     @tasks.loop(hours=96)
     async def db_ping_task(self):
@@ -225,6 +223,84 @@ class WordleBot(commands.Bot):
             print(f"📊 Stats updated: {stats['server_count']} servers, {stats['total_words']} words")
         except Exception as e:
             print(f"⚠️ Stats update failed: {e}")
+
+    @tasks.loop(hours=48)
+    async def smart_name_cache_loop(self):
+        """
+        Background task to cache ALL player names every 48 hours.
+        Updates self.name_cache efficiently to avoid rate limits.
+        """
+        await self.wait_until_ready()
+        print("🔄 Starting Smart Name Cache Update...")
+        
+        try:
+            # 1. Fetch all unique user_ids from stats
+            # We use 'head=False' to get data
+            # To avoid huge payload, we paginate or just grab IDs if possible. 
+            # supabase-py max row limit is usually 1000 without range. 
+            # We'll fetch in chunks if needed, but for now let's try a large range or loop properly.
+            # Actually, let's just fetch all IDs. Assuming < 10k users for now.
+            
+            all_users = []
+            start = 0
+            step = 1000
+            while True:
+                res = self.supabase_client.table('user_stats_v2').select('user_id').range(start, start + step - 1).execute()
+                if not res.data:
+                    break
+                all_users.extend(r['user_id'] for r in res.data)
+                if len(res.data) < step:
+                    break
+                start += step
+            
+            print(f"   Found {len(all_users)} users to cache.")
+            
+            # 2. Iterate and Cache
+            # We use a separate dict and swap at the end? 
+            # User said "delete old cache only when new cache is ready".
+            # So yes, build new cache, then update self.name_cache.
+            
+            new_cache = {}
+            count = 0
+            
+            for uid in all_users:
+                try:
+                    # Try local guild cache first (FAST, no API call)
+                    name = None
+                    for guild in self.guilds:
+                        mem = guild.get_member(uid)
+                        if mem:
+                            name = mem.display_name
+                            break
+                    
+                    if not name:
+                         # API Call - Check global cache or fetch
+                        user = self.get_user(uid)
+                        if user:
+                            name = user.display_name
+                        else:
+                            # Strict Rate Limit Handling
+                            try:
+                                u = await self.fetch_user(uid)
+                                name = u.display_name
+                                await asyncio.sleep(0.5) # Prevent 429
+                            except:
+                                name = f"User {uid}" # Fallback
+                                
+                    new_cache[uid] = name
+                    count += 1
+                    if count % 100 == 0:
+                        print(f"   Cached {count}/{len(all_users)} names...")
+                        
+                except Exception as ex:
+                    print(f"   Error caching user {uid}: {ex}")
+            
+            # 3. Swap Cache
+            self.name_cache = new_cache
+            print(f"✅ Smart Name Cache Updated: {len(self.name_cache)} names cached at {datetime.datetime.utcnow()}.")
+            
+        except Exception as e:
+            print(f"❌ Smart Name Cache Failed: {e}")
 
 
 # Initialize Bot

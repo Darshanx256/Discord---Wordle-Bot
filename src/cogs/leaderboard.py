@@ -6,6 +6,8 @@ import discord
 from discord.ext import commands
 from src.config import TIERS
 from src.ui import LeaderboardView
+from src.utils import EMOJIS
+import datetime
 
 
 async def fetch_and_format_rankings(results, bot_instance, guild=None):
@@ -23,7 +25,8 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
         tier_icon = "🛡️"
         for t in TIERS:
             if wr >= t['min_wr']:
-                tier_icon = t['icon']
+                # FIX: Use EMOJIS.get to handle custom emojis like 'legend_tier'
+                tier_icon = EMOJIS.get(t['icon'], t['icon'])
                 break
 
         # 1. Try Local Cache (FAST & SAFE)
@@ -60,6 +63,9 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
 class LeaderboardCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.global_cache = None
+        self.global_cache_time = None
+
 
     @commands.hybrid_command(name="leaderboard", description="Server Leaderboard (Multiplayer WR).")
     async def leaderboard(self, ctx):
@@ -108,8 +114,24 @@ class LeaderboardCommands(commands.Cog):
     @commands.hybrid_command(name="leaderboard_global", description="Global Leaderboard (Multiplayer WR).")
     async def leaderboard_global(self, ctx):
         await ctx.defer()
+        
+        # 1. OPTIMIZATION: Check Cache (1 minute TTL)
+        if self.global_cache and self.global_cache_time:
+             if (datetime.datetime.utcnow() - self.global_cache_time).total_seconds() < 60:
+                 # Verify cache isn't empty
+                 results, total_count = self.global_cache
+                 if results:
+                    data = await fetch_and_format_rankings(results, self.bot)
+                    view = LeaderboardView(self.bot, data, "🌍 Global top 50", discord.Color.purple(), ctx.author, total_count=total_count)
+                    return await ctx.send(embed=view.create_embed(), view=view)
 
         try:
+             # OPTIMIZATION: Fetch Total Count Efficiently
+            count_res = self.bot.supabase_client.table('user_stats_v2') \
+                .select('user_id', count='exact', head=True) \
+                .execute()
+            total_count = count_res.count if count_res.count is not None else 0
+
             response = self.bot.supabase_client.table('user_stats_v2') \
                 .select('user_id, multi_wins, xp, multi_wr, active_badge') \
                 .order('multi_wr', desc=True) \
@@ -120,6 +142,10 @@ class LeaderboardCommands(commands.Cog):
                 return await ctx.send("No records found in global leaderboard.", ephemeral=True)
 
             results = [(r['user_id'], r['multi_wins'], r['xp'], r['multi_wr'], r.get('active_badge')) for r in response.data]
+            
+            # Save to Cache
+            self.global_cache = (results, total_count)
+            self.global_cache_time = datetime.datetime.utcnow()
 
         except Exception as e:
             print(f"Global Leaderboard Error: {e}")
@@ -130,7 +156,7 @@ class LeaderboardCommands(commands.Cog):
 
         data = await fetch_and_format_rankings(results, self.bot)
 
-        view = LeaderboardView(self.bot, data, "🌍 Global Leaderboard", discord.Color.purple(), ctx.author)
+        view = LeaderboardView(self.bot, data, "🌍 Global top 50", discord.Color.purple(), ctx.author, total_count=total_count)
         await ctx.send(embed=view.create_embed(), view=view)
 
 
