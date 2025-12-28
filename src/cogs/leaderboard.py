@@ -127,8 +127,10 @@ class LeaderboardCommands(commands.Cog):
 
         try:
              # OPTIMIZATION: Fetch Total Count Efficiently
+             # Use a simple count query. explicit select of 1 column + limit 1 is safest.
             count_res = self.bot.supabase_client.table('user_stats_v2') \
-                .select('user_id', count='exact', head=True) \
+                .select('user_id', count='exact') \
+                .limit(1) \
                 .execute()
             total_count = count_res.count if count_res.count is not None else 0
 
@@ -148,8 +150,10 @@ class LeaderboardCommands(commands.Cog):
             self.global_cache_time = datetime.datetime.utcnow()
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Global Leaderboard Error: {e}")
-            return await ctx.send("❌ Error fetching global leaderboard.", ephemeral=True)
+            return await ctx.send(f"❌ Error fetching global leaderboard: {e}", ephemeral=True)
 
         if not results:
             return await ctx.send("No players yet!", ephemeral=True)
