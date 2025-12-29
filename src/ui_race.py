@@ -85,10 +85,14 @@ class RaceLobbyView(ui.View):
             keypad = self.get_markdown_keypad(game.used_letters, user_id)
             progress_bar = "[○○○○○○]"
             
-            embed = discord.Embed(title="🏁 Race Mode | Attempt 0/6", color=discord.Color.gold())
-            embed.description = f"**Race against {self.race_session.participant_count} players!**\nSolve the word as fast as you can!"
+            # Set end time
+            self.race_session.end_time = datetime.datetime.now() + datetime.timedelta(minutes=self.race_session.duration_minutes)
+            end_ts = int(self.race_session.end_time.timestamp())
+
+            embed = discord.Embed(title=f"🏁 Race Mode | Attempt 0/{game.max_attempts}", color=discord.Color.gold())
+            embed.description = f"**Race against {self.race_session.participant_count} players!**\nEnds <t:{end_ts}:R>!"
             embed.add_field(name="Board", value=board_display, inline=False)
-            embed.set_footer(text=f"6 tries left {progress_bar}")
+            embed.set_footer(text=f"{game.max_attempts} tries left {progress_bar}")
             
             message_content = f"**Keyboard Status:**\n{keypad}"
             
@@ -135,7 +139,7 @@ class RaceLobbyView(ui.View):
         """Create the lobby embed showing participants."""
         embed = discord.Embed(
             title="🏁 Race Lobby",
-            description=f"Waiting for racers... **{self.race_session.participant_count}** joined",
+            description=f"Waiting for racers... **{self.race_session.participant_count}** joined\nRace Duration: **{self.race_session.duration_minutes} mins**",
             color=discord.Color.blue()
         )
         
@@ -239,7 +243,7 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         await interaction.response.defer()
         
         filled = "●" * self.game.attempts_used
-        empty = "○" * (6 - self.game.attempts_used)
+        empty = "○" * (self.game.max_attempts - self.game.attempts_used)
         progress_bar = f"[{filled}{empty}]"
         
         board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
@@ -297,12 +301,14 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         
         else:
             # Continue playing
+            end_ts = int(self.race_session.end_time.timestamp()) if self.race_session.end_time else 0
             embed = discord.Embed(
-                title=f"🏁 Race Mode | Attempt {self.game.attempts_used}/6",
+                title=f"🏁 Race Mode | Attempt {self.game.attempts_used}/{self.game.max_attempts}",
                 color=discord.Color.blue()
             )
+            embed.description = f"Ends <t:{end_ts}:R>"
             embed.add_field(name="Board", value=board_display, inline=False)
-            embed.set_footer(text=f"{6 - self.game.attempts_used} tries left {progress_bar}")
+            embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
             
             await interaction.edit_original_response(content=f"**Keyboard:**\n{keypad}", embed=embed, view=self.view_ref)
     

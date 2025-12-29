@@ -2,9 +2,10 @@
 Race mode commands: /race and /showrace
 """
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import random
+import datetime
 from src.race_game import RaceSession
 from src.ui_race import RaceLobbyView, RaceGameView
 from src.utils import EMOJIS
@@ -13,6 +14,45 @@ from src.utils import EMOJIS
 class RaceCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.check_race_timeouts.start()
+    
+    def cog_unload(self):
+        self.check_race_timeouts.cancel()
+    
+    @tasks.loop(seconds=10)
+    async def check_race_timeouts(self):
+        """Check for expired race sessions."""
+        if not hasattr(self.bot, 'race_sessions'): return
+        
+        # Snapshot keys to avoid runtime error if dict changes
+        try:
+            active_sessions = [s for s in self.bot.race_sessions.values() if s.status == 'active']
+            for session in active_sessions:
+                if session.end_time and datetime.datetime.now() > session.end_time:
+                    # Time's up!
+                    session.status = 'finished'
+                    
+                    # Notify channel
+                    channel = self.bot.get_channel(session.channel_id)
+                    if channel:
+                        try:
+                            await channel.send(
+                                f"⏰ **Race Time Limit Reached!**\n"
+                                f"The word was **{session.secret.upper()}**.\n"
+                                f"Thanks for playing!"
+                            )
+                        except:
+                            pass
+                    
+                    # Remove from active sessions
+                    if session.channel_id in self.bot.race_sessions:
+                        del self.bot.race_sessions[session.channel_id]
+        except Exception as e:
+            print(f"Error in race timeout loop: {e}")
+
+    @check_race_timeouts.before_loop
+    async def before_check_race_timeouts(self):
+        await self.bot.wait_until_ready()
     
     @app_commands.command(name="race", description="Start a race lobby - compete to solve the same word!")
     async def race(self, interaction: discord.Interaction):
@@ -99,7 +139,7 @@ class RaceCommands(commands.Cog):
         # Recreate the game display
         game = user_race_game
         filled = "●" * game.attempts_used
-        empty = "○" * (6 - game.attempts_used)
+        empty = "○" * (game.max_attempts - game.attempts_used)
         progress_bar = f"[{filled}{empty}]"
         
         board_display = "\n".join([f"{h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
@@ -109,13 +149,19 @@ class RaceCommands(commands.Cog):
         view = RaceGameView(self.bot, game, interaction.user, user_race_session)
         keypad = view.get_markdown_keypad(game.used_letters, interaction.user.id)
         
+        # Timer check
+        end_desc = ""
+        if user_race_session.end_time:
+             end_ts = int(user_race_session.end_time.timestamp())
+             end_desc = f"\nEnds <t:{end_ts}:R>!"
+
         embed = discord.Embed(
-            title=f"🏁 Race Mode | Attempt {game.attempts_used}/6",
+            title=f"🏁 Race Mode | Attempt {game.attempts_used}/{game.max_attempts}",
             color=discord.Color.gold()
         )
-        embed.description = f"**Racing against {user_race_session.participant_count} players!**"
+        embed.description = f"**Racing against {user_race_session.participant_count} players!**{end_desc}"
         embed.add_field(name="Board", value=board_display, inline=False)
-        embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
+        embed.set_footer(text=f"{game.max_attempts - game.attempts_used} tries left {progress_bar}")
         
         message_content = f"**Keyboard Status:**\n{keypad}"
         

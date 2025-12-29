@@ -95,7 +95,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             
              # Progress Bar Logic
             filled = "●" * self.game.attempts_used
-            empty = "○" * (6 - self.game.attempts_used)
+            empty = "○" * (self.game.max_attempts - self.game.attempts_used)
             progress_bar = f"[{filled}{empty}]"
 
             # Board Display
@@ -146,9 +146,9 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
 
             else:
                 # Ongoing game - show board in embed, keyboard in content
-                embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/6", color=discord.Color.gold())
+                embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/{self.game.max_attempts}", color=discord.Color.gold())
                 embed.add_field(name="Board", value=board_display, inline=False)
-                embed.set_footer(text=f"{6 - self.game.attempts_used} tries left {progress_bar}")
+                embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
 
                 # Keyboard in message content to avoid 1024 char limit
                 message_content = f"**Keyboard Status:**\n{keypad}"
@@ -341,14 +341,19 @@ class HelpView(discord.ui.View):
                 "`/solo` — Private Game\n"
                 "`/custom` — Set Custom Word\n"
                 "`/guess` or `-g` — Guess\n"
-                "`/stop_game` — Cancel Game"
+                "`/guess` or `-g` — Guess\n"
+                "`/stop_game` — Cancel Game\n"
+                "`/race` — Start Race Mode"
             ), inline=True)
             
             embed.add_field(name="📊 Stats & Profile", value=(
                 "`/profile` — Your Stats\n"
                 "`/leaderboard` — Server Ranks\n"
                 "`/leaderboard_global` — Global\n"
-                "`/shop` — Equip Badges"
+                "`/leaderboard` — Server Ranks\n"
+                "`/leaderboard_global` — Global\n"
+                "`/shop` — Equip Badges\n"
+                "`/showrace` — Resume Race"
             ), inline=True)
             
             # Tiers Section
@@ -377,7 +382,19 @@ class HelpView(discord.ui.View):
                 "• Start with vowel-heavy words (AUDIO, RAISE)\n"
                 "• Speed matters — faster solves = bonus rewards\n"
                 "• Higher tiers receive scaled rewards\n"
+                "• Speed matters — faster solves = bonus rewards\n"
+                "• Higher tiers receive scaled rewards\n"
                 "• Participate in Multiplayer for extra XP"
+            ), inline=False)
+
+            # Custom Game Options
+            embed.add_field(name="🧂 Custom Game Extra Options", value=(
+                "Use in `Extra options` field:\n"
+                "`dict:word1,word2` — Custom word list\n"
+                "`time:X` — Time limit (min)\n"
+                "`player:@user` — Restrict to user\n"
+                "`blind:yes` — Hide colors 🙈\n"
+                "`start:word` — Force start word"
             ), inline=False)
             
             embed.set_footer(text="Page 2/2 • Climb the global leaderboard!")

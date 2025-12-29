@@ -112,8 +112,14 @@ class GuessHandler(commands.Cog):
 
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id)
         filled = "●" * game.attempts_used
+        if is_custom and getattr(game, 'blind_mode', False) and not (win or game_over):
+            # Blind mode: mask the board
+            # We show just outlines or black squares for previous turns
+            board_display = "\n".join(["⬛⬛⬛⬛⬛" for _ in game.history])
+        else:
+            board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+
         empty = "○" * (game.max_attempts - game.attempts_used)
-        board_display = "\n".join([f"{h['pattern']}" for h in game.history])
 
         message_content = f"**Keyboard Status:**\n{keypad}" if (not is_custom or game.show_keyboard) else ""
 
@@ -131,7 +137,7 @@ class GuessHandler(commands.Cog):
             if win:
                 # Winner found the word
                 filled = "●" * game.attempts_used
-                empty = "○" * (6 - game.attempts_used)
+                empty = "○" * (game.max_attempts - game.attempts_used)
                 board_display = "\n".join([f"{h['pattern']}" for h in game.history])
 
                 embed = discord.Embed(
@@ -149,7 +155,7 @@ class GuessHandler(commands.Cog):
             elif game_over:
                 # Game over - all attempts used
                 filled = "●" * game.attempts_used
-                empty = "○" * (6 - game.attempts_used)
+                empty = "○" * (game.max_attempts - game.attempts_used)
                 board_display = "\n".join([f"{h['pattern']}" for h in game.history])
 
                 embed = discord.Embed(
@@ -170,7 +176,7 @@ class GuessHandler(commands.Cog):
             else:
                 # Just a turn in custom game
                 filled = "●" * game.attempts_used
-                empty = "○" * (6 - game.attempts_used)
+                empty = "○" * (game.max_attempts - game.attempts_used)
                 board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                 
                 embed = discord.Embed(title=f"Attempt {game.attempts_used}/{game.max_attempts}", color=discord.Color.gold())

@@ -50,7 +50,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
     
     extra_options = ui.TextInput(
         label="Extra options (optional, see /help)",
-        placeholder="dict:apple,grape,melon,lemon,peach | time:10 | player:@username",
+        placeholder="dict:apple,grape | time:10 | player:@user | blind:yes | start:crane",
         max_length=300,
         required=False,
         style=discord.TextStyle.paragraph
@@ -105,6 +105,8 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         custom_dict = None
         time_limit = None
         allowed_player_id = None
+        blind_mode = False
+        start_word = None
         
         if extra:
             parts = [p.strip() for p in extra.split('|')]
@@ -146,10 +148,25 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                     if match:
                         allowed_player_id = int(match.group(1) or match.group(2))
                     else:
-                        return await interaction.response.send_message(
                             "❌ Invalid player format! Use @mention or user ID.",
                             ephemeral=True
                         )
+                
+                elif part.startswith('blind:'):
+                    # Blind mode
+                    val = part[6:].strip().lower()
+                    if val in ['yes', 'true', 'on', '1']:
+                        blind_mode = True
+                
+                elif part.startswith('start:'):
+                    # Force start word
+                    s_word = part[6:].strip().lower()
+                    if len(s_word) != 5 or not s_word.isalpha():
+                        return await interaction.response.send_message(
+                            "❌ Start word must be exactly 5 letters!",
+                            ephemeral=True
+                        )
+                    start_word = s_word
 
         reveal_bool = reveal == "yes"
         show_keyboard = keyboard == "yes"
@@ -181,6 +198,17 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         game.time_limit = time_limit
         game.allowed_player_id = allowed_player_id
         game.show_keyboard = show_keyboard
+        game.blind_mode = blind_mode
+        
+        # Apply start word if valid
+        if start_word:
+            # We treat it as a pre-made guess by the system/host
+            # Using a dummy user or just appending to history directly
+            # For simplicity, we just process it as a turn by the bot (id=bot.user.id if available, else 0)
+            # Actually, let's just append to history to avoid validation logic issues
+            pat = game.evaluate_guess(start_word)
+            game.history.append({'word': start_word, 'pattern': pat, 'user': self.bot.user})
+            game.guessed_words.add(start_word)
         self.bot.custom_games[cid] = game
 
         # Clean up any "stopped" state
@@ -202,6 +230,10 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             setup_details.append(f"**Time limit:** {time_limit} minutes")
         if allowed_player_id:
             setup_details.append(f"**Restricted to:** <@{allowed_player_id}>")
+        if blind_mode:
+            setup_details.append("**Blind Mode:** Active 🙈")
+        if start_word:
+            setup_details.append(f"**Starting Word:** {start_word.upper()}")
 
         await interaction.followup.send(
             "✅ Custom game set up!\n" + "\n".join(setup_details),
@@ -221,6 +253,8 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             desc_parts.append(f"**Restricted to:** <@{allowed_player_id}>")
         if time_limit:
             desc_parts.append(f"**Time limit:** {time_limit} minutes")
+        if blind_mode:
+            desc_parts.append("**Blind Mode:** Active 🙈")
         
         embed.description = "\n".join(desc_parts)
         embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
