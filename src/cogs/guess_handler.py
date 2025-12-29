@@ -28,7 +28,7 @@ class GuessHandler(commands.Cog):
         # Strip all whitespace first (handles "-g     dance" case)
         g_word = word.strip().lower()
 
-        print(f"DEBUG: Guess in Channel {cid}. Active: {list(self.bot.games.keys())} | Custom: {list(self.bot.custom_games.keys())}")
+        print(f"DEBUG: Guess '{g_word}' | Channel {cid} | Active Games: {len(self.bot.games)} | Custom: {len(self.bot.custom_games)}")
 
         # Check which game type is active
         is_custom = False
@@ -65,6 +65,7 @@ class GuessHandler(commands.Cog):
             return await ctx.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
         pat, win, game_over = game.process_turn(g_word, ctx.author)
+        print(f"DEBUG: Processed Turn | Attempts: {game.attempts_used}/{game.max_attempts} | Win: {win} | Over: {game_over}")
 
         # Attempt Easter Egg trigger (rate-limited per-user to avoid farming)
         try:

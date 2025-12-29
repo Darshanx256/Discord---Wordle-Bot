@@ -286,12 +286,14 @@ class GameCommands(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="wordle", description="Start a new game (Simple word list).")
+    @commands.guild_only()
     async def start(self, ctx):
         if not ctx.interaction:
             return # Only allow slash command, ignore prefix like -wordle
         await start_multiplayer_game(self.bot, ctx, is_classic=False)
 
     @commands.hybrid_command(name="wordle_classic", description="Start a Classic game (Harder word list).")
+    @commands.guild_only()
     async def start_classic(self, ctx):
         if not ctx.interaction:
             return # Only allow slash command, ignore prefix like -wordle_classic
@@ -356,6 +358,7 @@ class GameCommands(commands.Cog):
         await ctx.send(f"✅ Solo game cancelled. The word was **{game.secret.upper()}**.", ephemeral=True)
 
     @commands.hybrid_command(name="stop_game", description="Force stop the current game.")
+    @commands.guild_only()
     async def stop_game(self, ctx):
         if not ctx.interaction: return
         await ctx.defer()
@@ -395,6 +398,7 @@ class GameCommands(commands.Cog):
             return
 
     @commands.hybrid_command(name="custom", description="Start a custom Wordle game with your own word.")
+    @commands.guild_only()
     async def custom_mode(self, ctx):
         if not ctx.interaction: return
         await ctx.defer(ephemeral=True)
