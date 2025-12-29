@@ -13,14 +13,47 @@ from src.handlers.game_logic import start_multiplayer_game
 
 
 # ========= CUSTOM MODE MODAL =========
-class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
-    word_input = ui.TextInput(label="Enter a 5-letter word", placeholder="e.g., PIZZA", max_length=5, min_length=5)
+class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
+    word_input = ui.TextInput(
+        label="Enter a 5-letter word",
+        placeholder="e.g., PIZZA",
+        max_length=5,
+        min_length=5
+    )
+    
+    tries_input = ui.TextInput(
+        label="Number of tries (3-10, default: 6)",
+        placeholder="6",
+        max_length=2,
+        min_length=1,
+        required=False,
+        default="6"
+    )
+    
     reveal_input = ui.TextInput(
-        label="Reveal word on loss?", 
-        placeholder="yes or no",
+        label="Reveal word on loss? (yes/no, default: yes)",
+        placeholder="yes",
         max_length=3,
         min_length=2,
+        required=False,
         default="yes"
+    )
+    
+    keyboard_input = ui.TextInput(
+        label="Show keyboard guide? (yes/no, default: yes)",
+        placeholder="yes",
+        max_length=3,
+        min_length=2,
+        required=False,
+        default="yes"
+    )
+    
+    extra_options = ui.TextInput(
+        label="Extra options (optional, see /help)",
+        placeholder="dict:apple,grape,melon,lemon,peach | time:10 | player:@username",
+        max_length=300,
+        required=False,
+        style=discord.TextStyle.paragraph
     )
 
     def __init__(self, bot, user):
@@ -30,7 +63,10 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
 
     async def on_submit(self, interaction: discord.Interaction):
         word = self.word_input.value.strip().lower()
-        reveal = self.reveal_input.value.strip().lower()
+        tries_str = self.tries_input.value.strip() or "6"
+        reveal = self.reveal_input.value.strip().lower() or "yes"
+        keyboard = self.keyboard_input.value.strip().lower() or "yes"
+        extra = self.extra_options.value.strip()
 
         # Validation
         if not word or not word.isalpha() or len(word) != 5:
@@ -38,16 +74,87 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                 "❌ Invalid input! Word must be exactly 5 letters (alphabetic only).",
                 ephemeral=True
             )
-
+        
         if reveal not in ["yes", "no"]:
             return await interaction.response.send_message(
                 "❌ Reveal must be 'yes' or 'no'.",
                 ephemeral=True
             )
+        
+        if keyboard not in ["yes", "no"]:
+            return await interaction.response.send_message(
+                "❌ Keyboard option must be 'yes' or 'no'.",
+                ephemeral=True
+            )
+        
+        # Parse tries
+        try:
+            tries = int(tries_str)
+            if tries < 3 or tries > 10:
+                return await interaction.response.send_message(
+                    "❌ Number of tries must be between 3 and 10.",
+                    ephemeral=True
+                )
+        except ValueError:
+            return await interaction.response.send_message(
+                "❌ Invalid number of tries! Must be a number between 3-10.",
+                ephemeral=True
+            )
+
+        # Parse extra options
+        custom_dict = None
+        time_limit = None
+        allowed_player_id = None
+        
+        if extra:
+            parts = [p.strip() for p in extra.split('|')]
+            for part in parts:
+                if part.startswith('dict:'):
+                    # Custom dictionary
+                    words_str = part[5:].strip()
+                    words = [w.strip().lower() for w in words_str.split(',') if w.strip()]
+                    # Validate all words are 5 letters
+                    if not all(len(w) == 5 and w.isalpha() for w in words):
+                        return await interaction.response.send_message(
+                            "❌ All custom dictionary words must be exactly 5 letters!",
+                            ephemeral=True
+                        )
+                    custom_dict = set(words)
+                    custom_dict.add(word)  # Add secret word to dict
+                
+                elif part.startswith('time:'):
+                    # Time limit in minutes
+                    try:
+                        time_limit = int(part[5:].strip())
+                        if time_limit < 1 or time_limit > 360:
+                            return await interaction.response.send_message(
+                                "❌ Time limit must be between 1 and 360 minutes!",
+                                ephemeral=True
+                            )
+                    except ValueError:
+                        return await interaction.response.send_message(
+                            "❌ Invalid time limit! Must be a number.",
+                            ephemeral=True
+                        )
+                
+                elif part.startswith('player:'):
+                    # Allowed player restriction
+                    player_mention = part[7:].strip()
+                    # Try to extract user ID from mention or raw ID
+                    import re
+                    match = re.search(r'<@!?(\d+)>|^(\d+)$', player_mention)
+                    if match:
+                        allowed_player_id = int(match.group(1) or match.group(2))
+                    else:
+                        return await interaction.response.send_message(
+                            "❌ Invalid player format! Use @mention or user ID.",
+                            ephemeral=True
+                        )
 
         reveal_bool = reveal == "yes"
+        show_keyboard = keyboard == "yes"
 
-        # Check if ANY game already exists in this channel (race condition protection)
+        # Check if ANY game already exists in this channel
         cid = interaction.channel.id
         if cid in self.bot.custom_games:
             return await interaction.response.send_message(
@@ -63,23 +170,41 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
 
         # Add word to valid set temporarily
         self.bot.valid_set.add(word)
+        if custom_dict:
+            self.bot.valid_set.update(custom_dict)
 
         # Create game
         game = WordleGame(word, cid, self.user, 0)
-        game.reveal_on_loss = reveal_bool  # Add reveal flag
+        game.max_attempts = tries
+        game.reveal_on_loss = reveal_bool
+        game.custom_dict = custom_dict
+        game.time_limit = time_limit
+        game.allowed_player_id = allowed_player_id
+        game.show_keyboard = show_keyboard
         self.bot.custom_games[cid] = game
 
-        # Clean up any "stopped" state for this channel so wins are rewarded
+        # Clean up any "stopped" state
         self.bot.stopped_games.discard(cid)
 
-        # Respond to modal (already deferred if we added it, but let's just use send_message early or defer)
-        # Actually, let's defer early in on_submit
+        # Respond to modal
         if not interaction.response.is_done():
             await interaction.response.defer(ephemeral=True)
 
-        # Respond to modal
+        # Build setup summary
+        setup_details = [
+            f"**Tries:** {tries}",
+            f"**Reveal on loss:** {'Yes' if reveal_bool else 'No'}",
+            f"**Keyboard:** {'Shown' if show_keyboard else 'Hidden'}"
+        ]
+        if custom_dict:
+            setup_details.append(f"**Custom dictionary:** {len(custom_dict)} words")
+        if time_limit:
+            setup_details.append(f"**Time limit:** {time_limit} minutes")
+        if allowed_player_id:
+            setup_details.append(f"**Restricted to:** <@{allowed_player_id}>")
+
         await interaction.followup.send(
-            "✅ Custom game set up! Game is starting...",
+            "✅ Custom game set up!\n" + "\n".join(setup_details),
             ephemeral=True
         )
 
@@ -88,10 +213,20 @@ class CustomWordModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             title="🧂 Custom Wordle Game Started",
             color=discord.Color.teal()
         )
-        embed.description = f"A 5-letter custom wordle has been set up by **{self.user.display_name}**\n**6 attempts** total"
+        desc_parts = [
+            f"A custom wordle has been set up by **{self.user.display_name}**",
+            f"**{tries} attempts** total"
+        ]
+        if allowed_player_id:
+            desc_parts.append(f"**Restricted to:** <@{allowed_player_id}>")
+        if time_limit:
+            desc_parts.append(f"**Time limit:** {time_limit} minutes")
+        
+        embed.description = "\n".join(desc_parts)
         embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
 
         await interaction.channel.send(embed=embed)
+
 
 
 # ========= CUSTOM MODE BUTTONS =========
@@ -103,7 +238,7 @@ class CustomSetupView(ui.View):
 
     @ui.button(label="Set Up", style=discord.ButtonStyle.primary, emoji="🧂")
     async def setup_button(self, interaction: discord.Interaction, button: ui.Button):
-        await interaction.response.send_modal(CustomWordModal(self.bot, self.user))
+        await interaction.response.send_modal(EnhancedCustomModal(self.bot, self.user))
 
     @ui.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):

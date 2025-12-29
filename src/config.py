@@ -15,6 +15,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SECRET_FILE = "words.txt" # Simple list (Original Wordle)
 VALID_FILE = "all_words.txt" # Full dictionary (Valid guesses)
 CLASSIC_FILE = "words_hard.txt" # Classic list
+BANNED_USERS_FILE = "banned_users.txt" # Banned user IDs (one per line)
 
 # --- GAME CONSTANTS ---
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]

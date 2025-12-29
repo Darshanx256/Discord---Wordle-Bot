@@ -37,12 +37,31 @@ class GuessHandler(commands.Cog):
             is_custom = True
         elif not game:
             return await ctx.send("⚠️ No active game.", ephemeral=True)
+        
+        # Custom game validations
+        if is_custom:
+            # Check if player is restricted
+            if game.allowed_player_id and ctx.author.id != game.allowed_player_id:
+                return await ctx.send(
+                    "❌ This game is restricted to a specific player!",
+                    ephemeral=True
+                )
+            
+            # Check custom dictionary if set
+            if game.custom_dict and g_word not in game.custom_dict:
+                return await ctx.send(
+                    f"⚠️ **{g_word.upper()}** not in custom dictionary!",
+                    ephemeral=True
+                )
 
         if game.is_duplicate(g_word):
             return await ctx.send(f"⚠️ **{g_word.upper()}** already guessed!", ephemeral=True)
         if len(g_word) != 5 or not g_word.isalpha():
             return await ctx.send("⚠️ 5 letters only.", ephemeral=True)
-        if g_word not in self.bot.valid_set:
+        
+        # Use custom dictionary if set, otherwise use bot's valid set
+        valid_check = game.custom_dict if (is_custom and game.custom_dict) else self.bot.valid_set
+        if g_word not in valid_check:
             return await ctx.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
         pat, win, game_over = game.process_turn(g_word, ctx.author)
@@ -93,10 +112,10 @@ class GuessHandler(commands.Cog):
 
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id)
         filled = "●" * game.attempts_used
-        empty = "○" * (6 - game.attempts_used)
+        empty = "○" * (game.max_attempts - game.attempts_used)
         board_display = "\n".join([f"{h['pattern']}" for h in game.history])
 
-        message_content = f"**Keyboard Status:**\n{keypad}"
+        message_content = f"**Keyboard Status:**\n{keypad}" if (not is_custom or game.show_keyboard) else ""
 
         # Fetch player badge
         try:
@@ -119,7 +138,7 @@ class GuessHandler(commands.Cog):
                     title="🏆 VICTORY!",
                     color=discord.Color.green()
                 )
-                embed.description = f"**{ctx.author.display_name}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
+                embed.description = f"**{ctx.author.display_name}** found **{game.secret.upper()}** in {game.attempts_used}/{game.max_attempts}!"
                 embed.add_field(name="Final Board", value=board_display, inline=False)
                 embed.set_footer(text=f"Attempts: {filled}{empty} | Custom mode (no rewards)")
 
@@ -154,11 +173,13 @@ class GuessHandler(commands.Cog):
                 empty = "○" * (6 - game.attempts_used)
                 board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                 
-                embed = discord.Embed(title=f"Attempt {game.attempts_used}/6", color=discord.Color.gold())
+                embed = discord.Embed(title=f"Attempt {game.attempts_used}/{game.max_attempts}", color=discord.Color.gold())
                 embed.description = f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`"
                 embed.add_field(name="Current Board", value=board_display, inline=False)
-                embed.set_footer(text=f"{6 - game.attempts_used} tries left [{filled}{empty}]")
-                await ctx.send(content=message_content, embed=embed)
+                embed.set_footer(text=f"{game.max_attempts - game.attempts_used} tries left [{filled}{empty}]")
+                # Only send keyboard if show_keyboard is True
+                content = message_content if game.show_keyboard else None
+                await ctx.send(content=content, embed=embed)
 
             return  # Exit - no DB recording for custom mode
 

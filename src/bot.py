@@ -23,6 +23,7 @@ class WordleBot(commands.Bot):
         self.games = {}
         self.solo_games = {}
         self.custom_games = {}  # Custom mode games
+        self.race_sessions = {}  # Race mode lobbies
         self.stopped_games = set()
         self.egg_cooldowns = {}
         self.secrets = []
@@ -30,6 +31,7 @@ class WordleBot(commands.Bot):
         self.valid_set = set()
         self.name_cache = {}
         self.supabase_client: Client = None
+        self.banned_users = set()  # Banned user IDs
 
     def get_custom_prefix(self, bot, message):
         """Only allow '-' as a prefix if it's followed by 'g' (the guess shortcut)."""
@@ -59,6 +61,7 @@ class WordleBot(commands.Bot):
 
     async def setup_hook(self):
         self.load_local_data()
+        self.load_banned_users()
         self.setup_db()
         # Load cogs first so their app-commands are registered before syncing
         await self.load_cogs()
@@ -108,6 +111,22 @@ class WordleBot(commands.Bot):
 
         self.valid_set.update(self.secrets)
         self.valid_set.update(self.hard_secrets)
+    
+    def load_banned_users(self):
+        """Load banned user IDs from file."""
+        from src.config import BANNED_USERS_FILE
+        if os.path.exists(BANNED_USERS_FILE):
+            try:
+                with open(BANNED_USERS_FILE, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and line.isdigit():
+                            self.banned_users.add(int(line))
+                print(f"✅ Loaded {len(self.banned_users)} banned user(s).")
+            except Exception as e:
+                print(f"⚠️ Failed to load banned users: {e}")
+        else:
+            print(f"📝 No banned users file found ({BANNED_USERS_FILE}).")
 
     def setup_db(self):
         """Initialize Supabase client."""

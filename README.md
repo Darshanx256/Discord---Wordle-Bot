@@ -34,6 +34,8 @@ Discord---Wordle-Bot/
 - **Multiplayer**: Coop/Competitive in a channel (`/wordle`).
 - **Solo**: Private, ephemeral game using Discord Buttons & Modals (`/solo`).
 - **Classic**: Hard mode with full dictionary (`/wordle_classic`).
+- **Race**: **NEW!** Competitive race mode - everyone solves the same word (`/race`).
+- **Custom**: Setup games with custom words and extensive options (`/custom`).
 
 ### 🎒 Features
 - **Shop**: Unlock badges like "Duck Lord" or "Dragon Slayer".
@@ -46,6 +48,9 @@ Discord---Wordle-Bot/
 - `/wordle` - Start public simple game.
 - `/wordle_classic` - Start public hard game.
 - `/solo` - **NEW!** Play privately.
+- `/race` - **NEW (BETA)!** Start competitive race lobby.
+- `/showrace` - **NEW (BETA)!** Recover your race game.
+- `/custom` - Start custom game with extensive options.
 - `/guess [word]` - Submit a guess.
 - `/leaderboard` - Server Rankings.
 - `/leaderboard_global` - Global Rankings.

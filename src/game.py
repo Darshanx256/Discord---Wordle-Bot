@@ -6,7 +6,7 @@ from src.utils import EMOJIS
 class WordleGame:
     __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
                  'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time',
-                 'reveal_on_loss', 'difficulty')
+                 'reveal_on_loss', 'difficulty', 'custom_dict', 'time_limit', 'allowed_player_id', 'show_keyboard')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
@@ -23,6 +23,11 @@ class WordleGame:
         self.message_id = message_id
         self.reveal_on_loss = True  # Default for custom games
         self.difficulty = 0         # 0=Simple, 1=Classic, 2=Custom
+        # Enhanced custom game fields
+        self.custom_dict = None      # Set of allowed words for custom games
+        self.time_limit = None       # Time limit in minutes (None = default 6 hours)
+        self.allowed_player_id = None  # Restrict guesses to specific user
+        self.show_keyboard = True    # Whether to show keyboard guide
 
     @property
     def attempts_used(self): return len(self.history)

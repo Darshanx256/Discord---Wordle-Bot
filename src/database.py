@@ -268,3 +268,36 @@ def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
         print(f"DB ERROR (General) in get_next_classic_secret: {e}")
         print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
         return random.choice(bot.hard_secrets)
+
+def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, guesses: int, time_taken: float, xp: int, wr: int, rank: int):
+    """Record race mode result in database."""
+    try:
+        # Record in match history (optional - for tracking purposes)
+        bot.supabase_client.table('match_history').insert({
+            'user_id': user_id,
+            'mode': 'RACE',
+            'word': word,
+            'won': won,
+            'guesses': guesses,
+            'time_taken': time_taken,
+            'xp_delta': xp,
+            'wr_delta': wr,
+            'rank': rank,
+            'created_at': datetime.datetime.utcnow().isoformat()
+        }).execute()
+        
+        # Update user stats
+        bot.supabase_client.rpc('record_game_result_v4', {
+            'p_user_id': user_id,
+            'p_guild_id': None,  # Race is cross-server
+            'p_mode': 'MULTI',  # Treat as multiplayer for WR purposes
+            'p_xp_gain': xp,
+            'p_wr_delta': wr,
+            'p_is_win': won,
+            'p_egg_trigger': None
+        }).execute()
+        
+        return True
+    except Exception as e:
+        print(f"DB ERROR in record_race_result: {e}")
+        return False

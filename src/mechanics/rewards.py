@@ -103,3 +103,46 @@ def calculate_final_rewards(mode: str, outcome: str, guesses: int, time_taken: f
         wr = ag_wr
         
     return xp, wr
+
+def calculate_race_rewards(bot, user_id: int, game, rank: int):
+    """
+    Calculate rewards for Race Mode.
+    - 1st place: 110% of normal rewards (10% bonus)
+    - Others: 45% of normal rewards
+    """
+    from src.database import fetch_user_profile_v2
+    
+    # Get user profile for tier calculation
+    profile = fetch_user_profile_v2(bot, user_id)
+    current_wr = profile.get('wr_multi', 0) if profile else 0
+    daily_wr_gain = profile.get('daily_wr_gain', 0) if profile else 0
+    
+    # Calculate base rewards
+    time_taken = (game.last_interaction - game.start_time).total_seconds()
+    xp, wr = calculate_final_rewards('MULTI', 'win', game.attempts_used, time_taken, current_wr, daily_wr_gain)
+    
+    # Apply rank multiplier
+    if rank == 1:
+        # 1st place gets 110% (10% bonus)
+        xp = int(xp * 1.10)
+        wr = int(wr * 1.10)
+        rank_msg = "**1st Place Bonus!** +10%"
+    else:
+        # Others get 45%
+        xp = int(xp * 0.45)
+        wr = int(wr * 0.45)
+        rank_msg = f"**Rank #{rank}** rewards"
+    
+    # Record in database
+    from src.database import record_race_result
+    record_race_result(bot, user_id, game.secret, True, game.attempts_used, time_taken, xp, wr, rank)
+    
+    # Build message
+    message = f"{rank_msg}\n+{xp} XP | +{wr} WR"
+    
+    return {
+        'xp': xp,
+        'wr': wr,
+        'rank': rank,
+        'message': message
+    }

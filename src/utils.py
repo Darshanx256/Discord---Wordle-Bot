@@ -162,3 +162,7 @@ async def get_cached_username(bot, user_id: int) -> str:
     
     # 4. Fallback
     return str(user_id)
+
+def is_user_banned(bot, user_id: int) -> bool:
+    """Check if a user is banned."""
+    return hasattr(bot, 'banned_users') and user_id in bot.banned_users
