@@ -367,7 +367,10 @@ class GuessHandler(commands.Cog):
             embed.description = f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`"
             embed.add_field(name="Current Board", value=board_display, inline=False)
             embed.set_footer(text=f"{6 - game.attempts_used} tries left [{filled}{empty}]")
-            await ctx.send(content=message_content, embed=embed)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            await ctx.send(f"❌ Internal Logic Error: {e}", ephemeral=True)
 
 
 async def setup(bot):
