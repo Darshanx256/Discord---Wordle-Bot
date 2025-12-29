@@ -76,38 +76,41 @@ class RaceLobbyView(ui.View):
         from src.game import WordleGame
         from src.ui_race import RaceGameView
         
+        # Set end time
+        self.race_session.end_time = datetime.datetime.now() + datetime.timedelta(minutes=self.race_session.duration_minutes)
+        end_ts = int(self.race_session.end_time.timestamp())
+        
         for user_id, user in self.race_session.participants.items():
             game = WordleGame(self.race_session.secret, 0, user, 0)
             self.race_session.race_games[user_id] = game
+            self.race_session.green_scores[user_id] = 0  # Initialize green score
             
-            # Send ephemeral race game to each participant
-            board_display = "No guesses yet."
-            keypad = self.get_markdown_keypad(game.used_letters, user_id)
-            progress_bar = "[○○○○○○]"
+            # Build unified embed with board + keyboard in description
+            progress_bar = f"[{'○' * game.max_attempts}]"
             
-            # Set end time
-            self.race_session.end_time = datetime.datetime.now() + datetime.timedelta(minutes=self.race_session.duration_minutes)
-            end_ts = int(self.race_session.end_time.timestamp())
-
             embed = discord.Embed(title=f"🏁 Race Mode | Attempt 0/{game.max_attempts}", color=discord.Color.gold())
-            embed.description = f"**Race against {self.race_session.participant_count} players!**\nEnds <t:{end_ts}:R>!"
-            embed.add_field(name="Board", value=board_display, inline=False)
+            embed.description = (
+                f"**Race against {self.race_session.participant_count} players!**\n"
+                f"Ends <t:{end_ts}:R>!\n\n"
+                f"Click **Make Guess** to start!"
+            )
             embed.set_footer(text=f"{game.max_attempts} tries left {progress_bar}")
             
-            message_content = f"**Keyboard Status:**\n{keypad}"
-            
             view = RaceGameView(self.bot, game, user, self.race_session)
+            
+            # Send ephemeral in the original channel instead of DM
             try:
-                await user.send(content=message_content, embed=embed, view=view)
-            except:
-                # Fallback: send in channel if DM fails
                 channel = self.bot.get_channel(self.race_session.channel_id)
                 if channel:
-                    await channel.send(
-                        f"{user.mention} - Your race game!",
+                    # We need to use followup since response is already done
+                    # Store the message reference for later updates
+                    msg = await channel.send(
+                        content=f"{user.mention} - Your race game! 🏁",
                         embed=embed,
                         view=view
                     )
+            except Exception as e:
+                print(f"Error sending race game to {user}: {e}")
         
         self.race_session.status = 'active'
         self.stop()
@@ -239,6 +242,10 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         # Process the guess
         pattern, won, game_over = self.game.process_turn(guess, interaction.user)
         
+        # Count greens for tiebreaker
+        green_count = pattern.count('🟩') + sum(1 for i, c in enumerate(guess) if c.upper() == self.game.secret[i].upper())
+        self.race_session.green_scores[interaction.user.id] = self.race_session.green_scores.get(interaction.user.id, 0) + green_count
+        
         # Update the game display
         await interaction.response.defer()
         
@@ -260,13 +267,16 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
             rewards = calculate_race_rewards(self.bot, interaction.user.id, self.game, rank)
             
             embed = discord.Embed(title=f"🏆 Victory! - Rank #{rank}", color=discord.Color.gold())
-            embed.description = f"You solved it in **{self.game.attempts_used}/6** tries!"
-            embed.add_field(name="Board", value=board_display, inline=False)
+            embed.description = (
+                f"You solved it in **{self.game.attempts_used}/{self.game.max_attempts}** tries!\n\n"
+                f"**Final Board:**\n{board_display}\n\n"
+                f"**Keyboard:**\n{keypad}"
+            )
             embed.add_field(name="⏱️ Time", value=f"{time_taken:.1f}s", inline=True)
             embed.add_field(name="🎁 Rewards", value=rewards['message'], inline=False)
             
             self.view_ref.disable_all()
-            await interaction.edit_original_response(content=f"**Keyboard:**\n{keypad}", embed=embed, view=self.view_ref)
+            await interaction.edit_original_response(content="", embed=embed, view=self.view_ref)
             
             # Announce completion in channel
             channel = self.bot.get_channel(self.race_session.channel_id)
@@ -283,15 +293,18 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
             self.race_session.record_completion(interaction.user.id, False, time_taken)
             
             embed = discord.Embed(title="💔 Out of Attempts", color=discord.Color.red())
-            embed.description = f"You ran out of tries!"
-            embed.add_field(name="Board", value=board_display, inline=False)
+            embed.description = (
+                f"You ran out of tries!\n\n"
+                f"**Final Board:**\n{board_display}\n\n"
+                f"**Keyboard:**\n{keypad}"
+            )
             
             # Don't reveal word yet - wait for all to finish
             if not self.race_session.all_completed:
                 embed.set_footer(text="Waiting for others to finish...")
             
             self.view_ref.disable_all()
-            await interaction.edit_original_response(content=f"**Keyboard:**\n{keypad}", embed=embed, view=self.view_ref)
+            await interaction.edit_original_response(content="", embed=embed, view=self.view_ref)
             
             # Check if all completed
             if self.race_session.all_completed:
@@ -306,11 +319,14 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
                 title=f"🏁 Race Mode | Attempt {self.game.attempts_used}/{self.game.max_attempts}",
                 color=discord.Color.blue()
             )
-            embed.description = f"Ends <t:{end_ts}:R>"
-            embed.add_field(name="Board", value=board_display, inline=False)
+            embed.description = (
+                f"Ends <t:{end_ts}:R>\n\n"
+                f"**Board:**\n{board_display}\n\n"
+                f"**Keyboard:**\n{keypad}"
+            )
             embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
             
-            await interaction.edit_original_response(content=f"**Keyboard:**\n{keypad}", embed=embed, view=self.view_ref)
+            await interaction.edit_original_response(content="", embed=embed, view=self.view_ref)
     
     async def handle_race_end(self, channel):
         """Handle race end - reveal word if anyone failed."""

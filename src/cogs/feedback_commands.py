@@ -39,31 +39,25 @@ class FeedbackModal(ui.Modal, title="📨 Send Feedback"):
         super().__init__()
     
     async def on_submit(self, interaction: discord.Interaction):
-        """Handle feedback submission."""
+        """Handle feedback submission - stores to Supabase."""
         title = self.title_input.value.strip()
         content = self.content_input.value.strip()
-        discord_id = self.discord_id_input.value.strip() or "Anonymous"
+        discord_id = self.discord_id_input.value.strip() or str(interaction.user.id)
         
-        # Build feedback entry
-        timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-        feedback_entry = f"""
-========================================
-Feedback Received: {timestamp}
-========================================
-FROM: {discord_id}
-TITLE: {title}
-
-CONTENT:
-{content}
-========================================
-
-"""
-        
-        # Append to feedback file
-        feedback_file = os.path.join(os.path.dirname(__file__), '..', '..', 'feedback.txt')
+        # Store in Supabase
         try:
-            with open(feedback_file, 'a', encoding='utf-8') as f:
-                f.write(feedback_entry)
+            feedback_data = {
+                'user_id': interaction.user.id,
+                'username': str(interaction.user),
+                'discord_id_provided': discord_id,
+                'title': title,
+                'content': content,
+                'guild_id': interaction.guild.id if interaction.guild else None,
+                'guild_name': interaction.guild.name if interaction.guild else 'DM',
+                'created_at': datetime.datetime.utcnow().isoformat()
+            }
+            
+            interaction.client.supabase_client.table('feedback').insert(feedback_data).execute()
             
             await interaction.response.send_message(
                 "✅ **Feedback submitted successfully!**\n"
@@ -71,7 +65,7 @@ CONTENT:
                 ephemeral=True
             )
         except Exception as e:
-            print(f"Failed to save feedback: {e}")
+            print(f"Failed to save feedback to Supabase: {e}")
             await interaction.response.send_message(
                 "❌ Failed to save feedback. Please try again later or contact the bot developer directly.",
                 ephemeral=True

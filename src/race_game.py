@@ -11,7 +11,7 @@ class RaceSession:
     """Manages a race lobby and tracks participants before game starts."""
     
     __slots__ = ('channel_id', 'started_by', 'participants', 'secret', 'start_time', 
-                 'lobby_message_id', 'status', 'race_games', 'completion_order', 'end_time', 'duration_minutes')
+                 'lobby_message_id', 'status', 'race_games', 'completion_order', 'end_time', 'duration_minutes', 'green_scores')
     
     def __init__(self, channel_id: int, started_by: discord.User, secret: str, lobby_message_id: int):
         self.channel_id = channel_id
@@ -23,8 +23,9 @@ class RaceSession:
         self.status = 'waiting'  # waiting, active, finished
         self.race_games: Dict[int, 'WordleGame'] = {}  # user_id: game instance
         self.completion_order: List[tuple] = []  # [(user_id, won, time_taken), ...]
-        self.duration_minutes = 5 # Default duration
+        self.duration_minutes = 10  # Default 10 minutes
         self.end_time = None
+        self.green_scores: Dict[int, int] = {}  # user_id: total greens count
     
     @property
     def participant_count(self) -> int:

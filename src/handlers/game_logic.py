@@ -70,21 +70,31 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     others = list(game.participants - {winner_user.id})
     participant_data = []
     
+    # Pre-calculate unique greens per user
+    user_unique_greens = {} # {uid: count}
+    discovered_indices = set()
+    
+    for h in game.history:
+        uid = getattr(h.get('user'), 'id', None)
+        if not uid: continue
+        
+        guess = h.get('word', '') or ''
+        # Check greens
+        for i, (g_char, s_char) in enumerate(zip(guess.upper(), game.secret.upper())):
+            if g_char == s_char:
+                if i not in discovered_indices:
+                    discovered_indices.add(i)
+                    user_unique_greens[uid] = user_unique_greens.get(uid, 0) + 1
+
     # Pre-calculate outcome keys to parallelize DB calls
     async def process_participant(uid):
-        max_greens = 0
-        for h in game.history:
-            if getattr(h.get('user'), 'id', None) == uid:
-                guess = h.get('word', '') or ''
-                greens = sum(1 for a, b in zip(guess.upper(), game.secret.upper()) if a == b)
-                if greens > max_greens:
-                    max_greens = greens
+        unique_greens = user_unique_greens.get(uid, 0)
 
-        if max_greens >= 5: outcome_key = 'win'
-        elif max_greens == 4: outcome_key = 'correct_4'
-        elif max_greens == 3: outcome_key = 'correct_3'
-        elif max_greens == 2: outcome_key = 'correct_2'
-        elif max_greens == 1: outcome_key = 'correct_1'
+        if unique_greens >= 5: outcome_key = 'win'
+        elif unique_greens == 4: outcome_key = 'correct_4'
+        elif unique_greens == 3: outcome_key = 'correct_3'
+        elif unique_greens == 2: outcome_key = 'correct_2'
+        elif unique_greens == 1: outcome_key = 'correct_1'
         else: outcome_key = 'participation'
 
         # DB operations in threads since record_game_v2 is blocking (via calculate_final_rewards)
@@ -181,21 +191,31 @@ async def handle_game_loss(bot, game, interaction, cid):
     except Exception as e:
         print(f"⚠️ Batch fetch error: {e}")
 
+    # Pre-calculate unique greens per user
+    user_unique_greens = {} # {uid: count}
+    discovered_indices = set()
+    
+    for h in game.history:
+        uid = getattr(h.get('user'), 'id', None)
+        if not uid: continue
+        
+        guess = h.get('word', '') or ''
+        # Check greens
+        for i, (g_char, s_char) in enumerate(zip(guess.upper(), game.secret.upper())):
+            if g_char == s_char:
+                if i not in discovered_indices:
+                    discovered_indices.add(i)
+                    user_unique_greens[uid] = user_unique_greens.get(uid, 0) + 1
+
     # Award per-player concurrently
     async def process_participant(uid):
-        max_greens = 0
-        for h in game.history:
-            if getattr(h.get('user'), 'id', None) == uid:
-                guess = h.get('word', '') or ''
-                greens = sum(1 for a, b in zip(guess.upper(), game.secret.upper()) if a == b)
-                if greens > max_greens:
-                    max_greens = greens
+        unique_greens = user_unique_greens.get(uid, 0)
 
-        if max_greens >= 5: outcome_key = 'win'
-        elif max_greens == 4: outcome_key = 'correct_4'
-        elif max_greens == 3: outcome_key = 'correct_3'
-        elif max_greens == 2: outcome_key = 'correct_2'
-        elif max_greens == 1: outcome_key = 'correct_1'
+        if unique_greens >= 5: outcome_key = 'win'
+        elif unique_greens == 4: outcome_key = 'correct_4'
+        elif unique_greens == 3: outcome_key = 'correct_3'
+        elif unique_greens == 2: outcome_key = 'correct_2'
+        elif unique_greens == 1: outcome_key = 'correct_1'
         else: outcome_key = 'participation'
 
         p_stats = stats_map.get(uid, {'wr': 0, 'badge': None, 'daily': 0})

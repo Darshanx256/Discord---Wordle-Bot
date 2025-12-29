@@ -7,7 +7,7 @@ class WordleGame:
     __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
                  'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time',
                  'reveal_on_loss', 'difficulty', 'custom_dict', 'time_limit', 'allowed_player_id', 'show_keyboard',
-                 'blind_mode')
+                 'blind_mode', 'custom_only', 'discovered_green_positions')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
@@ -28,9 +28,10 @@ class WordleGame:
         self.custom_dict = None      # Set of allowed words for custom games
         self.time_limit = None       # Time limit in minutes (None = default 6 hours)
         self.allowed_player_id = None  # Restrict guesses to specific user
-        self.allowed_player_id = None  # Restrict guesses to specific user
         self.show_keyboard = True    # Whether to show keyboard guide
         self.blind_mode = False      # If True, feedback is hidden until end
+        self.custom_only = False     # If True, only custom dictionary words are allowed
+        self.discovered_green_positions = set()  # Track which positions have greens discovered
 
     @property
     def attempts_used(self): return len(self.history)

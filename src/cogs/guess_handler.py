@@ -77,8 +77,17 @@ class GuessHandler(commands.Cog):
             if len(g_word) != 5 or not g_word.isalpha():
                 return await ctx.send("⚠️ 5 letters only.", ephemeral=True)
             
-            valid_check = game.custom_dict if (is_custom and game.custom_dict) else self.bot.valid_set
+            # Determine valid word set based on custom_only setting
+            if is_custom and getattr(game, 'custom_only', False) and game.custom_dict:
+                valid_check = game.custom_dict
+            elif is_custom and game.custom_dict:
+                valid_check = self.bot.valid_set | game.custom_dict
+            else:
+                valid_check = self.bot.valid_set
+            
             if g_word not in valid_check:
+                if is_custom and getattr(game, 'custom_only', False):
+                    return await ctx.send(f"⚠️ **{g_word.upper()}** not in custom dictionary! Only custom words allowed.", ephemeral=True)
                 return await ctx.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
             pat, win, game_over = game.process_turn(g_word, ctx.author)

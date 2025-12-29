@@ -110,8 +110,8 @@ class RaceCommands(commands.Cog):
         # Update message with actual lobby
         await message.edit(embed=embed, view=view)
     
-    @app_commands.command(name="showrace", description="Recover your race game if you dismissed it.")
-    async def showrace(self, interaction: discord.Interaction):
+    @app_commands.command(name="show_race", description="Recover your race game if you dismissed it.")
+    async def show_race(self, interaction: discord.Interaction):
         """Show the user's active race game if they dismissed it."""
         # Check if user is banned
         if hasattr(self.bot, 'banned_users') and interaction.user.id in self.bot.banned_users:

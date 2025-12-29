@@ -107,6 +107,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         allowed_player_id = None
         blind_mode = False
         start_word = None
+        custom_only = False
         
         if extra:
             parts = [p.strip() for p in extra.split('|')]
@@ -159,12 +160,24 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                     if val in ['yes', 'true', 'on', '1']:
                         blind_mode = True
                 
+                elif part.startswith('custom_only:'):
+                    # Custom only mode - only dictionary words allowed
+                    val = part[12:].strip().lower()
+                    if val in ['yes', 'true', 'on', '1']:
+                        custom_only = True
+                
                 elif part.startswith('start:'):
                     # Force start word
                     s_word = part[6:].strip().lower()
                     if len(s_word) != 5 or not s_word.isalpha():
                         return await interaction.response.send_message(
                             "❌ Start word must be exactly 5 letters!",
+                            ephemeral=True
+                        )
+                    # Validate start word is not the answer
+                    if s_word.lower() == word.lower():
+                        return await interaction.response.send_message(
+                            "❌ Start word cannot be the answer!",
                             ephemeral=True
                         )
                     start_word = s_word
@@ -200,6 +213,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         game.allowed_player_id = allowed_player_id
         game.show_keyboard = show_keyboard
         game.blind_mode = blind_mode
+        game.custom_only = custom_only
         
         # Apply start word if valid
         if start_word:
@@ -312,19 +326,14 @@ class GameCommands(commands.Cog):
         game = WordleGame(secret, 0, ctx.author, 0)
         self.bot.solo_games[ctx.author.id] = game
 
-        board_display = "No guesses yet."
-        keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id)
-        progress_bar = "[○○○○○○]"
+        progress_bar = f"[{'○' * game.max_attempts}]"
 
-        embed = discord.Embed(title="Solo Wordle | Attempt 0/6", color=discord.Color.gold())
+        embed = discord.Embed(title=f"Solo Wordle | Attempt 0/{game.max_attempts}", color=discord.Color.gold())
         embed.description = "This game is **private**. Only you can see it.\nUse the button below to guess."
-        embed.add_field(name="Board", value=board_display, inline=False)
-        embed.set_footer(text=f"6 tries left {progress_bar}")
-
-        message_content = f"**Keyboard Status:**\n{keypad}"
+        embed.set_footer(text=f"{game.max_attempts} tries left {progress_bar}")
 
         view = SoloView(self.bot, game, ctx.author)
-        await ctx.send(content=message_content, embed=embed, view=view, ephemeral=True)
+        await ctx.send(embed=embed, view=view, ephemeral=True)
 
     @commands.hybrid_command(name="show_solo", description="Show your active solo game (if dismissed).")
     async def show_solo(self, ctx):
