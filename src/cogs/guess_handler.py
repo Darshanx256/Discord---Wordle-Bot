@@ -23,7 +23,8 @@ class GuessHandler(commands.Cog):
             return await ctx.send("Guild only.", ephemeral=True)
 
         cid = ctx.channel.id
-        game = self.bot.games.get(cid)
+        try:
+            game = self.bot.games.get(cid)
         custom_game = self.bot.custom_games.get(cid)
         # Strip all whitespace first (handles "-g     dance" case)
         g_word = word.strip().lower()
