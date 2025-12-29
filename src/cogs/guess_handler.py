@@ -113,9 +113,45 @@ class GuessHandler(commands.Cog):
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id)
         filled = "●" * game.attempts_used
         if is_custom and getattr(game, 'blind_mode', False) and not (win or game_over):
-            # Blind mode: mask the board
-            # We show just outlines or black squares for previous turns
-            board_display = "\n".join(["⬛⬛⬛⬛⬛" for _ in game.history])
+            # Blind mode: Hide Yellows/Greys, show Greens
+            # We reconstruct the line row by row
+            lines = []
+            for h in game.history:
+                pat = h['pattern'] 
+                # pat is a string of emojis. We can't easy regex replace emojis universally safely.
+                # BETTER APPROACH: We have h['pattern'] but we need original states to reconstruct "masked".
+                # However, game.history logic in 'game.py' stores the final emoji string in 'pattern'.
+                # Re-evaluating is expensive/complex here without access to the class logic.
+                # LUCKILY: The pattern string is just concatenated emojis.
+                # But 'pattern' doesn't tell us which char was green easily without parsing the emoji string? 
+                # Actually, 'WordleGame.evaluate_guess' returns the emoji string.
+                # We can't easily "replace not green with black" on the emoji string itself.
+                
+                # ALTERNATIVE: Re-evaluate logic?
+                # or modify 'game.py' to store state.
+                # Actually, blindly masking everything was easier.
+                # If the user wants to see Greens, we need to know WHICH are greens.
+                
+                # Check line 100 in game.py: history stores 'word', 'pattern', 'user'.
+                # We can re-evaluate quickly since we have game.secret and h['word'].
+                # Since we are in 'GuessHandler', we can re-derive the pattern manually for display.
+                
+                guess_word = h['word']
+                secret_word = game.secret
+                # Simple re-check for Greens
+                masked_line = ""
+                for i, char in enumerate(guess_word):
+                    if char.upper() == secret_word[i].upper():
+                        # It's Green. Show the Green Emoji for this char
+                        # We need the utils EMOJIS dict or similar helper
+                        # Assuming 'block_X_green' exists
+                         masked_line += EMOJIS.get(f"block_{char.lower()}_green", "🟩")
+                    else:
+                         # Mask everything else (Yellow or Grey) as Black/Unknown
+                         # Using a generic black block emoji
+                         masked_line += "⬛"
+                lines.append(masked_line)
+            board_display = "\n".join(lines)
         else:
             board_display = "\n".join([f"{h['pattern']}" for h in game.history])
 

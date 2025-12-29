@@ -29,15 +29,15 @@ class HelpCommands(commands.Cog):
         
         embed.add_field(
             name="👨‍💻 Developer",
-            value="• **[Developer Name]** — Creator & Maintainer",
+            value="• **[Developer Name]** -> Creator & Maintainer",
             inline=False
         )
         
         embed.add_field(
             name="🎨 Assets & Icons",
             value=(
-                "• **[Icon Credit]** — Bot Icon\n"
-                "• **[Emoji Credit]** — Custom Emojis"
+                "• **[Icon Credit]** -> Bot Icon\n"
+                "• **[Emoji Credit]** -> Custom Emojis"
             ),
             inline=False
         )
@@ -45,8 +45,8 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="🙏 Special Thanks",
             value=(
-                "• **[Person/Project]** — For inspiration\n"
-                "• **[Person/Project]** — For support"
+                "• **[Person/Project]** -> For inspiration\n"
+                "• **[Person/Project]** -> For support"
             ),
             inline=False
         )
@@ -54,8 +54,8 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="📚 Libraries",
             value=(
-                "• **discord.py** — Discord API Wrapper\n"
-                "• **Supabase** — Database"
+                "• **discord.py** -> Discord API Wrapper\n"
+                "• **Supabase** -> Database"
             ),
             inline=False
         )

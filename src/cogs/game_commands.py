@@ -148,6 +148,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                     if match:
                         allowed_player_id = int(match.group(1) or match.group(2))
                     else:
+                        return await interaction.response.send_message(
                             "❌ Invalid player format! Use @mention or user ID.",
                             ephemeral=True
                         )

@@ -309,10 +309,10 @@ class HelpView(discord.ui.View):
             
             embed.add_field(name="🎮 How to Play", value=(
                 "**1. Start a Game**\n"
-                "• `/wordle` — Simple 5-letter words\n"
-                "• `/wordle_classic` — Harder, full dictionary\n"
-                "• `/custom` — Custom word in channel\n"
-                "• `/solo` — Private Solo Mode\n\n"
+                "• `/wordle` -> Simple 5-letter words\n"
+                "• `/wordle_classic` -> Harder, full dictionary\n"
+                "• `/custom` -> Custom word in channel\n"
+                "• `/solo` -> Private Solo Mode\n\n"
                 "**2. Make a Guess**\n"
                 "• `/guess word:apple` or `-g apple`\n\n"
                 "**3. Hints**\n"
@@ -336,29 +336,29 @@ class HelpView(discord.ui.View):
             
             # Commands Section - Two columns for better organization
             embed.add_field(name="🎮 Game Commands", value=(
-                "`/wordle` — Simple Game\n"
-                "`/wordle_classic` — Hard Game\n"
-                "`/solo` — Private Game\n"
-                "`/custom` — Set Custom Word\n"
-                "`/guess` or `-g` — Guess\n"
-                "`/guess` or `-g` — Guess\n"
-                "`/stop_game` — Cancel Game\n"
-                "`/race` — Start Race Mode"
+                "`/wordle` -> Simple Game\n"
+                "`/wordle_classic` -> Hard Game\n"
+                "`/solo` -> Private Game\n"
+                "`/custom` -> Set Custom Word\n"
+                "`/guess` or `-g` -> Guess\n"
+                "`/guess` or `-g` -> Guess\n"
+                "`/stop_game` -> Cancel Game\n"
+                "`/race` -> Start Race Mode"
             ), inline=True)
             
             embed.add_field(name="📊 Stats & Profile", value=(
-                "`/profile` — Your Stats\n"
-                "`/leaderboard` — Server Ranks\n"
-                "`/leaderboard_global` — Global\n"
-                "`/leaderboard` — Server Ranks\n"
-                "`/leaderboard_global` — Global\n"
-                "`/shop` — Equip Badges\n"
-                "`/showrace` — Resume Race"
+                "`/profile` -> Your Stats\n"
+                "`/leaderboard` -> Server Ranks\n"
+                "`/leaderboard_global` -> Global\n"
+                "`/leaderboard` -> Server Ranks\n"
+                "`/leaderboard_global` -> Global\n"
+                "`/shop` -> Equip Badges\n"
+                "`/showrace` -> Resume Race"
             ), inline=True)
             
             # Tiers Section
             tier_text = "\n".join([
-                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** — WR ≥ {t['min_wr']}" 
+                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** -> WR ≥ {t['min_wr']}" 
                 for t in TIERS
             ])
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
@@ -370,9 +370,9 @@ class HelpView(discord.ui.View):
             
             embed.add_field(name="🎁 Easter Eggs & Badges", value=(
                 f"**Rare Drops during `/guess`:**\n"
-                f"{duck_emoji} **Duck** — Simple Mode (1/100)\n"
-                f"{dragon_emoji} **Dragon** — Classic Mode (1/1000)\n"
-                f"{candy_emoji} **Candy** — Both Modes (1/100)\n\n"
+                f"{duck_emoji} **Duck** -> Simple Mode (1/100)\n"
+                f"{dragon_emoji} **Dragon** -> Classic Mode (1/1000)\n"
+                f"{candy_emoji} **Candy** -> Both Modes (1/100)\n\n"
                 "View your collection via `/profile`\n"
                 "Unlock **Badges** in `/shop`!"
             ), inline=False)
@@ -380,9 +380,9 @@ class HelpView(discord.ui.View):
             # Pro Tips
             embed.add_field(name="💡 Pro Tips", value=(
                 "• Start with vowel-heavy words (AUDIO, RAISE)\n"
-                "• Speed matters — faster solves = bonus rewards\n"
+                "• Speed matters -> faster solves = bonus rewards\n"
                 "• Higher tiers receive scaled rewards\n"
-                "• Speed matters — faster solves = bonus rewards\n"
+                "• Speed matters -> faster solves = bonus rewards\n"
                 "• Higher tiers receive scaled rewards\n"
                 "• Participate in Multiplayer for extra XP"
             ), inline=False)
@@ -390,11 +390,11 @@ class HelpView(discord.ui.View):
             # Custom Game Options
             embed.add_field(name="🧂 Custom Game Extra Options", value=(
                 "Use in `Extra options` field:\n"
-                "`dict:word1,word2` — Custom word list\n"
-                "`time:X` — Time limit (min)\n"
-                "`player:@user` — Restrict to user\n"
-                "`blind:yes` — Hide colors 🙈\n"
-                "`start:word` — Force start word"
+                "`dict:word1,word2` -> Custom word list\n"
+                "`time:X` -> Time limit (min)\n"
+                "`player:@user` -> Restrict to user\n"
+                "`blind:yes` -> Hide colors 🙈\n"
+                "`start:word` -> Force start word"
             ), inline=False)
             
             embed.set_footer(text="Page 2/2 • Climb the global leaderboard!")
