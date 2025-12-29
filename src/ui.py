@@ -107,8 +107,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
                 flavor = get_win_flavor(self.game.attempts_used)
                 embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
-                embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!"
-                embed.add_field(name="Final Board", value=board_display, inline=False)
+                embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 
                 # Record Results
                 from src.database import record_game_v2
@@ -121,40 +120,28 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                         embed.description += f"\n\n🔼 **LEVEL UP!** You are now **Level {res['level_up']}**! 🔼"
 
                 embed.set_footer(text=f"Time: {time_taken:.1f}s")
-                self.view_ref.disable_all() # Disable button
+                self.view_ref.disable_all()
                 
-                # Clean up game
                 self.bot.solo_games.pop(interaction.user.id, None)
-                
-                # CRITICAL FIX: Send the updated message (clear content)
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
             elif game_over:
                 embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
-                embed.description = f"The word was **{self.game.secret.upper()}**."
-                embed.add_field(name="Final Board", value=board_display, inline=False)
+                embed.description = f"The word was **{self.game.secret.upper()}**.\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 
-                # Record Loss
                 from src.database import record_game_v2
-                record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', 6, 999)
+                record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999)
                 
                 self.view_ref.disable_all()
                 self.bot.solo_games.pop(interaction.user.id, None)
-                
-                # CRITICAL FIX: Send the updated message (clear content)
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
             else:
-                # Ongoing game - show board in embed, keyboard in content
+                # Ongoing game - board + keyboard in embed description
                 embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/{self.game.max_attempts}", color=discord.Color.gold())
-                embed.add_field(name="Board", value=board_display, inline=False)
+                embed.description = f"**Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
-
-                # Keyboard in message content to avoid 1024 char limit
-                message_content = f"**Keyboard Status:**\n{keypad}"
-
-                # Update the message (Content + Embed + View)
-                await interaction.response.edit_message(content=message_content, embed=embed, view=self.view_ref)
+                await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
             
         except Exception as e:
             import traceback
