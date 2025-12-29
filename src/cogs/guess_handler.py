@@ -160,8 +160,7 @@ class GuessHandler(commands.Cog):
                         title="🏆 VICTORY!",
                         color=discord.Color.green()
                     )
-                    embed.description = f"**{ctx.author.display_name}** found **{game.secret.upper()}** in {game.attempts_used}/{game.max_attempts}!"
-                    embed.add_field(name="Final Board", value=board_display, inline=False)
+                    embed.description = f"**{ctx.author.display_name}** found **{game.secret.upper()}** in {game.attempts_used}/{game.max_attempts}!\n\n**Final Board:**\n{board_display}"
                     embed.set_footer(text=f"Attempts: {filled}{empty} | Custom mode (no rewards)")
 
                     # Clean up
@@ -181,8 +180,7 @@ class GuessHandler(commands.Cog):
                     
                     # Check if reveal was enabled
                     reveal_text = f"The word was **{game.secret.upper()}**." if game.reveal_on_loss else "Better luck next time!"
-                    embed.description = reveal_text
-                    embed.add_field(name="Final Board", value=board_display, inline=False)
+                    embed.description = f"{reveal_text}\n\n**Final Board:**\n{board_display}"
                     embed.set_footer(text=f"Attempts: {filled}{empty} | Custom mode (no rewards)")
 
                     # Clean up
@@ -196,8 +194,7 @@ class GuessHandler(commands.Cog):
                     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                     
                     embed = discord.Embed(title=f"Attempt {game.attempts_used}/{game.max_attempts}", color=discord.Color.gold())
-                    embed.description = f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`"
-                    embed.add_field(name="Current Board", value=board_display, inline=False)
+                    embed.description = f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`\n\n**Board:**\n{board_display}"
                     embed.set_footer(text=f"{game.max_attempts - game.attempts_used} tries left [{filled}{empty}]")
                     # Only send keyboard if show_keyboard is True
                     content = message_content if game.show_keyboard else None
@@ -340,8 +337,7 @@ class GuessHandler(commands.Cog):
             else:
                 # Just a turn (REGULAR GAME)
                 embed = discord.Embed(title=f"Attempt {game.attempts_used}/{game.max_attempts}", color=discord.Color.gold())
-                embed.description = f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`"
-                embed.add_field(name="Current Board", value=board_display, inline=False)
+                embed.description = f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`\n\n**Board:**\n{board_display}"
                 embed.set_footer(text=f"{game.max_attempts - game.attempts_used} tries left [{filled}{empty}]")
                 await ctx.send(content=message_content, embed=embed)
                 
