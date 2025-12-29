@@ -211,6 +211,8 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             game.history.append({'word': start_word, 'pattern': pat, 'user': self.bot.user})
             game.guessed_words.add(start_word)
         self.bot.custom_games[cid] = game
+        
+        print(f"DEBUG: Game Created | Max Attempts: {game.max_attempts} | ID: {id(game)}")
 
         # Clean up any "stopped" state
         self.bot.stopped_games.discard(cid)

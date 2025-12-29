@@ -35,6 +35,7 @@ class GuessHandler(commands.Cog):
         if custom_game:
             game = custom_game
             is_custom = True
+            print(f"DEBUG: Using Custom Game | ID: {id(game)} | Max Attempts: {game.max_attempts}")
         elif not game:
             return await ctx.send("⚠️ No active game.", ephemeral=True)
         
