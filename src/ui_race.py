@@ -242,8 +242,8 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         # Process the guess
         pattern, won, game_over = self.game.process_turn(guess, interaction.user)
         
-        # Count greens for tiebreaker
-        green_count = pattern.count('🟩') + sum(1 for i, c in enumerate(guess) if c.upper() == self.game.secret[i].upper())
+        # Count greens for tiebreaker (Manual check is safest/most accurate)
+        green_count = sum(1 for i, c in enumerate(guess) if c.upper() == self.game.secret[i].upper())
         self.race_session.green_scores[interaction.user.id] = self.race_session.green_scores.get(interaction.user.id, 0) + green_count
         
         # Update the game display
