@@ -420,7 +420,7 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
             
             embed = discord.Embed(
                 title=f"🏁 Race Mode | Attempt {self.game.attempts_used}/{self.game.max_attempts}",
-                color=discord.Color.blue()
+                color=discord.Color.gold()
             )
             embed.description = (
                 f"{timer_label} <t:{end_ts}:R>\n\n"

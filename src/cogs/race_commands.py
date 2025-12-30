@@ -189,14 +189,17 @@ class RaceCommands(commands.Cog):
             title=f"🏁 Race Mode | Attempt {game.attempts_used}/{game.max_attempts}",
             color=discord.Color.gold()
         )
-        embed.description = f"**Racing against {user_race_session.participant_count} players!**{end_desc}"
-        embed.add_field(name="Board", value=board_display, inline=False)
+        timer_label = "Ended" if is_ended else "Ends"
+        
+        embed.description = (
+            f"**Racing against {user_race_session.participant_count} players!**\n"
+            f"{timer_label} <t:{end_ts}:R>\n\n"
+            f"**Board:**\n{board_display}\n\n"
+            f"**Keyboard:**\n{keypad}"
+        )
         embed.set_footer(text=f"{game.max_attempts - game.attempts_used} tries left {progress_bar}")
         
-        message_content = f"**Keyboard Status:**\n{keypad}"
-        
         await interaction.response.send_message(
-            content=message_content,
             embed=embed,
             view=view,
             ephemeral=True
