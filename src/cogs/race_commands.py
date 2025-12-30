@@ -19,7 +19,7 @@ class RaceCommands(commands.Cog):
     def cog_unload(self):
         self.check_race_timeouts.cancel()
     
-    @tasks.loop(seconds=10)
+    @tasks.loop(seconds=2)
     async def check_race_timeouts(self):
         """Check for expired race sessions."""
         if not hasattr(self.bot, 'race_sessions'): return
@@ -150,7 +150,12 @@ class RaceCommands(commands.Cog):
         end_desc = ""
         if user_race_session.end_time:
              end_ts = int(user_race_session.end_time.timestamp())
-             end_desc = f"\nEnds <t:{end_ts}:R>!"
+             now_ts = int(datetime.datetime.now().timestamp())
+             
+             if now_ts >= end_ts or user_race_session.status == 'finished':
+                 end_desc = f"\n**Ended** <t:{end_ts}:R>!"
+             else:
+                 end_desc = f"\nEnds <t:{end_ts}:R>!"
 
         embed = discord.Embed(
             title=f"🏁 Race Mode | Attempt {game.attempts_used}/{game.max_attempts}",

@@ -95,11 +95,15 @@ class RaceLobbyView(ui.View):
         # Switch View to "Active Race" mode (Open Board button only)
         self.update_buttons()
         
+        now = datetime.datetime.now()
+        is_ended = now >= self.race_session.end_time if self.race_session.end_time else False
+        timer_label = "Ended" if is_ended else "Ends"
+        
         embed = discord.Embed(
             title="🏁 Race Started!",
             description=(
                 f"**{self.race_session.participant_count}** racers are competing!\n"
-                f"Ends <t:{end_ts}:R>\n\n"
+                f"{timer_label} <t:{end_ts}:R>\n\n"
                 "👇 **Click below to open your game board!**"
                 "Note: If you dismiss the board, use `/show_race` to bring it back."
             ),
@@ -127,10 +131,14 @@ class RaceLobbyView(ui.View):
         
         end_ts = int(self.race_session.end_time.timestamp()) if self.race_session.end_time else 0
         
+        now = datetime.datetime.now()
+        is_ended = now >= self.race_session.end_time if self.race_session.end_time else False
+        timer_label = "Ended" if is_ended else "Ends"
+        
         embed = discord.Embed(title=f"🏁 Race Mode | Attempt {game.attempts_used}/{game.max_attempts}", color=discord.Color.gold())
         embed.description = (
             f"**Race against {self.race_session.participant_count} players!**\n"
-            f"Ends <t:{end_ts}:R>\n\n"
+            f"{timer_label} <t:{end_ts}:R>\n\n"
             f"Click **Make Guess** to start!"
         )
         if game.history:
@@ -370,12 +378,16 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         else:
             # Continue playing
             end_ts = int(self.race_session.end_time.timestamp()) if self.race_session.end_time else 0
+            now = datetime.datetime.now()
+            is_ended = now >= self.race_session.end_time if self.race_session.end_time else False
+            timer_label = "Ended" if is_ended else "Ends"
+            
             embed = discord.Embed(
                 title=f"🏁 Race Mode | Attempt {self.game.attempts_used}/{self.game.max_attempts}",
                 color=discord.Color.blue()
             )
             embed.description = (
-                f"Ends <t:{end_ts}:R>\n\n"
+                f"{timer_label} <t:{end_ts}:R>\n\n"
                 f"**Board:**\n{board_display}\n\n"
                 f"**Keyboard:**\n{keypad}"
             )
