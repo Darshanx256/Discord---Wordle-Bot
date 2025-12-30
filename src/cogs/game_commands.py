@@ -51,7 +51,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
     extra_options = ui.TextInput(
         label="Extra options (optional, see /help)",
         placeholder="dict:apple,grape | time:10 | player:@user | blind:yes | start:crane",
-        max_length=300,
+        max_length=2000,
         required=False,
         style=discord.TextStyle.paragraph
     )
@@ -433,7 +433,10 @@ class GameCommands(commands.Cog):
         if custom_game:
             if (ctx.author.id == custom_game.started_by.id) or ctx.author.guild_permissions.manage_messages:
                 self.bot.custom_games.pop(cid)
-                await ctx.send(f"🛑 Custom game stopped. Word: **{custom_game.secret.upper()}**.")
+                if getattr(custom_game, 'reveal_on_loss', True):
+                    await ctx.send(f"🛑 Custom game stopped. Word: **{custom_game.secret.upper()}**.")
+                else:
+                    await ctx.send("🛑 Custom game stopped. Word was hidden.")
             else:
                 await ctx.send("❌ Only Starter or Admin can stop it.", ephemeral=True)
             return
