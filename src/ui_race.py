@@ -101,7 +101,7 @@ class RaceLobbyView(ui.View):
                 f"**{self.race_session.participant_count}** racers are competing!\n"
                 f"Ends <t:{end_ts}:R>\n\n"
                 "👇 **Click below to open your game board!**"
-                "Note: If you dismissed the board, use `show_race` to bring it back."
+                "Note: If you dismiss the board, use `/show_race` to bring it back."
             ),
             color=discord.Color.green()
         )
