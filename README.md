@@ -1,4 +1,4 @@
-# 🟩 Discord Wordle Bot (V2)
+# 🟩 Discord Wordle Bot (V3)
 
 A feature-rich, competitive Wordle bot for Discord, featuring a dual-track progression system (Rating & XP), cosmetic shop, and private solo modes.
 
@@ -48,21 +48,20 @@ Discord---Wordle-Bot/
 - `/wordle` - Start public simple game.
 - `/wordle_classic` - Start public hard game.
 - `/solo` - **NEW!** Play privately.
-- `/race` - **NEW (BETA)!** Start competitive race lobby.
-- `/showrace` - **NEW (BETA)!** Recover your race game.
+- `/race` - **NEW!** Start competitive race lobby.
+- `/showrace` - **NEW!** Recover your race game.
 - `/custom` - Start custom game with extensive options.
 - `/guess [word]` - Submit a guess.
 - `/leaderboard` - Server Rankings.
 - `/leaderboard_global` - Global Rankings.
 - `/profile` - Check your Level, WR, and Collection.
-- `/shop` - **NEW!** Equip badges.
+- `/shop` - Equip badges.
 - `/stop_game` - Cancel public game.
 
 ## 🏆 Ranking Rules
 
 - **XP**: Earned from all games. +50 XP for Win, +10 XP per letter.
 - **WR (Rating)**: Based on Wins, Speed (<60s bonus), and Efficiency (fewer guesses).
-- **Penalties**: None for Multi. High-rank Solo players risk WR slightly.
 
 ## ⚡ Performance
 
