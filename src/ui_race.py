@@ -12,7 +12,7 @@ class RaceLobbyView(ui.View):
     """View for race lobby with Join/Start/Cancel buttons."""
     
     def __init__(self, bot, race_session):
-        super().__init__(timeout=120)  # 2 minutes
+        super().__init__(timeout=300)  # 5 minutes lobby timeout
         self.bot = bot
         self.race_session = race_session
         self.update_buttons()
@@ -20,9 +20,25 @@ class RaceLobbyView(ui.View):
     def update_buttons(self):
         """Update button states based on race session state."""
         # Disable start if less than 2 participants
+        # If race is active, show ONLY Open Board
+        
+        is_active = self.race_session.status == 'active'
+        
+        # Clear existing buttons if we are restructuring for active state
+        if is_active:
+            self.clear_items()
+            
+            # Add Open Board button
+            open_btn = ui.Button(label="Open Race Board", style=discord.ButtonStyle.success, emoji="🎮", custom_id="race_open_board")
+            open_btn.callback = self.open_board_button
+            self.add_item(open_btn)
+            return
+
+        # Lobby State Buttons
         for child in self.children:
             if hasattr(child, 'custom_id'):
                 if child.custom_id == 'race_start':
+                    # Enable start only if 2+ participants
                     child.disabled = not self.race_session.can_start
     
     @ui.button(label="Join Race", style=discord.ButtonStyle.success, emoji="🏁", custom_id="race_join")
@@ -58,62 +74,76 @@ class RaceLobbyView(ui.View):
                 ephemeral=True
             )
         
+        # Defer immediately as we have setup work
         await interaction.response.defer()
-        
-        # Disable all buttons
-        for child in self.children:
-            child.disabled = True
-        
-        # Update lobby message
-        embed = discord.Embed(
-            title="🏁 Race Starting!",
-            description=f"**{self.race_session.participant_count}** racers are getting ready...",
-            color=discord.Color.gold()
-        )
-        await interaction.message.edit(embed=embed, view=self)
-        
-        # Start race games for each participant
-        from src.game import WordleGame
-        from src.ui_race import RaceGameView
         
         # Set end time
         self.race_session.end_time = datetime.datetime.now() + datetime.timedelta(minutes=self.race_session.duration_minutes)
         end_ts = int(self.race_session.end_time.timestamp())
         
-        for user_id, user in self.race_session.participants.items():
-            game = WordleGame(self.race_session.secret, 0, user, 0)
-            self.race_session.race_games[user_id] = game
-            self.race_session.green_scores[user_id] = 0  # Initialize green score
-            
-            # Build unified embed with board + keyboard in description
-            progress_bar = f"[{'○' * game.max_attempts}]"
-            
-            embed = discord.Embed(title=f"🏁 Race Mode | Attempt 0/{game.max_attempts}", color=discord.Color.gold())
-            embed.description = (
-                f"**Race against {self.race_session.participant_count} players!**\n"
-                f"Ends <t:{end_ts}:R>!\n\n"
-                f"Click **Make Guess** to start!"
-            )
-            embed.set_footer(text=f"{game.max_attempts} tries left {progress_bar}")
-            
-            view = RaceGameView(self.bot, game, user, self.race_session)
-            
-            # Send ephemeral in the original channel instead of DM
-            try:
-                channel = self.bot.get_channel(self.race_session.channel_id)
-                if channel:
-                    # We need to use followup since response is already done
-                    # Store the message reference for later updates
-                    msg = await channel.send(
-                        content=f"{user.mention} - Your race game! 🏁",
-                        embed=embed,
-                        view=view
-                    )
-            except Exception as e:
-                print(f"Error sending race game to {user}: {e}")
+        # Initialize games for ALL participants
+        from src.game import WordleGame
         
         self.race_session.status = 'active'
-        self.stop()
+        
+        for user_id, user in self.race_session.participants.items():
+            # Create game instance
+            game = WordleGame(self.race_session.secret, 0, user, 0)
+            self.race_session.race_games[user_id] = game
+            self.race_session.green_scores[user_id] = 0
+            
+        # Switch View to "Active Race" mode (Open Board button only)
+        self.update_buttons()
+        
+        embed = discord.Embed(
+            title="🏁 Race Started!",
+            description=(
+                f"**{self.race_session.participant_count}** racers are competing!\n"
+                f"Ends <t:{end_ts}:R>\n\n"
+                "👇 **Click below to open your game board!**"
+            ),
+            color=discord.Color.green()
+        )
+        embed.set_footer(text="Good luck! The fastest solver wins!")
+        
+        await interaction.message.edit(embed=embed, view=self)
+
+    async def open_board_button(self, interaction: discord.Interaction):
+        """Ephemeral button to open the game board."""
+        if not self.race_session.is_participant(interaction.user.id):
+             return await interaction.response.send_message("⚠️ You are not in this race!", ephemeral=True)
+        
+        game = self.race_session.race_games.get(interaction.user.id)
+        if not game:
+            return await interaction.response.send_message("⚠️ Game not found.", ephemeral=True)
+            
+        # Create View and Embed
+        view = RaceGameView(self.bot, game, interaction.user, self.race_session)
+        
+        filled = "●" * game.attempts_used
+        empty = "○" * (game.max_attempts - game.attempts_used)
+        progress_bar = f"[{filled}{empty}]"
+        
+        end_ts = int(self.race_session.end_time.timestamp()) if self.race_session.end_time else 0
+        
+        embed = discord.Embed(title=f"🏁 Race Mode | Attempt {game.attempts_used}/{game.max_attempts}", color=discord.Color.gold())
+        embed.description = (
+            f"**Race against {self.race_session.participant_count} players!**\n"
+            f"Ends <t:{end_ts}:R>\n\n"
+            f"Click **Make Guess** to start!"
+        )
+        if game.history:
+             board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+             embed.description += f"\n\n**Board:**\n{board_display}"
+             
+             # Keypad
+             keypad = view.get_markdown_keypad(game.used_letters, interaction.user.id)
+             embed.description += f"\n\n**Keyboard:**\n{keypad}"
+
+        embed.set_footer(text=f"{game.max_attempts} tries left {progress_bar}")
+        
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
     
     @ui.button(label="Cancel", style=discord.ButtonStyle.danger, custom_id="race_cancel")
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
@@ -140,9 +170,12 @@ class RaceLobbyView(ui.View):
     
     def create_lobby_embed(self):
         """Create the lobby embed showing participants."""
+        # Calculate relative timestamp for lobby timeout
+        timeout_ts = int(self.race_session.start_time.timestamp() + 300) # 5 mins
+        
         embed = discord.Embed(
             title="🏁 Race Lobby",
-            description=f"Waiting for racers... **{self.race_session.participant_count}** joined\nRace Duration: **{self.race_session.duration_minutes} mins**",
+            description=f"Waiting for racers... **{self.race_session.participant_count}** joined\nRace starts automatically or by host.",
             color=discord.Color.blue()
         )
         
@@ -157,16 +190,12 @@ class RaceLobbyView(ui.View):
             inline=False
         )
         
-        time_remaining = 120 - (datetime.datetime.now() - self.race_session.start_time).total_seconds()
-        if time_remaining > 0:
-            embed.set_footer(text=f"⏰ Lobby expires in {int(time_remaining)}s • Min 2 players to start")
-        else:
-            embed.set_footer(text="⏰ Lobby expired!")
+        embed.add_field(name="Lobby Timeout", value=f"<t:{timeout_ts}:R>", inline=False)
         
         return embed
     
     async def on_timeout(self):
-        """Handle lobby timeout after 2 minutes."""
+        """Handle lobby timeout."""
         if self.race_session.status == 'waiting':
             # Remove race session
             if self.race_session.channel_id in self.bot.race_sessions:
@@ -179,34 +208,12 @@ class RaceLobbyView(ui.View):
                     message = await channel.fetch_message(self.race_session.lobby_message_id)
                     embed = discord.Embed(
                         title="⏰ Race Lobby Expired",
-                        description="The race lobby timed out after 2 minutes.",
+                        description="The race lobby timed out.",
                         color=discord.Color.dark_grey()
                     )
                     await message.edit(embed=embed, view=None)
             except:
                 pass
-    
-    def get_markdown_keypad(self, used_letters: dict, user_id: int):
-        """Generate markdown keyboard status."""
-        lines = []
-        for row in KEYBOARD_LAYOUT:
-            chars = []
-            for ch in row:
-                ch_lower = ch.lower()
-                if ch_lower in used_letters['correct']:
-                    emoji_key = f"key_{ch_lower}_green"
-                    chars.append(EMOJIS.get(emoji_key, f"🟩{ch}"))
-                elif ch_lower in used_letters['present']:
-                    emoji_key = f"key_{ch_lower}_yellow"
-                    chars.append(EMOJIS.get(emoji_key, f"🟨{ch}"))
-                elif ch_lower in used_letters['absent']:
-                    emoji_key = f"key_{ch_lower}_grey"
-                    chars.append(EMOJIS.get(emoji_key, f"⬜{ch}"))
-                else:
-                    emoji_key = f"key_{ch_lower}"
-                    chars.append(EMOJIS.get(emoji_key, ch))
-            lines.append("".join(chars))
-        return "\n".join(lines)
 
 
 class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
@@ -256,6 +263,8 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
         keypad = self.view_ref.get_markdown_keypad(self.game.used_letters, interaction.user.id)
         
+        end_ts = int(self.race_session.end_time.timestamp()) if self.race_session.end_time else 0
+        
         if won:
             # Record completion
             time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
@@ -266,7 +275,7 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
             from src.mechanics.rewards import calculate_race_rewards
             rewards = calculate_race_rewards(self.bot, interaction.user.id, self.game, rank)
             
-            embed = discord.Embed(title=f"🏆 Victory! - Rank #{rank}", color=discord.Color.gold())
+            embed = discord.Embed(title=f"🏆 Victory! - Rank #{rank}", color=discord.Color.green())
             embed.description = (
                 f"You solved it in **{self.game.attempts_used}/{self.game.max_attempts}** tries!\n\n"
                 f"**Final Board:**\n{board_display}\n\n"
@@ -302,6 +311,8 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
             # Don't reveal word yet - wait for all to finish
             if not self.race_session.all_completed:
                 embed.set_footer(text="Waiting for others to finish...")
+            else:
+                 embed.description += f"\n\nThe word was: **{self.game.secret.upper()}**"
             
             self.view_ref.disable_all()
             await interaction.edit_original_response(content="", embed=embed, view=self.view_ref)
@@ -377,31 +388,47 @@ class RaceGameView(ui.View):
         
         embed = discord.Embed(
             title="🏳️ Race Forfeited",
-            description="You ended the race early.",
+            description=f"You ended the race early.\nThe word was **{self.game.secret.upper()}**.",
             color=discord.Color.dark_grey()
         )
         
         self.disable_all()
         await interaction.response.edit_message(embed=embed, view=self)
+        
+        # Check if everybody finished
+        if self.race_session.all_completed:
+             channel = self.bot.get_channel(self.race_session.channel_id)
+             if channel:
+                 # Logic to notify channel
+                  await channel.send(f"🏁 Race Over! The word was **{self.game.secret.upper()}**.")
+                  if self.race_session.channel_id in self.bot.race_sessions:
+                        del self.bot.race_sessions[self.race_session.channel_id]
+
     
     def get_markdown_keypad(self, used_letters: dict, user_id: int):
-        """Generate markdown keyboard status."""
-        lines = []
+        """Generate markdown keyboard status matching Standard Game."""
+        output_lines = []
         for row in KEYBOARD_LAYOUT:
-            chars = []
-            for ch in row:
-                ch_lower = ch.lower()
-                if ch_lower in used_letters['correct']:
-                    emoji_key = f"key_{ch_lower}_green"
-                    chars.append(EMOJIS.get(emoji_key, f"🟩{ch}"))
-                elif ch_lower in used_letters['present']:
-                    emoji_key = f"key_{ch_lower}_yellow"
-                    chars.append(EMOJIS.get(emoji_key, f"🟨{ch}"))
-                elif ch_lower in used_letters['absent']:
-                    emoji_key = f"key_{ch_lower}_grey"
-                    chars.append(EMOJIS.get(emoji_key, f"⬜{ch}"))
-                else:
-                    emoji_key = f"key_{ch_lower}"
-                    chars.append(EMOJIS.get(emoji_key, ch))
-            lines.append("".join(chars))
-        return "\n".join(lines)
+             line = ""
+             for char_key in row:
+                 char = char_key.lower()
+                 if char in used_letters['correct']:
+                     emoji_key = f"{char}_correct" # Match utils.py format
+                 elif char in used_letters['present']:
+                     emoji_key = f"{char}_misplaced"
+                 elif char in used_letters['absent']:
+                     emoji_key = f"{char}_absent"
+                 else:
+                     emoji_key = f"{char}_unknown" # Or just char fallback
+                
+                 # Fetch emoji
+                 emoji_display = EMOJIS.get(emoji_key, char_key)
+                 line += emoji_display + " "
+             output_lines.append(line.strip())
+        
+        # Add spacing indentation to match standard game
+        if len(output_lines) >= 3:
+             output_lines[1] = u"\u2007" + output_lines[1]
+             output_lines[2] = u"\u2007\u2007\u2007\u2007" + output_lines[2]
+
+        return "\n".join(output_lines)
