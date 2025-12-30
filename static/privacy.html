@@ -114,6 +114,14 @@
                         <li><strong>Purpose:</strong> To track words already used on a server to prevent immediate
                             repetition.</li>
                     </ul>
+                <li>
+                    <strong>In-Memory Message Processing:</strong> The Bot temporarily processes message content ONLY
+                    when users submit guesses using the <code>-g</code> command during an active game.
+                    <ul>
+                        <li><strong>Purpose:</strong> This data is processed in-memory to generate game feedback and is
+                            <strong>immediately discarded</strong> after the game round ends. The Bot does not store,
+                            log, or analyze general chat messages.</li>
+                    </ul>
                 </li>
             </ul>
         </div>
@@ -123,7 +131,8 @@
             <p>The collected data is used exclusively for the operation of the Bot:</p>
             <ul>
                 <li>To display user ranks and scores on the <code>/leaderboard</code> and
-                    <code>/leaderboard_global</code> commands.</li>
+                    <code>/leaderboard_global</code> commands.
+                </li>
                 <li>To manage and progress the active Wordle game in a channel.</li>
                 <li>To ensure fairness and replayability by managing the pool of words used in each server.</li>
             </ul>

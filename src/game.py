@@ -99,12 +99,13 @@ class WordleGame:
             char = guess[i].lower()
             state = state_list[i]
             
-            # Special handling for 'green' blind mode: hide yellows on the board
-            display_state = state
-            if self.blind_mode == 'green' and state == 'yellow':
-                display_state = 'white' # Display as grey/white
+        # --- Phase 4: Construct the final emoji pattern string ---
+        emoji_tags = [""] * 5
+        for i in range(5):
+            char = guess[i].lower()
+            state = state_list[i]
             
-            emoji_key = f"block_{char}_{display_state}"
+            emoji_key = f"block_{char}_{state}"
             emoji_tags[i] = EMOJIS.get(emoji_key, char.upper())
 
         return "".join(emoji_tags)

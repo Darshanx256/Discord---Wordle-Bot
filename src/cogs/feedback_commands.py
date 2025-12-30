@@ -21,18 +21,11 @@ class FeedbackModal(ui.Modal, title="📨 Send Feedback"):
     
     content_input = ui.TextInput(
         label="Content",
-        placeholder="Feature requests, bug reports, questions, ban/data delete requests...",
+        placeholder="Feature requests, bug reports, questions...",
         max_length=1000,
         min_length=10,
         required=True,
         style=discord.TextStyle.paragraph
-    )
-    
-    discord_id_input = ui.TextInput(
-        label="Discord ID (optional - for follow-up)",
-        placeholder="Leave empty to remain anonymous",
-        max_length=50,
-        required=False
     )
     
     def __init__(self):
@@ -42,19 +35,14 @@ class FeedbackModal(ui.Modal, title="📨 Send Feedback"):
         """Handle feedback submission - stores to Supabase."""
         title = self.title_input.value.strip()
         content = self.content_input.value.strip()
-        discord_id = self.discord_id_input.value.strip() or str(interaction.user.id)
         
         # Store in Supabase
         try:
             feedback_data = {
-                'user_id': interaction.user.id,
-                'username': str(interaction.user),
-                'discord_id_provided': discord_id,
+                'timestamp': datetime.datetime.utcnow().isoformat(),
                 'title': title,
                 'content': content,
-                'guild_id': interaction.guild.id if interaction.guild else None,
-                'guild_name': interaction.guild.name if interaction.guild else 'DM',
-                'created_at': datetime.datetime.utcnow().isoformat()
+                'user_id': interaction.user.id # This is the 'id' column requested
             }
             
             interaction.client.supabase_client.table('feedback').insert(feedback_data).execute()

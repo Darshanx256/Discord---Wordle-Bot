@@ -136,11 +136,18 @@ class GuessHandler(commands.Cog):
                 lines = []
                 for h in game.history:
                     masked = ""
-                    for i, char in enumerate(h['word'].upper()):
-                        if char == game.secret[i].upper():
-                            masked += EMOJIS.get(f"block_{char.lower()}_green", "🟩")
-                        else:
-                            masked += "⬛"
+                    guess_word = h['word'].upper()
+                    for i, char in enumerate(guess_word):
+                        char_low = char.lower()
+                        # 'full' blind mode hides EVERYTHING with black blocks
+                        if game.blind_mode == 'full':
+                            masked += EMOJIS.get("block_black", "⬛")
+                        # 'green' blind mode shows greens, but others appear as 'absent' grey letters
+                        elif game.blind_mode == 'green':
+                            if char == game.secret[i].upper():
+                                masked += EMOJIS.get(f"block_{char_low}_green", "🟩")
+                            else:
+                                masked += EMOJIS.get(f"block_{char_low}_absent", "⬜")
                     lines.append(masked)
                 board_display = "\n".join(lines)
             else:
