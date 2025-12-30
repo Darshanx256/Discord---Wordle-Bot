@@ -67,6 +67,18 @@ Discord---Wordle-Bot/
 
 - **Optimized DB**: Logic moved to SQL RPC (`record_game_result_v4`) to minimize latency and ensure data integrity.
 - **Concurrency**: Async fetching for large leaderboards.
+- **Scalability**: Per-user state optimization, API batching, and TTL caching.
+
+## 🛡️ Development Standards
+
+To maintain production-grade stability and scalability, all new features MUST follow these standards:
+
+1.  **Event-Driven Over Polling**: Use `asyncio.Task` with dynamic sleeps for timers instead of global polling loops.
+2.  **Monotonic Timing**: Always use `time.monotonic()` for intervals and timeouts to avoid system clock drift.
+3.  **Memory Efficiency**: Use `__slots__` in all core game and session classes to minimize RAM footprint.
+4.  **API Batching**: Never perform $N$ database calls in a loop. Use batched fetching (e.g., `.in_('id', ids)`) for multi-user operations.
+5.  **State Management**: Keep per-user state minimal and use ephemeral storage where possible.
+6.  **Cached Validation**: Cache frequent external data lookups (e.g., user profiles) with appropriate TTL.
 
 ---
 *Created with ❤️ by the Wordle Bot Team.* (ONE MAN)

@@ -138,13 +138,19 @@ class RaceSession:
         
         results.sort(key=rank_key, reverse=True)
         
-        # 3. Calculate Rewards & Store
+        # 3. Batch Fetch Profiles (Optimization)
+        from src.database import fetch_user_profiles_batched
+        user_ids = [res['user_id'] for res in results]
+        all_profiles = fetch_user_profiles_batched(bot, user_ids)
+        
+        # 4. Calculate Rewards & Store
         from src.mechanics.rewards import calculate_race_rewards_delayed
         
         final_summary = []
         for idx, res in enumerate(results, 1):
              try:
-                 rewards = calculate_race_rewards_delayed(bot, res['user_id'], res['game'], idx)
+                 profile = all_profiles.get(res['user_id'])
+                 rewards = calculate_race_rewards_delayed(bot, res['user_id'], res['game'], idx, pre_fetched_profile=profile)
                  res['rewards'] = rewards
                  res['rank'] = idx
                  final_summary.append(res)

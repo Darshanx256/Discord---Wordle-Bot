@@ -104,7 +104,7 @@ def calculate_final_rewards(mode: str, outcome: str, guesses: int, time_taken: f
         
     return xp, wr
 
-def calculate_race_rewards_delayed(bot, user_id: int, game, rank: int):
+def calculate_race_rewards_delayed(bot, user_id: int, game, rank: int, pre_fetched_profile: dict = None):
     """
     Calculate rewards for Race Mode (Delayed).
     - 1st place: 110% of normal rewards (10% bonus)
@@ -113,8 +113,12 @@ def calculate_race_rewards_delayed(bot, user_id: int, game, rank: int):
     from src.database import fetch_user_profile_v2, record_race_result
     
     # Get user profile for tier calculation
-    profile = fetch_user_profile_v2(bot, user_id)
-    current_wr = profile.get('wr_multi', 0) if profile else 0
+    if pre_fetched_profile:
+        profile = pre_fetched_profile
+    else:
+        profile = fetch_user_profile_v2(bot, user_id)
+        
+    current_wr = profile.get('multi_wr', 0) if profile else 0
     daily_wr_gain = profile.get('daily_wr_gain', 0) if profile else 0
     
     # Calculate base rewards

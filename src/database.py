@@ -7,6 +7,12 @@ from src.config import TIERS, XP_GAINS, XP_LEVELS, MPS_BASE, MPS_EFFICIENCY, MPS
 
 from src.mechanics.rewards import calculate_final_rewards
 import datetime
+import time
+
+# --- PROFILE CACHE ---
+# Simple TTL Cache to reduce DB pressure on frequent lookups
+_PROFILE_CACHE = {} # {user_id: (data, expiry)}
+CACHE_TTL = 300 # 5 minutes
 
 def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
     """
@@ -75,6 +81,10 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
         
         response = bot.supabase_client.rpc('record_game_result_v4', params).execute()
         
+        # Invalidate Cache
+        if user_id in _PROFILE_CACHE:
+            del _PROFILE_CACHE[user_id]
+        
         if response.data:
             from src.utils import calculate_level
             
@@ -133,42 +143,78 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
         print(f"DB ERROR in record_game_v2: {e}")
         return None
 
-def fetch_user_profile_v2(bot: commands.Bot, user_id: int):
-    """Fetches full profile V2."""
+def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = True):
+    """Fetches full profile V2 with optional caching."""
+    now = time.monotonic()
+    
+    if use_cache and user_id in _PROFILE_CACHE:
+        data, expiry = _PROFILE_CACHE[user_id]
+        if now < expiry:
+            return data
+            
     try:
         response = bot.supabase_client.table('user_stats_v2').select('*').eq('user_id', user_id).execute()
         if response.data:
             data = response.data[0]
-            # Use centralized utility for consistent math
             from src.utils import get_level_progress
-            
             lvl, cur_xp, needed = get_level_progress(data['xp'])
-            
             data['level'] = lvl
             data['current_level_xp'] = cur_xp
             data['next_level_xp'] = needed
             
-            # Determine Tier
-            # Use Multi WR for main tier display? Prompt says "Wordle Rating... Separate ladders".
-            # "Grandmaster... 15 multiplayer wins... WR >= 2800".
-            # Let's check Multi WR for tier.
             wr = data['multi_wr']
-            tier_info = TIERS[-1] # Default Challenger
-            
+            tier_info = TIERS[-1] 
             for t in TIERS:
                 if wr >= t['min_wr']:
-                    # Also check extra reqs conceptually? 
-                    # For now just WR based.
                     tier_info = t
                     break
-            
             data['tier'] = tier_info
             
+            # Update Cache
+            _PROFILE_CACHE[user_id] = (data, now + CACHE_TTL)
             return data
         return None
     except Exception as e:
         print(f"DB ERROR in fetch_user_profile_v2: {e}")
         return None
+
+def fetch_user_profiles_batched(bot: commands.Bot, user_ids: list):
+    """
+    Industry-grade optimization: Fetch multiple profiles in ONE API call.
+    Used for race conclusions to avoid N database queries.
+    """
+    if not user_ids: return {}
+    
+    try:
+        # Use .in_ filters for batching
+        response = bot.supabase_client.table('user_stats_v2').select('*').in_('user_id', user_ids).execute()
+        
+        results = {}
+        from src.utils import get_level_progress
+        now = time.monotonic()
+        
+        for data in response.data:
+            uid = data['user_id']
+            lvl, cur_xp, needed = get_level_progress(data['xp'])
+            data['level'] = lvl
+            data['current_level_xp'] = cur_xp
+            data['next_level_xp'] = needed
+            
+            wr = data['multi_wr']
+            tier_info = TIERS[-1]
+            for t in TIERS:
+                if wr >= t['min_wr']:
+                    tier_info = t
+                    break
+            data['tier'] = tier_info
+            
+            results[uid] = data
+            _PROFILE_CACHE[uid] = (data, now + CACHE_TTL) # Back-fill cache
+            
+        return results
+    except Exception as e:
+        print(f"DB ERROR in fetch_user_profiles_batched: {e}")
+        return {}
 
 def trigger_egg(bot: commands.Bot, user_id: int, egg_name: str):
     """Triggers an easter egg update without a game."""
