@@ -78,10 +78,10 @@ class RaceLobbyView(ui.View):
         # Defer immediately as we have setup work
         await interaction.response.defer()
         
-        # Set end time
-        self.race_session.end_time = datetime.datetime.now() + datetime.timedelta(minutes=self.race_session.duration_minutes)
-        self.race_session.monotonic_end_time = time.monotonic() + (self.race_session.duration_minutes * 60)
-        end_ts = int(self.race_session.end_time.timestamp())
+        # Set end time (Standardized to whole seconds for perfect Discord/Server sync)
+        end_ts = int(time.time() + (self.race_session.duration_minutes * 60))
+        self.race_session.end_time = datetime.datetime.fromtimestamp(end_ts)
+        self.race_session.monotonic_end_time = time.monotonic() + (end_ts - time.time())
         
         # Initialize games for ALL participants
         from src.game import WordleGame
@@ -138,8 +138,7 @@ class RaceLobbyView(ui.View):
         
         end_ts = int(self.race_session.end_time.timestamp()) if self.race_session.end_time else 0
         
-        now = datetime.datetime.now()
-        is_ended = now >= self.race_session.end_time if self.race_session.end_time else False
+        is_ended = int(time.time()) >= end_ts
         timer_label = "Ended" if is_ended else "Ends"
         
         embed = discord.Embed(title=f"🏁 Race Mode | Attempt {game.attempts_used}/{game.max_attempts}", color=discord.Color.gold())
@@ -231,6 +230,27 @@ class RaceLobbyView(ui.View):
             except:
                 pass
 
+    async def update_to_ended(self):
+        """Standardized update to change 'Ends' to 'Ended' in the lobby embed."""
+        try:
+            channel = self.bot.get_channel(self.race_session.channel_id)
+            if not channel: return
+            
+            message = await channel.fetch_message(self.race_session.lobby_message_id)
+            if not message: return
+            
+            embed = message.embeds[0]
+            end_ts = int(self.race_session.end_time.timestamp())
+            
+            # Update description line from "Ends <t:ts:R>" to "Ended <t:ts:R>"
+            new_desc = embed.description.replace("Ends <t:", "Ended <t:")
+            embed.description = new_desc
+            
+            await message.edit(embed=embed)
+        except Exception as e:
+            # print(f"Error updating lobby to ended: {e}")
+            pass
+
 
 async def send_race_summary(bot, channel_id, race_session):
     """Helper to conclude race, generate summary, and send it."""
@@ -261,6 +281,16 @@ async def send_race_summary(bot, channel_id, race_session):
         # 3. Build Summary Embed
         word = race_session.secret.upper()
         
+        # --- UI Sync: Update Lobby Message to "Ended" ---
+        try:
+            lobby_msg = await channel.fetch_message(race_session.lobby_message_id)
+            if lobby_msg and lobby_msg.embeds:
+                l_embed = lobby_msg.embeds[0]
+                l_embed.description = l_embed.description.replace("Ends <t:", "Ended <t:")
+                await lobby_msg.edit(embed=l_embed)
+        except:
+            pass
+
         embed = discord.Embed(
             title="🏁 Race Results 🏁",
             description=f"The word was **{word}**!",
@@ -385,8 +415,7 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         else:
             # Continue playing
             end_ts = int(self.race_session.end_time.timestamp()) if self.race_session.end_time else 0
-            now = datetime.datetime.now()
-            is_ended = now >= self.race_session.end_time if self.race_session.end_time else False
+            is_ended = int(time.time()) >= end_ts
             timer_label = "Ended" if is_ended else "Ends"
             
             embed = discord.Embed(

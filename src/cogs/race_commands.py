@@ -46,10 +46,15 @@ class RaceCommands(commands.Cog):
                     sleep_time = 5
                 elif remaining > 2:
                     sleep_time = 1
+                elif remaining > 0.05:
+                    sleep_time = 0.05 # High frequency loop as we approach the exact second
                 else:
-                    sleep_time = 0.2 # Near-instant check when finishing
+                    sleep_time = 0 # Immediate break soon
                 
-                await asyncio.sleep(sleep_time)
+                if sleep_time > 0:
+                    await asyncio.sleep(min(sleep_time, remaining))
+                else:
+                    break
                 
             # Time's up or session marked finished
             if session.status == 'active':
@@ -173,9 +178,9 @@ class RaceCommands(commands.Cog):
         end_desc = ""
         if user_race_session.end_time:
              end_ts = int(user_race_session.end_time.timestamp())
-             now_ts = int(datetime.datetime.now().timestamp())
+             is_ended = int(time.time()) >= end_ts or user_race_session.status == 'finished'
              
-             if now_ts >= end_ts or user_race_session.status == 'finished':
+             if is_ended:
                  end_desc = f"\n**Ended** <t:{end_ts}:R>!"
              else:
                  end_desc = f"\nEnds <t:{end_ts}:R>!"
