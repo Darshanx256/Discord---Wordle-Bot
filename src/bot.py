@@ -35,6 +35,10 @@ class WordleBot(commands.Bot):
 
     def get_custom_prefix(self, bot, message):
         """Only allow '-' as a prefix if it's followed by 'g' (the guess shortcut)."""
+        # Global ban check for prefix commands
+        if message.author.id in self.banned_users:
+            return []
+
         content = message.content.lower()
         if content.startswith("-g ") or content.startswith("-g"):
             # Only allow if a game is active
@@ -63,6 +67,15 @@ class WordleBot(commands.Bot):
         self.load_local_data()
         self.load_banned_users()
         self.setup_db()
+        
+        # Global Ban Check for Slash Commands
+        @self.tree.interaction_check
+        async def global_ban_check(interaction: discord.Interaction) -> bool:
+            if interaction.user.id in self.banned_users:
+                await interaction.response.send_message("⚠️ You are banned from using this bot.", ephemeral=True)
+                return False
+            return True
+
         # Load cogs first so their app-commands are registered before syncing
         await self.load_cogs()
         await self.tree.sync()
