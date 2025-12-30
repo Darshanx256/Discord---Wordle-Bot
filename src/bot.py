@@ -3,6 +3,7 @@ import sys
 import asyncio
 import datetime
 import random
+import time
 import discord
 from discord.ext import commands, tasks
 from supabase import create_client, Client
@@ -32,6 +33,7 @@ class WordleBot(commands.Bot):
         self.name_cache = {}
         self.supabase_client: Client = None
         self.banned_users = set()  # Banned user IDs
+        self._background_tasks = {} # Name: Task
 
     def get_custom_prefix(self, bot, message):
         """Only allow '-' as a prefix if it's followed by 'g' (the guess shortcut)."""
@@ -79,12 +81,14 @@ class WordleBot(commands.Bot):
         # Load cogs first so their app-commands are registered before syncing
         await self.load_cogs()
         await self.tree.sync()
-        self.cleanup_task.start()
-
-        self.db_ping_task.start()
-        self.activity_loop.start()
-        self.stats_update_task.start()
-        self.smart_name_cache_loop.start()
+        
+        # Start refactored background tasks
+        self._background_tasks['cleanup'] = asyncio.create_task(self.cleanup_task_loop())
+        self._background_tasks['db_ping'] = asyncio.create_task(self.db_ping_task_loop())
+        self._background_tasks['activity'] = asyncio.create_task(self.activity_loop_task())
+        self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
+        self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
+        
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
     async def load_cogs(self):
@@ -156,180 +160,173 @@ class WordleBot(commands.Bot):
             print(f"❌ FATAL DB ERROR during Supabase setup: {e}")
             sys.exit(1)
 
-    @tasks.loop(minutes=60)
-    async def activity_loop(self):
+    async def activity_loop_task(self):
         """Rotates the bot's activity status every hour."""
         await self.wait_until_ready()
-        if ROTATING_ACTIVITIES:
-            act_data = random.choice(ROTATING_ACTIVITIES)
-            activity = discord.Activity(type=act_data["type"], name=act_data["name"])
-            await self.change_presence(activity=activity)
-
-    @tasks.loop(minutes=30)
-    async def cleanup_task(self):
-        """Clean up stale games and solo games."""
-        now = datetime.datetime.now()
-        to_remove = []
+        INTERVAL = 3600 # 1 hour
+        next_run = time.monotonic()
         
-        for cid, game in self.games.items():
-            delta = now - game.start_time
-            if delta.total_seconds() > 21600:  # 6 hours
-                to_remove.append(cid)
-                try:
-                    channel = self.get_channel(cid)
-                    if channel:
-                        embed = discord.Embed(
-                            title="⏰ Time's Up!",
-                            description=f"Game timed out.\nThe word was **{game.secret.upper()}**.",
-                            color=discord.Color.dark_grey()
-                        )
-                        await channel.send(embed=embed)
-                        await asyncio.sleep(1)
-                except:
-                    pass
+        while not self.is_closed():
+            if time.monotonic() >= next_run:
+                if ROTATING_ACTIVITIES:
+                    act_data = random.choice(ROTATING_ACTIVITIES)
+                    activity = discord.Activity(type=act_data["type"], name=act_data["name"])
+                    await self.change_presence(activity=activity)
+                next_run = time.monotonic() + INTERVAL
+            
+            # Dynamic sleep
+            remaining = next_run - time.monotonic()
+            await asyncio.sleep(min(max(remaining, 1), 60))
 
-        for cid in to_remove:
-            self.games.pop(cid, None)
+    async def cleanup_task_loop(self):
+        """Clean up stale games and solo games."""
+        await self.wait_until_ready()
+        INTERVAL = 1800 # 30 mins
+        next_run = time.monotonic()
+        
+        while not self.is_closed():
+            if time.monotonic() >= next_run:
+                now_dt = datetime.datetime.now()
+                to_remove = []
+                
+                for cid, game in self.games.items():
+                    delta = now_dt - game.start_time
+                    if delta.total_seconds() > 21600:  # 6 hours
+                        to_remove.append(cid)
+                        try:
+                            channel = self.get_channel(cid)
+                            if channel:
+                                embed = discord.Embed(
+                                    title="⏰ Time's Up!",
+                                    description=f"Game timed out.\nThe word was **{game.secret.upper()}**.",
+                                    color=discord.Color.dark_grey()
+                                )
+                                await channel.send(embed=embed)
+                                await asyncio.sleep(0.5)
+                        except:
+                            pass
 
-        # Clean up custom games
-        custom_remove = []
-        for cid, game in self.custom_games.items():
-            delta = now - game.start_time
-            if delta.total_seconds() > 21600:  # 6 hours
-                custom_remove.append(cid)
+                for cid in to_remove:
+                    self.games.pop(cid, None)
 
-        for cid in custom_remove:
-            self.custom_games.pop(cid, None)
+                # Clean up custom games
+                custom_remove = []
+                for cid, game in self.custom_games.items():
+                    delta = now_dt - game.start_time
+                    if delta.total_seconds() > 21600:  # 6 hours
+                        custom_remove.append(cid)
+                for cid in custom_remove:
+                    self.custom_games.pop(cid, None)
 
-        solo_remove = []
-        for uid, sgame in self.solo_games.items():
-            delta = now - sgame.start_time
-            if delta.total_seconds() > 21600:  # 6 hours
-                solo_remove.append(uid)
+                solo_remove = []
+                for uid, sgame in self.solo_games.items():
+                    delta = now_dt - sgame.start_time
+                    if delta.total_seconds() > 21600:  # 6 hours
+                        solo_remove.append(uid)
+                for uid in solo_remove:
+                    self.solo_games.pop(uid, None)
+                
+                next_run = time.monotonic() + INTERVAL
+            
+            remaining = next_run - time.monotonic()
+            await asyncio.sleep(min(max(remaining, 1), 60))
 
-        for uid in solo_remove:
-            self.solo_games.pop(uid, None)
-
-
-
-    @tasks.loop(hours=96)
-    async def db_ping_task(self):
+    async def db_ping_task_loop(self):
         """Ping Supabase every 4 days to prevent project freeze."""
         await self.wait_until_ready()
-        if self.supabase_client:
-            try:
-                def ping_db_sync():
-                    self.supabase_client.table('scores').select('count', count='exact').limit(0).execute()
+        INTERVAL = 96 * 3600 # 4 days
+        next_run = time.monotonic()
+        
+        while not self.is_closed():
+            if time.monotonic() >= next_run:
+                if self.supabase_client:
+                    try:
+                        def ping_db_sync():
+                            self.supabase_client.table('scores').select('count', count='exact').limit(0).execute()
+                        await asyncio.to_thread(ping_db_sync)
+                        print(f"✅ DB Ping Task: Successfully pinged Supabase at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    except Exception as e:
+                        print(f"⚠️ DB Ping Task Failed: {e}")
+                next_run = time.monotonic() + INTERVAL
+            
+            remaining = next_run - time.monotonic()
+            await asyncio.sleep(min(max(remaining, 1), 3600))
 
-                await asyncio.to_thread(ping_db_sync)
-                print(f"✅ DB Ping Task: Successfully pinged Supabase at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            except Exception as e:
-                print(f"⚠️ DB Ping Task Failed: {e}")
-
-    @tasks.loop(hours=6)
-    async def stats_update_task(self):
+    async def stats_update_task_loop(self):
         """Update bot stats every 6 hours for the webpage."""
         await self.wait_until_ready()
-        try:
-            import json
-            import os
-            
-            stats = {
-                'server_count': len(self.guilds),
-                'simple_words': len(self.secrets),
-                'classic_words': len(self.hard_secrets),
-                'total_words': len(self.valid_set),
-                'last_updated': datetime.datetime.utcnow().isoformat()
-            }
-            
-            # Write to shared file that Flask server can read
-            stats_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            stats_file = os.path.join(stats_dir, 'static', 'bot_stats.json')
-            
-            with open(stats_file, 'w') as f:
-                json.dump(stats, f)
-                
-            print(f"📊 Stats updated: {stats['server_count']} servers, {stats['total_words']} words")
-        except Exception as e:
-            print(f"⚠️ Stats update failed: {e}")
-
-    @tasks.loop(hours=48)
-    async def smart_name_cache_loop(self):
-        """
-        Background task to cache ALL player names every 48 hours.
-        Updates self.name_cache efficiently to avoid rate limits.
-        """
-        await self.wait_until_ready()
-        print("🔄 Starting Smart Name Cache Update...")
+        INTERVAL = 6 * 3600 # 6 hours
+        next_run = time.monotonic()
         
-        try:
-            # 1. Fetch all unique user_ids from stats
-            # We use 'head=False' to get data
-            # To avoid huge payload, we paginate or just grab IDs if possible. 
-            # supabase-py max row limit is usually 1000 without range. 
-            # We'll fetch in chunks if needed, but for now let's try a large range or loop properly.
-            # Actually, let's just fetch all IDs. Assuming < 10k users for now.
-            
-            all_users = []
-            start = 0
-            step = 1000
-            while True:
-                res = self.supabase_client.table('user_stats_v2').select('user_id').range(start, start + step - 1).execute()
-                if not res.data:
-                    break
-                all_users.extend(r['user_id'] for r in res.data)
-                if len(res.data) < step:
-                    break
-                start += step
-            
-            print(f"   Found {len(all_users)} users to cache.")
-            
-            # 2. Iterate and Cache
-            # We use a separate dict and swap at the end? 
-            # User said "delete old cache only when new cache is ready".
-            # So yes, build new cache, then update self.name_cache.
-            
-            new_cache = {}
-            count = 0
-            
-            for uid in all_users:
+        while not self.is_closed():
+            if time.monotonic() >= next_run:
                 try:
-                    # Try local guild cache first (FAST, no API call)
-                    name = None
-                    for guild in self.guilds:
-                        mem = guild.get_member(uid)
-                        if mem:
-                            name = mem.display_name
-                            break
+                    import json
+                    stats = {
+                        'server_count': len(self.guilds),
+                        'simple_words': len(self.secrets),
+                        'classic_words': len(self.hard_secrets),
+                        'total_words': len(self.valid_set),
+                        'last_updated': datetime.datetime.utcnow().isoformat()
+                    }
+                    stats_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    stats_file = os.path.join(stats_dir, 'static', 'bot_stats.json')
+                    with open(stats_file, 'w') as f:
+                        json.dump(stats, f)
+                    print(f"📊 Stats updated: {stats['server_count']} servers")
+                except Exception as e:
+                    print(f"⚠️ Stats update failed: {e}")
+                next_run = time.monotonic() + INTERVAL
+                
+            remaining = next_run - time.monotonic()
+            await asyncio.sleep(min(max(remaining, 1), 600))
+
+    async def smart_name_cache_loop_task(self):
+        """Background task to cache ALL player names every 48 hours."""
+        await self.wait_until_ready()
+        INTERVAL = 48 * 3600 # 48 hours
+        next_run = time.monotonic()
+        
+        while not self.is_closed():
+            if time.monotonic() >= next_run:
+                print("🔄 Starting Smart Name Cache Update...")
+                try:
+                    all_users = []
+                    start = 0
+                    step = 1000
+                    while True:
+                        res = self.supabase_client.table('user_stats_v2').select('user_id').range(start, start + step - 1).execute()
+                        if not res.data: break
+                        all_users.extend(r['user_id'] for r in res.data)
+                        if len(res.data) < step: break
+                        start += step
                     
-                    if not name:
-                         # API Call - Check global cache or fetch
-                        user = self.get_user(uid)
-                        if user:
-                            name = user.display_name
-                        else:
-                            # Strict Rate Limit Handling
-                            try:
-                                u = await self.fetch_user(uid)
-                                name = u.display_name
-                                await asyncio.sleep(0.5) # Prevent 429
-                            except:
-                                name = f"User {uid}" # Fallback
-                                
-                    new_cache[uid] = name
-                    count += 1
-                    if count % 100 == 0:
-                        print(f"   Cached {count}/{len(all_users)} names...")
-                        
-                except Exception as ex:
-                    print(f"   Error caching user {uid}: {ex}")
-            
-            # 3. Swap Cache
-            self.name_cache = new_cache
-            print(f"✅ Smart Name Cache Updated: {len(self.name_cache)} names cached at {datetime.datetime.utcnow()}.")
-            
-        except Exception as e:
-            print(f"❌ Smart Name Cache Failed: {e}")
+                    new_cache = {}
+                    for uid in all_users:
+                        try:
+                            name = None
+                            for guild in self.guilds:
+                                mem = guild.get_member(uid)
+                                if mem:
+                                    name = mem.display_name
+                                    break
+                            if not name:
+                                user = self.get_user(uid)
+                                if user: name = user.display_name
+                                else:
+                                    u = await self.fetch_user(uid)
+                                    name = u.display_name
+                                    await asyncio.sleep(0.5)
+                            new_cache[uid] = name
+                        except: pass
+                    self.name_cache = new_cache
+                    print(f"✅ Smart Name Cache Updated: {len(self.name_cache)} names")
+                except Exception as e:
+                    print(f"❌ Smart Name Cache Failed: {e}")
+                next_run = time.monotonic() + INTERVAL
+                
+            remaining = next_run - time.monotonic()
+            await asyncio.sleep(min(max(remaining, 1), 3600))
 
 
 # Initialize Bot

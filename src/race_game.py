@@ -12,7 +12,7 @@ class RaceSession:
     
     __slots__ = ('channel_id', 'started_by', 'participants', 'secret', 'start_time', 
                  'lobby_message_id', 'status', 'race_games', 'completion_order', 'end_time', 
-                 'duration_minutes', 'green_scores', 'final_results')
+                 'duration_minutes', 'green_scores', 'final_results', 'monotonic_end_time')
     
     def __init__(self, channel_id: int, started_by: discord.User, secret: str, lobby_message_id: int):
         self.channel_id = channel_id
@@ -26,6 +26,7 @@ class RaceSession:
         self.completion_order: List[tuple] = []  # [(user_id, won, time_taken), ...]
         self.duration_minutes = 10  # Default 10 minutes
         self.end_time = None
+        self.monotonic_end_time = None
         self.green_scores: Dict[int, int] = {}  # user_id: total greens count
         self.final_results = [] # Stores final ranking info
     

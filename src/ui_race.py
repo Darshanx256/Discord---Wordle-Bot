@@ -4,6 +4,7 @@ UI components for Race Mode: lobby views, race game views, and modals.
 import discord
 from discord import ui
 import datetime
+import time
 from src.config import KEYBOARD_LAYOUT
 from src.utils import EMOJIS
 
@@ -79,6 +80,7 @@ class RaceLobbyView(ui.View):
         
         # Set end time
         self.race_session.end_time = datetime.datetime.now() + datetime.timedelta(minutes=self.race_session.duration_minutes)
+        self.race_session.monotonic_end_time = time.monotonic() + (self.race_session.duration_minutes * 60)
         end_ts = int(self.race_session.end_time.timestamp())
         
         # Initialize games for ALL participants
@@ -92,6 +94,11 @@ class RaceLobbyView(ui.View):
             self.race_session.race_games[user_id] = game
             self.race_session.green_scores[user_id] = 0
             
+        # Launch monotonic timer task
+        race_cog = self.bot.get_cog("RaceCommands")
+        if race_cog:
+            await race_cog.start_race_timer(self.race_session.channel_id, self.race_session)
+
         # Switch View to "Active Race" mode (Open Board button only)
         self.update_buttons()
         

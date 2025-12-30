@@ -6,6 +6,8 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import random
 import datetime
+import time
+import asyncio
 from src.race_game import RaceSession
 from src.ui_race import RaceLobbyView, RaceGameView
 from src.utils import EMOJIS
@@ -14,42 +16,63 @@ from src.utils import EMOJIS
 class RaceCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.check_race_timeouts.start()
+        self._race_timers = {} # channel_id: Task
     
     def cog_unload(self):
-        self.check_race_timeouts.cancel()
+        for task in self._race_timers.values():
+            task.cancel()
     
-    @tasks.loop(seconds=2)
-    async def check_race_timeouts(self):
-        """Check for expired race sessions."""
-        if not hasattr(self.bot, 'race_sessions'): return
+    async def _run_race_timer(self, channel_id, session):
+        """
+        Production-Ready Timer Design:
+        - Use a single async task per race
+        - Store a fixed end time using time.monotonic()
+        - Sleep dynamically: long sleeps when far, short sleeps near finish
+        """
+        # print(f"🚀 Starting timer for race in {channel_id}")
         
-        # Snapshot keys to avoid runtime error if dict changes
         try:
-            sessions_to_finish = []
-            now = datetime.datetime.now()
-            
-            for cid, session in self.bot.race_sessions.items():
-                if session.status == 'active' and session.end_time and now > session.end_time:
-                    sessions_to_finish.append((cid, session))
-            
-            if not sessions_to_finish:
-                return
-
-            from src.ui_race import send_race_summary
-            
-            for cid, session in sessions_to_finish:
-                # Time's up!
-                session.status = 'finished'
-                # print(f"⏰ Race in {cid} timed out. Concluding...")
-                await send_race_summary(self.bot, cid, session)
+            while session.status == 'active':
+                now = time.monotonic()
+                remaining = session.monotonic_end_time - now
                 
+                if remaining <= 0:
+                    break
+                
+                # Dynamic sleep logic
+                if remaining > 60:
+                    sleep_time = 30
+                elif remaining > 10:
+                    sleep_time = 5
+                elif remaining > 2:
+                    sleep_time = 1
+                else:
+                    sleep_time = 0.2 # Near-instant check when finishing
+                
+                await asyncio.sleep(sleep_time)
+                
+            # Time's up or session marked finished
+            if session.status == 'active':
+                session.status = 'finished'
+                # print(f"⏰ Race in {channel_id} timed out. Concluding...")
+                from src.ui_race import send_race_summary
+                await send_race_summary(self.bot, channel_id, session)
+                
+        except asyncio.CancelledError:
+            # print(f"🛑 Timer for race {channel_id} cancelled.")
+            pass
         except Exception as e:
-            print(f"Error in race timeout loop: {e}")
+            print(f"❌ Error in race timer {channel_id}: {e}")
+        finally:
+            self._race_timers.pop(channel_id, None)
 
-    @check_race_timeouts.before_loop
-    async def before_check_race_timeouts(self):
-        await self.bot.wait_until_ready()
+    async def start_race_timer(self, channel_id, session):
+        """Helper to launch the timer task."""
+        if channel_id in self._race_timers:
+            self._race_timers[channel_id].cancel()
+        
+        task = asyncio.create_task(self._run_race_timer(channel_id, session))
+        self._race_timers[channel_id] = task
     
     @app_commands.command(name="race", description="Start a race lobby - compete to solve the same word!")
     async def race(self, interaction: discord.Interaction):
