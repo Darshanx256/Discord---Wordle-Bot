@@ -61,6 +61,9 @@ class WordleGame:
                 letter = guess[i].lower()
                 self.used_letters['correct'].add(letter)
                 self.used_letters['present'].discard(letter)
+                
+                # Track discovered green positions for race scoring
+                self.discovered_green_positions.add(i)
 
         # 2. Yellows (Misplaced)
         for i in range(5):

@@ -104,13 +104,13 @@ def calculate_final_rewards(mode: str, outcome: str, guesses: int, time_taken: f
         
     return xp, wr
 
-def calculate_race_rewards(bot, user_id: int, game, rank: int):
+def calculate_race_rewards_delayed(bot, user_id: int, game, rank: int):
     """
-    Calculate rewards for Race Mode.
+    Calculate rewards for Race Mode (Delayed).
     - 1st place: 110% of normal rewards (10% bonus)
     - Others: 45% of normal rewards
     """
-    from src.database import fetch_user_profile_v2
+    from src.database import fetch_user_profile_v2, record_race_result
     
     # Get user profile for tier calculation
     profile = fetch_user_profile_v2(bot, user_id)
@@ -119,30 +119,51 @@ def calculate_race_rewards(bot, user_id: int, game, rank: int):
     
     # Calculate base rewards
     time_taken = (game.last_interaction - game.start_time).total_seconds()
-    xp, wr = calculate_final_rewards('MULTI', 'win', game.attempts_used, time_taken, current_wr, daily_wr_gain)
     
-    # Apply rank multiplier
-    if rank == 1:
-        # 1st place gets 110% (10% bonus)
-        xp = int(xp * 1.10)
-        wr = int(wr * 1.10)
-        rank_msg = "**1st Place Bonus!** +10%"
+    # Decide outcome for reward calc
+    # If they didn't win, they get loss rewards (but ranked by greens)
+    # Actually, existing logic for losses is standard
+    
+    has_won = (game.history and game.history[-1]['word'] == game.secret.upper())
+    outcome = "win" if has_won else "loss"
+    
+    xp, wr = calculate_final_rewards('MULTI', outcome, game.attempts_used, time_taken, current_wr, daily_wr_gain)
+    
+    rank_msg = ""
+    # Apply rank multiplier if WIN
+    if has_won:
+        if rank == 1:
+            # 1st place gets 110% (10% bonus)
+            xp = int(xp * 1.10)
+            wr = int(wr * 1.10)
+            rank_msg = "**🥇 1st Place!**"
+        elif rank == 2:
+            rank_msg = "**🥈 2nd Place**"
+            # Standard modifiers apply
+        elif rank == 3:
+            rank_msg = "**🥉 3rd Place**"
+        else:
+            rank_msg = f"**#{rank}**"
+            # Others get 45% (Aggressive reduction for lower ranks)
+            xp = int(xp * 0.45)
+            wr = int(wr * 0.45)
     else:
-        # Others get 45%
-        xp = int(xp * 0.45)
-        wr = int(wr * 0.45)
-        rank_msg = f"**Rank #{rank}** rewards"
+        # Loss rewards are already small, keep them as is?
+        rank_msg = f"**#{rank}** (Failed)"
     
     # Record in database
-    from src.database import record_race_result
-    record_race_result(bot, user_id, game.secret, True, game.attempts_used, time_taken, xp, wr, rank)
+    record_race_result(bot, user_id, game.secret, has_won, game.attempts_used, time_taken, xp, wr, rank)
     
-    # Build message
-    message = f"{rank_msg}\n+{xp} XP | +{wr} WR"
+    # Build text string
+    if wr > 0:
+        reward_text = f"+{xp} XP | +{wr} WR"
+    else:
+        reward_text = f"+{xp} XP | {wr} WR"
     
     return {
         'xp': xp,
         'wr': wr,
         'rank': rank,
-        'message': message
+        'rank_msg': rank_msg,
+        'reward_text': reward_text
     }
