@@ -19,6 +19,7 @@ class WordleBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.guilds = True
+        intents.members = True
 
         super().__init__(command_prefix=self.get_custom_prefix, intents=intents, max_messages=10)
         self.games = {}
