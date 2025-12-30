@@ -123,7 +123,8 @@ class GuessHandler(commands.Cog):
             except: pass
 
             # Get keyboard status
-            keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id)
+            key_blind = game.blind_mode if not (win or game_over) else False
+            keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id, blind_mode=key_blind)
             
             # Progress bar
             filled = "●" * game.attempts_used

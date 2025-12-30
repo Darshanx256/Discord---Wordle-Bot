@@ -5,7 +5,7 @@ from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
 from src.utils import EMOJIS, get_win_flavor, get_badge_emoji # Added utils
 
-def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) -> str:
+def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, blind_mode=False) -> str:
     #egg start
     extra_line = ""
     rng = random.randint(1, 100)
@@ -46,7 +46,11 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None) 
             char = char_key.lower()
             formatting = ""
             if char in used_letters['correct']: formatting = "correct"
-            elif char in used_letters['present']: formatting = "misplaced"
+            elif char in used_letters['present']: 
+                if blind_mode == 'green': 
+                    formatting = "unknown"
+                else: 
+                    formatting = "misplaced"
             elif char in used_letters['absent']: formatting = "absent"
             else : formatting = "unknown"
             
@@ -100,10 +104,10 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
 
             # Board Display
             board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
-            keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id)
             
             # Embed Update
             if win:
+                keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)
                 time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
                 flavor = get_win_flavor(self.game.attempts_used)
                 embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
@@ -126,6 +130,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
             elif game_over:
+                keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)
                 embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
                 embed.description = f"The word was **{self.game.secret.upper()}**.\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 
@@ -138,6 +143,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
 
             else:
                 # Ongoing game - board + keyboard in embed description
+                keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=self.game.blind_mode)
                 embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/{self.game.max_attempts}", color=discord.Color.gold())
                 embed.description = f"**Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
