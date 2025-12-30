@@ -216,38 +216,62 @@ class RaceLobbyView(ui.View):
                 pass
 
 
-async def send_race_summary(bot, channel, race_session):
+async def send_race_summary(bot, channel_id, race_session):
     """Helper to conclude race, generate summary, and send it."""
-    # Clean up session first
-    if race_session.channel_id in bot.race_sessions:
-        del bot.race_sessions[race_session.channel_id]
-        
-    results = race_session.conclude_race(bot)
+    # print(f"Attempting to send summary for channel {channel_id}...")
     
-    # Build Summary Embed
-    word = race_session.secret.upper()
-    
-    embed = discord.Embed(
-        title="🏁 Race Results 🏁",
-        description=f"The word was **{word}**!",
-        color=discord.Color.gold()
-    )
-    
-    leaderboard_text = ""
-    for res in results:
-        medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(res['rank'], f"`{res['rank']}.`")
-        user_name = res['user'].display_name
-        status = "Solved" if res['won'] else "Failed"
+    # 1. Clean up session first (Atomic check)
+    if not hasattr(bot, 'race_sessions') or channel_id not in bot.race_sessions:
+        # print("⚠️ Race session already closed/deleted.")
+        return
         
-        # Reward line
-        rew = res['rewards']
-        
-        leaderboard_text += f"{medal} **{user_name}** ({status} in {res['attempts']}/6)\n"
-        leaderboard_text += f"   > {rew['reward_text']} • {res['green_count']} 🟩 found\n"
+    del bot.race_sessions[channel_id]
+    
+    try:
+        results = race_session.conclude_race(bot)
+        if not results:
+            # print("⚠️ No results gathered for summary.")
+            return
 
-    embed.add_field(name="Leaderboard", value=leaderboard_text or "No data.", inline=False)
-    
-    await channel.send(embed=embed)
+        # 2. Find the channel
+        channel = bot.get_channel(channel_id)
+        if not channel:
+            try:
+                channel = await bot.fetch_channel(channel_id)
+            except:
+                # print(f"❌ Failed to fetch channel {channel_id}")
+                return
+
+        # 3. Build Summary Embed
+        word = race_session.secret.upper()
+        
+        embed = discord.Embed(
+            title="🏁 Race Results 🏁",
+            description=f"The word was **{word}**!",
+            color=discord.Color.gold()
+        )
+        
+        leaderboard_text = ""
+        for res in results:
+            medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(res['rank'], f"`{res['rank']}.`")
+            user_name = res['user'].display_name
+            status = "Solved" if res['won'] else "Failed"
+            
+            # Reward line
+            rew = res.get('rewards', {})
+            reward_text = rew.get('reward_text', 'N/A')
+            
+            leaderboard_text += f"{medal} **{user_name}** ({status} in {res['attempts']}/6)\n"
+            leaderboard_text += f"   > {reward_text} • {res['green_count']} 🟩 found\n"
+
+        embed.add_field(name="Leaderboard", value=leaderboard_text or "No one completed the race.", inline=False)
+        
+        await channel.send(embed=embed)
+        # print("✅ Summary sent successfully.")
+        
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR in send_race_summary: {e}")
+
 
 
 class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
@@ -315,9 +339,7 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
             
             # Check if all completed
             if self.race_session.all_completed:
-                channel = self.bot.get_channel(self.race_session.channel_id)
-                if channel:
-                    await send_race_summary(self.bot, channel, self.race_session)
+                await send_race_summary(self.bot, self.race_session.channel_id, self.race_session)
         
         elif game_over:
             # Record completion as failed
@@ -339,9 +361,7 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
             
             # Check if all completed
             if self.race_session.all_completed:
-                channel = self.bot.get_channel(self.race_session.channel_id)
-                if channel:
-                    await send_race_summary(self.bot, channel, self.race_session)
+                await send_race_summary(self.bot, self.race_session.channel_id, self.race_session)
         
         else:
             # Continue playing
@@ -402,9 +422,7 @@ class RaceGameView(ui.View):
         
         # Check if everybody finished
         if self.race_session.all_completed:
-             channel = self.bot.get_channel(self.race_session.channel_id)
-             if channel:
-                 await send_race_summary(self.bot, channel, self.race_session)
+             await send_race_summary(self.bot, self.race_session.channel_id, self.race_session)
 
     
     def get_markdown_keypad(self, used_letters: dict, user_id: int):

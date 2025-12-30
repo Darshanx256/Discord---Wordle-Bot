@@ -26,27 +26,24 @@ class RaceCommands(commands.Cog):
         
         # Snapshot keys to avoid runtime error if dict changes
         try:
-            active_sessions = [s for s in self.bot.race_sessions.values() if s.status == 'active']
-            for session in active_sessions:
-                if session.end_time and datetime.datetime.now() > session.end_time:
-                    # Time's up!
-                    session.status = 'finished'
-                    
-                    # Notify channel
-                    channel = self.bot.get_channel(session.channel_id)
-                    if channel:
-                        try:
-                            await channel.send(
-                                f"⏰ **Race Time Limit Reached!**\n"
-                                f"The word was **{session.secret.upper()}**.\n"
-                                f"Thanks for playing!"
-                            )
-                        except:
-                            pass
-                    
-                    # Remove from active sessions
-                    if session.channel_id in self.bot.race_sessions:
-                        del self.bot.race_sessions[session.channel_id]
+            sessions_to_finish = []
+            now = datetime.datetime.now()
+            
+            for cid, session in self.bot.race_sessions.items():
+                if session.status == 'active' and session.end_time and now > session.end_time:
+                    sessions_to_finish.append((cid, session))
+            
+            if not sessions_to_finish:
+                return
+
+            from src.ui_race import send_race_summary
+            
+            for cid, session in sessions_to_finish:
+                # Time's up!
+                session.status = 'finished'
+                # print(f"⏰ Race in {cid} timed out. Concluding...")
+                await send_race_summary(self.bot, cid, session)
+                
         except Exception as e:
             print(f"Error in race timeout loop: {e}")
 

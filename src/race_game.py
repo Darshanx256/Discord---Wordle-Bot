@@ -88,11 +88,14 @@ class RaceSession:
         2. Won = False -> Green Count DESC (Secondary) -> Time Taken ASC (Tertiary)
         """
         results = []
+        # print(f"🏁 Concluding race for channel {self.channel_id}...")
         
         # 1. Gather all data
         for user_id, user in self.participants.items():
             game = self.race_games.get(user_id)
-            if not game: continue
+            if not game: 
+                # print(f"⚠️ No game found for user {user_id}")
+                continue
             
             # Check if user is in completion_order
             completed_info = next((x for x in self.completion_order if x[0] == user_id), None)
@@ -110,38 +113,26 @@ class RaceSession:
                 'user_id': user_id,
                 'user': user,
                 'won': won,
-                'time_taken': time_taken,
-                'green_count': green_count,
+                'time_taken': float(time_taken),
+                'green_count': int(green_count),
                 'attempts': game.attempts_used,
                 'max_attempts': game.max_attempts,
                 'game': game
             })
             
+        if not results:
+            # print("❌ No results to process.")
+            return []
+
         # 2. Sort Logic
-        # Sort keys: Won (True>False), Green Count (High>Low), Time (Low>High)
-        # Python sort is stable, so we sort by least important first or use complex key
-        
-        results.sort(key=lambda x: (
-            x['won'],                       # True(1) > False(0)
-            x['green_count'] if not x['won'] else 0,  # Only for non-winners matter
-            -x['time_taken']                # Negative for ASC sort in reverse=True context?? No wait.
-        ), reverse=True)
-        
-        # Let's simple key properties for clarity:
-        # We want: 
-        #   Winners (Fastest First)
-        #   Losers (Most Greens First -> Fastest First)
-        
         def rank_key(item):
-            # Returns a tuple that compares correctly with default sort (ASC) or reverse?
-            # Let's return a "Score" where higher is better.
-            
+            # Higher Score = Better Rank
             if item['won']:
-                # Score = 100000 - time_taken (Fastest time = Higher Score)
-                return 100000 - item['time_taken']
+                # Score starts at 1,000,000. Subtract time taken (Fastest time = Higher Score)
+                return 1000000 - item['time_taken']
             else:
                 # Score = (Green Count * 1000) + (1000 - Time Taken)
-                # Max time ~ 10 mins = 600s
+                # Max time ~ 10 mins = 600s. Base score below 100,000.
                 return (item['green_count'] * 1000) + (1000 - min(item['time_taken'], 1000))
         
         results.sort(key=rank_key, reverse=True)
@@ -151,10 +142,17 @@ class RaceSession:
         
         final_summary = []
         for idx, res in enumerate(results, 1):
-             rewards = calculate_race_rewards_delayed(bot, res['user_id'], res['game'], idx)
-             res['rewards'] = rewards
-             res['rank'] = idx
-             final_summary.append(res)
+             try:
+                 rewards = calculate_race_rewards_delayed(bot, res['user_id'], res['game'], idx)
+                 res['rewards'] = rewards
+                 res['rank'] = idx
+                 final_summary.append(res)
+             except Exception as e:
+                 print(f"❌ Error calculating rewards for {res['user_id']}: {e}")
+                 # Add fallback empty rewards
+                 res['rewards'] = {'reward_text': 'Error', 'rank': idx, 'rank_msg': f'#{idx}'}
+                 res['rank'] = idx
+                 final_summary.append(res)
              
         self.final_results = final_summary
         return final_summary
