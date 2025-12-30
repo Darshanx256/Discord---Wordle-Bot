@@ -377,11 +377,13 @@ class HelpView(discord.ui.View):
             # Custom Game Options
             embed.add_field(name="🧂 Custom Game Extra Options", value=(
                 "Use in `Extra options` field:\n"
-                "`dict:word1,word2` -> Custom word list\n"
-                "`time:X` -> Time limit (min)\n"
-                "`player:@user` -> Restrict to user\n"
-                "`blind:yes` -> Hide colors 🙈\n"
-                "`start:word` -> Force start word"
+                "`dict:word1,word2` -> Add custom words\n"
+                "`strict_dict:list` -> ONLY use these words\n"
+                "`time:0.5` -> Time limit (min, e.g. 0.5=30s)\n"
+                "`player:@u1,@u2` -> Allow multiple users\n"
+                "`blind:green` -> Show greens only 🟢\n"
+                "`start:w1,w2` -> Force start guesses\n"
+                "`title:My Text` -> Set custom title"
             ), inline=False)
             
             embed.set_footer(text="Page 2/2 • Climb the global leaderboard!")

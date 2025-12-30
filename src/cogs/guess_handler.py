@@ -66,11 +66,13 @@ class GuessHandler(commands.Cog):
             
             # Custom game validations
             if is_custom:
-                if game.allowed_player_id and ctx.author.id != game.allowed_player_id:
+                if game.allowed_players and ctx.author.id not in game.allowed_players:
                     return await ctx.send("❌ This game is restricted to a specific player!", ephemeral=True)
                 
                 if game.custom_dict and g_word not in game.custom_dict:
-                    return await ctx.send(f"⚠️ **{g_word.upper()}** not in custom dictionary!", ephemeral=True)
+                    # If it's custom_only, we fail here. If not, we fall through to bot.valid_set check.
+                    if getattr(game, 'custom_only', False):
+                        return await ctx.send(f"⚠️ **{g_word.upper()}** not in custom dictionary! Only custom words allowed.", ephemeral=True)
 
             if game.is_duplicate(g_word):
                 return await ctx.send(f"⚠️ **{g_word.upper()}** already guessed!", ephemeral=True)
@@ -78,16 +80,16 @@ class GuessHandler(commands.Cog):
                 return await ctx.send("⚠️ 5 letters only.", ephemeral=True)
             
             # Determine valid word set based on custom_only setting
-            if is_custom and getattr(game, 'custom_only', False) and game.custom_dict:
-                valid_check = game.custom_dict
+            if is_custom and getattr(game, 'custom_only', False):
+                valid_check = game.custom_dict or set()
+                if game.secret.lower() not in valid_check:
+                    valid_check.add(game.secret.lower())
             elif is_custom and game.custom_dict:
                 valid_check = self.bot.valid_set | game.custom_dict
             else:
                 valid_check = self.bot.valid_set
             
             if g_word not in valid_check:
-                if is_custom and getattr(game, 'custom_only', False):
-                    return await ctx.send(f"⚠️ **{g_word.upper()}** not in custom dictionary! Only custom words allowed.", ephemeral=True)
                 return await ctx.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
             pat, win, game_over = game.process_turn(g_word, ctx.author)
@@ -120,7 +122,7 @@ class GuessHandler(commands.Cog):
                         except: pass
             except: pass
 
-            # Get keyboard status (includes easter egg messages from ui.py)
+            # Get keyboard status
             keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id)
             
             # Progress bar
@@ -129,12 +131,12 @@ class GuessHandler(commands.Cog):
             progress = f"[{filled}{empty}]"
             
             # Board display
-            if is_custom and getattr(game, 'blind_mode', False) and not (win or game_over):
+            if is_custom and game.blind_mode and not (win or game_over):
                 lines = []
                 for h in game.history:
                     masked = ""
-                    for i, char in enumerate(h['word']):
-                        if char.upper() == game.secret[i].upper():
+                    for i, char in enumerate(h['word'].upper()):
+                        if char == game.secret[i].upper():
                             masked += EMOJIS.get(f"block_{char.lower()}_green", "🟩")
                         else:
                             masked += "⬛"

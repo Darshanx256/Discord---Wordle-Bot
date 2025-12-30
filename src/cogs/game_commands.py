@@ -102,88 +102,106 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             )
 
         # Parse extra options
-        custom_dict = None
-        time_limit = None
-        allowed_player_id = None
-        blind_mode = False
-        start_word = None
+        custom_dict = set()
+        time_limit_mins = None
+        allowed_players = set()
+        blind_mode = False # False, 'full', 'green'
+        start_words = []
         custom_only = False
+        custom_title = None
         
         if extra:
-            parts = [p.strip() for p in extra.split('|')]
+            # More robust split to handle cases like spaces around pipes
+            parts = [p.strip() for p in extra.split('|') if p.strip()]
             for part in parts:
-                if part.startswith('dict:'):
-                    # Custom dictionary
-                    words_str = part[5:].strip()
-                    words = [w.strip().lower() for w in words_str.split(',') if w.strip()]
-                    # Validate all words are 5 letters
+                if ':' not in part: continue
+                key, val = [i.strip() for i in part.split(':', 1)]
+                key = key.lower()
+                
+                if key in ['dict', 'strict_dict']:
+                    words = [w.strip().lower() for w in val.split(',') if w.strip()]
                     if not all(len(w) == 5 and w.isalpha() for w in words):
                         return await interaction.response.send_message(
-                            "❌ All custom dictionary words must be exactly 5 letters!",
+                            "❌ All dictionary words must be exactly 5 letters (alphabetic only)!",
                             ephemeral=True
                         )
-                    custom_dict = set(words)
-                    custom_dict.add(word)  # Add secret word to dict
-                
-                elif part.startswith('time:'):
-                    # Time limit in minutes
-                    try:
-                        time_limit = int(part[5:].strip())
-                        if time_limit < 1 or time_limit > 360:
-                            return await interaction.response.send_message(
-                                "❌ Time limit must be between 1 and 360 minutes!",
-                                ephemeral=True
-                            )
-                    except ValueError:
-                        return await interaction.response.send_message(
-                            "❌ Invalid time limit! Must be a number.",
-                            ephemeral=True
-                        )
-                
-                elif part.startswith('player:'):
-                    # Allowed player restriction
-                    player_mention = part[7:].strip()
-                    # Try to extract user ID from mention or raw ID
-                    import re
-                    match = re.search(r'<@!?(\d+)>|^(\d+)$', player_mention)
-                    if match:
-                        allowed_player_id = int(match.group(1) or match.group(2))
-                    else:
-                        return await interaction.response.send_message(
-                            "❌ Invalid player format! Use @mention or user ID.",
-                            ephemeral=True
-                        )
-                
-                elif part.startswith('blind:'):
-                    # Blind mode
-                    val = part[6:].strip().lower()
-                    if val in ['yes', 'true', 'on', '1']:
-                        blind_mode = True
-                
-                elif part.startswith('custom_only:'):
-                    # Custom only mode - only dictionary words allowed
-                    val = part[12:].strip().lower()
-                    if val in ['yes', 'true', 'on', '1']:
+                    custom_dict.update(words)
+                    if key == 'strict_dict':
                         custom_only = True
                 
-                elif part.startswith('start:'):
-                    # Force start word
-                    s_word = part[6:].strip().lower()
-                    if len(s_word) != 5 or not s_word.isalpha():
+                elif key == 'time':
+                    try:
+                        # Accepting float (e.g. 0.5 = 30s)
+                        time_val = float(val)
+                        if time_val <= 0 or time_val > 360:
+                            return await interaction.response.send_message(
+                                "❌ Time limit must be between 0.01 and 360 minutes!",
+                                ephemeral=True
+                            )
+                        time_limit_mins = time_val
+                    except ValueError:
                         return await interaction.response.send_message(
-                            "❌ Start word must be exactly 5 letters!",
+                            "❌ Invalid time limit! Must be a number (e.g. 10 or 0.5).",
                             ephemeral=True
                         )
-                    # Validate start word is not the answer
-                    if s_word.lower() == word.lower():
+                
+                elif key == 'player':
+                    # Support multiple players: @u1, @u2 or ID1, ID2
+                    entries = [e.strip() for e in val.split(',') if e.strip()]
+                    import re
+                    for entry in entries:
+                        match = re.search(r'<@!?(\d+)>|^(\d+)$', entry)
+                        if match:
+                            allowed_players.add(int(match.group(1) or match.group(2)))
+                        else:
+                            return await interaction.response.send_message(
+                                f"❌ Invalid player format: `{entry}`. Use @mention or ID.",
+                                ephemeral=True
+                            )
+                
+                elif key == 'blind':
+                    val_low = val.lower()
+                    if val_low in ['yes', 'true', 'on', 'full', '1']:
+                        blind_mode = 'full'
+                    elif val_low == 'green':
+                        blind_mode = 'green'
+                
+                elif key == 'start':
+                    # Support multiple start words
+                    words = [w.strip().lower() for w in val.split(',') if w.strip()]
+                    if not all(len(w) == 5 and w.isalpha() for w in words):
                         return await interaction.response.send_message(
-                            "❌ Start word cannot be the answer!",
+                            "❌ All starting words must be exactly 5 letters!",
                             ephemeral=True
                         )
-                    start_word = s_word
+                    for sw in words:
+                        if sw == word:
+                            return await interaction.response.send_message(
+                                "❌ A starting word cannot be the answer!",
+                                ephemeral=True
+                            )
+                    start_words = words
+
+                elif key == 'title':
+                    # Sanitize title: remove mentions, links, and keep it reasonable length
+                    import re
+                    # Remove anything that looks like a mention <@...> or <#...> or <@&...>
+                    clean_title = re.sub(r'<[@#]&?(\d+)>', '', val).strip()
+                    # Character limit
+                    if len(clean_title) > 100:
+                        clean_title = clean_title[:97] + "..."
+                    if clean_title:
+                        custom_title = clean_title
 
         reveal_bool = reveal == "yes"
         show_keyboard = keyboard == "yes"
+        
+        # Check if we have too many dict words
+        if len(custom_dict) > 1000: # Limit to 1000 for robustness
+             return await interaction.response.send_message(
+                "❌ Custom dictionary is too large! Maximum 1000 words.",
+                ephemeral=True
+            )
 
         # Check if ANY game already exists in this channel
         cid = interaction.channel.id
@@ -199,7 +217,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                 ephemeral=True
             )
 
-        # Add word to valid set temporarily
+        # Add word and dict to valid set temporarily
         self.bot.valid_set.add(word)
         if custom_dict:
             self.bot.valid_set.update(custom_dict)
@@ -208,49 +226,57 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         game = WordleGame(word, cid, self.user, 0)
         game.max_attempts = tries
         game.reveal_on_loss = reveal_bool
-        game.custom_dict = custom_dict
-        game.time_limit = time_limit
-        game.allowed_player_id = allowed_player_id
+        game.custom_dict = custom_dict if custom_dict else None
+        game.time_limit = time_limit_mins
+        game.allowed_players = allowed_players
         game.show_keyboard = show_keyboard
         game.blind_mode = blind_mode
         game.custom_only = custom_only
+        game.title = custom_title
         
-        # Apply start word if valid
-        if start_word:
-            # We treat it as a pre-made guess by the system/host
-            # Using a dummy user or just appending to history directly
-            # For simplicity, we just process it as a turn by the bot (id=bot.user.id if available, else 0)
-            # Actually, let's just append to history to avoid validation logic issues
-            pat = game.evaluate_guess(start_word)
-            game.history.append({'word': start_word, 'pattern': pat, 'user': self.bot.user})
-            game.guessed_words.add(start_word)
-        self.bot.custom_games[cid] = game
-        
-        print(f"DEBUG: Game Created | Max Attempts: {game.max_attempts} | ID: {id(game)}")
+        # Apply start words
+        for sw in start_words:
+            pat = game.evaluate_guess(sw)
+            game.history.append({'word': sw, 'pattern': pat, 'user': self.bot.user})
+            game.guessed_words.add(sw.upper()) # Note: guessed_words uses UPPER in process_turn usually? 
+                                             # Actually WordleGame.is_duplicate does word.upper() in self.guessed_words
+                                             # So we should add upper.
 
-        # Clean up any "stopped" state
+        if start_words:
+            # Add to guessed words set to prevent repeats
+            # Note: WordleGame uses upper() for guessed_words set
+            for sw in start_words:
+                game.guessed_words.add(sw.upper())
+
+        self.bot.custom_games[cid] = game
         self.bot.stopped_games.discard(cid)
 
-        # Respond to modal
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=True)
-
-        # Build setup summary
+        # Build setup summary for ephemeral response
         setup_details = [
             f"**Tries:** {tries}",
             f"**Reveal on loss:** {'Yes' if reveal_bool else 'No'}",
             f"**Keyboard:** {'Shown' if show_keyboard else 'Hidden'}"
         ]
         if custom_dict:
-            setup_details.append(f"**Custom dictionary:** {len(custom_dict)} words")
-        if time_limit:
-            setup_details.append(f"**Time limit:** {time_limit} minutes")
-        if allowed_player_id:
-            setup_details.append(f"**Restricted to:** <@{allowed_player_id}>")
+            setup_details.append(f"**Custom dictionary:** {len(custom_dict)} words{' (STRICT)' if custom_only else ''}")
+        if time_limit_mins:
+            if time_limit_mins < 1:
+                setup_details.append(f"**Time limit:** {int(time_limit_mins * 60)} seconds")
+            else:
+                setup_details.append(f"**Time limit:** {time_limit_mins} minutes")
+        if allowed_players:
+            p_mentions = ", ".join([f"<@{pid}>" for pid in allowed_players])
+            setup_details.append(f"**Restricted to:** {p_mentions}")
         if blind_mode:
-            setup_details.append("**Blind Mode:** Active 🙈")
-        if start_word:
-            setup_details.append(f"**Starting Word:** {start_word.upper()}")
+            blind_tag = "Full 🙈" if blind_mode == 'full' else "Greens Only 🟢"
+            setup_details.append(f"**Blind Mode:** {blind_tag}")
+        if start_words:
+            setup_details.append(f"**Starting Word(s):** {', '.join(w.upper() for w in start_words)}")
+        if custom_title:
+            setup_details.append(f"**Custom Title:** {custom_title}")
+
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
 
         await interaction.followup.send(
             "✅ Custom game set up!\n" + "\n".join(setup_details),
@@ -258,20 +284,24 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         )
 
         # Announce in channel
+        embed_title = f"{custom_title} Started" if custom_title else "🧂 Custom Wordle Game Started"
         embed = discord.Embed(
-            title="🧂 Custom Wordle Game Started",
+            title=embed_title,
             color=discord.Color.teal()
         )
         desc_parts = [
             f"A custom wordle has been set up by **{self.user.display_name}**",
             f"**{tries} attempts** total"
         ]
-        if allowed_player_id:
-            desc_parts.append(f"**Restricted to:** <@{allowed_player_id}>")
-        if time_limit:
-            desc_parts.append(f"**Time limit:** {time_limit} minutes")
+        if allowed_players:
+            p_mentions = ", ".join([f"<@{pid}>" for pid in allowed_players])
+            desc_parts.append(f"**Restricted to:** {p_mentions}")
+        if time_limit_mins:
+            t_str = f"{int(time_limit_mins * 60)}s" if time_limit_mins < 1 else f"{time_limit_mins}m"
+            desc_parts.append(f"**Time limit:** {t_str}")
         if blind_mode:
-            desc_parts.append("**Blind Mode:** Active 🙈")
+            blind_tag = "Active 🙈" if blind_mode == 'full' else "Greens Only 🟢"
+            desc_parts.append(f"**Blind Mode:** {blind_tag}")
         
         embed.description = "\n".join(desc_parts)
         embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)

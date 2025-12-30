@@ -6,8 +6,8 @@ from src.utils import EMOJIS
 class WordleGame:
     __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
                  'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time',
-                 'reveal_on_loss', 'difficulty', 'custom_dict', 'time_limit', 'allowed_player_id', 'show_keyboard',
-                 'blind_mode', 'custom_only', 'discovered_green_positions')
+                 'reveal_on_loss', 'difficulty', 'custom_dict', 'time_limit', 'allowed_players', 'show_keyboard',
+                 'blind_mode', 'custom_only', 'discovered_green_positions', 'title')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
@@ -26,12 +26,13 @@ class WordleGame:
         self.difficulty = 0         # 0=Simple, 1=Classic, 2=Custom
         # Enhanced custom game fields
         self.custom_dict = None      # Set of allowed words for custom games
-        self.time_limit = None       # Time limit in minutes (None = default 6 hours)
-        self.allowed_player_id = None  # Restrict guesses to specific user
+        self.time_limit = None       # Time limit in minutes
+        self.allowed_players = set()  # Set of user IDs allowed to guess
         self.show_keyboard = True    # Whether to show keyboard guide
-        self.blind_mode = False      # If True, feedback is hidden until end
+        self.blind_mode = False      # False, 'full', or 'green'
         self.custom_only = False     # If True, only custom dictionary words are allowed
         self.discovered_green_positions = set()  # Track which positions have greens discovered
+        self.title = None            # Custom title for the game embed
 
     @property
     def attempts_used(self): return len(self.history)
@@ -98,7 +99,12 @@ class WordleGame:
             char = guess[i].lower()
             state = state_list[i]
             
-            emoji_key = f"block_{char}_{state}"
+            # Special handling for 'green' blind mode: hide yellows on the board
+            display_state = state
+            if self.blind_mode == 'green' and state == 'yellow':
+                display_state = 'white' # Display as grey/white
+            
+            emoji_key = f"block_{char}_{display_state}"
             emoji_tags[i] = EMOJIS.get(emoji_key, char.upper())
 
         return "".join(emoji_tags)

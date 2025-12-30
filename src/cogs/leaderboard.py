@@ -122,7 +122,7 @@ class LeaderboardCommands(commands.Cog):
                  results, total_count = self.global_cache
                  if results:
                     data = await fetch_and_format_rankings(results, self.bot)
-                    view = LeaderboardView(self.bot, data, "🌍 Global top 50", discord.Color.purple(), ctx.author, total_count=total_count)
+                    view = LeaderboardView(self.bot, data, "🌍  Global Top 50", discord.Color.purple(), ctx.author, total_count=total_count)
                     return await ctx.send(embed=view.create_embed(), view=view)
 
         try:
@@ -160,7 +160,7 @@ class LeaderboardCommands(commands.Cog):
 
         data = await fetch_and_format_rankings(results, self.bot)
 
-        view = LeaderboardView(self.bot, data, "🌍 Global top 50", discord.Color.purple(), ctx.author, total_count=total_count)
+        view = LeaderboardView(self.bot, data, "🌍  Global Top 50", discord.Color.purple(), ctx.author, total_count=total_count)
         await ctx.send(embed=view.create_embed(), view=view)
 
 

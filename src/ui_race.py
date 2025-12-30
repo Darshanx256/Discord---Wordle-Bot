@@ -101,6 +101,7 @@ class RaceLobbyView(ui.View):
                 f"**{self.race_session.participant_count}** racers are competing!\n"
                 f"Ends <t:{end_ts}:R>\n\n"
                 "👇 **Click below to open your game board!**"
+                "Note: If you dismissed the board, use `show_race` to bring it back."
             ),
             color=discord.Color.green()
         )
@@ -262,7 +263,10 @@ async def send_race_summary(bot, channel_id, race_session):
             reward_text = rew.get('reward_text', 'N/A')
             
             leaderboard_text += f"{medal} **{user_name}** ({status} in {res['attempts']}/6)\n"
-            leaderboard_text += f"   > {reward_text} • {res['green_count']} 🟩 found\n"
+            leaderboard_text += (
+                f"   > {reward_text} • "
+                f"{'word found' if res['green_count'] == 5 else str(res['green_count']) + ' greens'}\n"
+            )
 
         embed.add_field(name="Leaderboard", value=leaderboard_text or "No one completed the race.", inline=False)
         

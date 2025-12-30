@@ -17,8 +17,8 @@ def calculate_base_rewards(mode: str, outcome: str, guesses: int, time_taken: fl
         xp = rewards.get(outcome, 5)
         
         if outcome == 'win':
-            # Solo Win Base: 100 (Assumed standard)
-            mps = 100 
+            # Solo Win Base: 50
+            mps = 50 
             mps += MPS_EFFICIENCY.get(guesses, 0)
             if time_taken < 60: mps += MPS_SPEED[60]
             elif time_taken < 90: mps += MPS_SPEED[90]

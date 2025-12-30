@@ -41,7 +41,7 @@ XP_GAINS = {
 
 # MATCH PERFORMANCE SCORE (MPS) - WR Calculation
 MPS_BASE = {
-    'win': 120, 'correct_4': 70, 'correct_3': 50, 'correct_2': 20, 'correct_1': 10, 'participation': 5
+    'win': 60, 'correct_4': 35, 'correct_3': 25, 'correct_2': 10, 'correct_1': 5, 'participation': 2
 }
 MPS_EFFICIENCY = { # Bonus for Nth guess win
     1: 50, 2: 40, 3: 30, 4: 20, 5: 10, 6: 5
