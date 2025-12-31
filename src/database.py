@@ -317,93 +317,99 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
 
 async def migrate_word_pools(bot: commands.Bot):
     """
-    ONE-TIME MIGRATION (BETA): Moves data from legacy row-per-word tables to bitset format.
-    Ensures that existing guild history is preserved during the transition.
+    ONE-TIME MIGRATION (BETA): Moves data from legacy row-per-word guild_history to bitset format.
+    Dynamically categorizes words into 'simple' or 'classic' pools.
     """
-    print("🚀 [MIGRATION] Migration function invoked!")
+    print("\n" + "🚨" * 20)
+    print("🚀 [MIGRATION DEBUG] MIGRATION PROCESS STARTED!")
+    print("🚨" * 20 + "\n")
     
     # 1. Fetch old history
     try:
-        print("📡 [MIGRATION] Fetching legacy tables...")
-        # Note: We use .select('*') to get all columns including guild_id and word
-        simple_res = bot.supabase_client.table('guild_history').select('guild_id, word').execute()
-        classic_res = bot.supabase_client.table('guild_history_classic').select('guild_id, word').execute()
-        
-        print(f"📡 [MIGRATION] Fetched {len(simple_res.data)} simple rows, {len(classic_res.data)} classic rows.")
+        print("📡 [MIGRATION] Fetching ALL legacy history from guild_history...")
+        res = bot.supabase_client.table('guild_history').select('guild_id, word').execute()
+        print(f"📡 [MIGRATION] Fetched {len(res.data)} total history rows.")
+        if not res.data:
+            print("ℹ️ [MIGRATION] guild_history is empty, nothing to migrate.")
+            return
     except Exception as e:
-        print(f"ℹ️ [MIGRATION] Legacy tables check failed or they are missing: {e}")
-        return
-
-    # Map: guild_id -> { 'simple': [words], 'classic': [words] }
-    guild_data = {}
-    
-    for row in simple_res.data:
-        gid = row['guild_id']
-        if gid not in guild_data: guild_data[gid] = {'simple': [], 'classic': []}
-        guild_data[gid]['simple'].append(row['word'].strip().lower())
-        
-    for row in classic_res.data:
-        gid = row['guild_id']
-        if gid not in guild_data: guild_data[gid] = {'simple': [], 'classic': []}
-        guild_data[gid]['classic'].append(row['word'].strip().lower())
-
-    if not guild_data:
-        print("ℹ️ [MIGRATION] No legacy data found to migrate.")
+        print(f"❌ [MIGRATION] Legacy fetch failed: {e}")
         return
 
     # 2. Reference sorted lists for mapping
-    # Note: These must be already loaded and sorted in bot.secrets / bot.hard_secrets
+    # Note: These MUST be loaded in setup_hook before this call
     simple_sorted = getattr(bot, 'secrets', [])
     classic_sorted = getattr(bot, 'hard_secrets', [])
     
-    print(f"📊 [MIGRATION] Ref Lists: Simple={len(simple_sorted)}, Classic={len(classic_sorted)}")
+    print(f"📊 [MIGRATION] Word Lists: Simple={len(simple_sorted)}, Classic={len(classic_sorted)}")
     
-    if not simple_sorted or not classic_sorted:
-        print("❌ [MIGRATION] Word lists not loaded! Cannot migrate.")
+    if not simple_sorted and not classic_sorted:
+        print("❌ [MIGRATION] NO WORD LISTS LOADED! Cannot proceed.")
         return
         
     simple_map = {word: i for i, word in enumerate(simple_sorted)}
     classic_map = {word: i for i, word in enumerate(classic_sorted)}
 
-    def build_bitset(words, word_map, total_words):
-        if total_words == 0: return b'', 0
+    # Map: guild_id -> { 'simple': set_of_indices, 'classic': set_of_indices }
+    guild_bit_data = {}
+    
+    print("🧠 [MIGRATION] Categorizing history rows...")
+    unknown_words = set()
+    
+    for row in res.data:
+        gid = str(row['guild_id'])
+        word = row['word'].strip().lower()
+        
+        if gid not in guild_bit_data:
+            guild_bit_data[gid] = {'simple': set(), 'classic': set()}
+            
+        if word in simple_map:
+            guild_bit_data[gid]['simple'].add(simple_map[word])
+        elif word in classic_map:
+            guild_bit_data[gid]['classic'].add(classic_map[word])
+        else:
+            unknown_words.add(word)
+
+    if unknown_words and len(unknown_words) < 20:
+        print(f"⚠️ [MIGRATION] Words not in either list: {unknown_words}")
+    elif unknown_words:
+        print(f"⚠️ [MIGRATION] Found {len(unknown_words)} words not in current word lists.")
+
+    def generate_hex_bitset(indices, total_words):
+        if total_words == 0: return "\\x", 0
         size = (total_words + 7) // 8
         ba = bytearray(size)
         count = 0
-        for w in words:
-            if w in word_map:
-                idx = word_map[w]
-                # Postgres BYTEA bit indexing (left-to-right)
-                ba[idx // 8] |= (1 << (7 - (idx % 8)))
-                count += 1
-        return bytes(ba), count # Return as bytes for Supabase/PostgREST
+        for idx in indices:
+            # Postgres BYTEA bit indexing (left-to-right)
+            ba[idx // 8] |= (1 << (7 - (idx % 8)))
+            count += 1
+        return f"\\x{ba.hex()}", count
 
-    # 3. Perform migration
+    # 3. Perform Direct Write
     migrate_count = 0
-    print(f"🔍 [MIGRATION] Found {len(guild_data)} guilds to process.")
+    total_guilds = len(guild_bit_data)
+    print(f"🔍 [MIGRATION] Ready to upsert {total_guilds} guilds...")
     
-    for gid, data in guild_data.items():
-        s_pool, s_count = build_bitset(data['simple'], simple_map, len(simple_sorted))
-        c_pool, c_count = build_bitset(data['classic'], classic_map, len(classic_sorted))
+    for gid, data in guild_bit_data.items():
+        s_hex, s_count = generate_hex_bitset(data['simple'], len(simple_sorted))
+        c_hex, c_count = generate_hex_bitset(data['classic'], len(classic_sorted))
         
         try:
-            # Note: supabase-py handles binary data by hex-encoding it for PostgREST
             payload = {
                 'guild_id': gid,
-                'simple_pool': s_pool.hex(), # Using .hex() for maximum compatibility with JSON payload
+                'simple_pool': s_hex,
                 'simple_count': s_count,
-                'classic_pool': c_pool.hex(),
+                'classic_pool': c_hex,
                 'classic_count': c_count
             }
-            # Add prefix \x for Postgres HEX format
-            payload['simple_pool'] = f"\\x{payload['simple_pool']}"
-            payload['classic_pool'] = f"\\x{payload['classic_pool']}"
-            
             bot.supabase_client.table('guild_word_pools').upsert(payload).execute()
             migrate_count += 1
-            if migrate_count % 10 == 0:
-                print(f"⏳ [MIGRATION] Processed {migrate_count} guilds...")
+            if migrate_count % 10 == 0 or migrate_count == total_guilds:
+                print(f"⏳ [MIGRATION] Progress: {migrate_count}/{total_guilds} guilds migrated...")
         except Exception as e:
             print(f"⚠️ [MIGRATION] Failed for guild {gid}: {e}")
 
-    print(f"✅ [MIGRATION] Complete! {migrate_count} guilds successfully migrated.")
+    print("\n" + "✅" * 20)
+    print(f"🏆 [MIGRATION] COMPLETE! {migrate_count} guilds successfully updated in guild_word_pools.")
+    print("✅" * 20 + "\n")

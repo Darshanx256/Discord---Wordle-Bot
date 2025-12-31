@@ -576,10 +576,10 @@ class GameCommands(commands.Cog):
         if not await self.bot.is_owner(interaction.user):
             return await interaction.response.send_message("❌ Command restricted to owner.", ephemeral=True)
             
-        await interaction.response.send_message("🚀 Starting manual migration... Check console for detailed logs.", ephemeral=True)
+        await interaction.response.send_message("🚀 Starting manual migration... Check console for detailed logs.")
         from src.database import migrate_word_pools
         await migrate_word_pools(self.bot)
-        await interaction.followup.send("✅ Manual migration process completed.", ephemeral=True)
+        await interaction.followup.send("✅ Manual migration process completed.")
 
 
 async def setup(bot):
