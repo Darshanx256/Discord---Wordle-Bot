@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 from discord import ui
 from src.game import WordleGame
-from src.database import get_next_secret, get_next_classic_secret
+from src.database import fetch_user_profile_v2
 from src.utils import EMOJIS
 from src.ui import SoloView, get_markdown_keypad_status
 from src.handlers.game_logic import start_multiplayer_game
