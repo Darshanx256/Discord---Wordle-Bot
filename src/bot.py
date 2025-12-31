@@ -110,6 +110,7 @@ class WordleBot(commands.Bot):
         """Load word lists from files."""
         if os.path.exists(SECRET_FILE):
             with open(SECRET_FILE, "r", encoding="utf-8") as f:
+                # NOTE: secrets MUST be alphabetically sorted in the file for stable bitset bit-mapping
                 self.secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
         else:
             self.secrets = []
@@ -122,6 +123,7 @@ class WordleBot(commands.Bot):
 
         if os.path.exists(CLASSIC_FILE):
             with open(CLASSIC_FILE, "r", encoding="utf-8") as f:
+                # NOTE: hard_secrets MUST be alphabetically sorted in the file for stable bitset bit-mapping
                 self.hard_secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
         else:
             self.hard_secrets = []

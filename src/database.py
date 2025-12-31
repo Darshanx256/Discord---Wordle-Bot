@@ -242,78 +242,45 @@ def trigger_egg(bot: commands.Bot, user_id: int, egg_name: str):
         print(f"Egg Error: {e}")
         return False
 
-# --- EXISTING WORD LOGIC (Keep as is) ---
-def get_next_secret(bot: commands.Bot, guild_id: int) -> str:
-    """Gets a secret word from the simple pool (bot.secrets) using guild_history table."""
-    try:
-        # 1. SELECT used words
-        response = bot.supabase_client.table('guild_history') \
-            .select('word') \
-            .eq('guild_id', guild_id) \
-            .execute()
-        
-        used_words = {r['word'] for r in response.data}
-        available_words = [w for w in bot.secrets if w not in used_words]
-        
-        if not available_words:
-            # 2. Reset history
-            bot.supabase_client.table('guild_history') \
-                .delete() \
-                .eq('guild_id', guild_id) \
-                .execute()
-                
-            available_words = bot.secrets
-            print(f"🔄 Guild {guild_id} history reset for Simple mode. Word pool recycled.")
-            
-        pick = random.choice(available_words)
-        
-        # 3. INSERT new secret
-        bot.supabase_client.table('guild_history') \
-            .insert({'guild_id': guild_id, 'word': pick}) \
-            .execute()
-            
-        return pick
-    
-    except Exception as e:
-        print(f"DB ERROR in get_next_secret: {e}")
-        print("CRITICAL: Falling back to random word (Simple) due to DB failure.")
-        return random.choice(bot.secrets)
+# --- BITSET WORD POOL OPTIMIZATION ---
 
-def get_next_classic_secret(bot: commands.Bot, guild_id: int) -> str:
-    """Gets a secret word from the hard pool (bot.hard_secrets) using guild_history_classic table."""
+def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str = 'simple') -> str:
+    """
+    Industry-grade optimization: Gets a secret word using a Guild-level bitset.
+    Avoids O(N) database growth and provides atomic selection.
+    """
     try:
-        # 1. SELECT used words from the classic table
-        response = bot.supabase_client.table('guild_history_classic') \
-            .select('word') \
-            .eq('guild_id', guild_id) \
-            .execute()
-        
-        used_words = {r['word'] for r in response.data}
-        available_words = [w for w in bot.hard_secrets if w not in used_words]
-        
-        if not available_words:
-            # 2. Reset history
-            bot.supabase_client.table('guild_history_classic') \
-                .delete() \
-                .eq('guild_id', guild_id) \
-                .execute()
-                
-            available_words = bot.hard_secrets
-            print(f"🔄 Guild {guild_id} history reset for Classic mode. Word pool recycled.")
+        # 1. Determine which pool and total words
+        if pool_type == 'classic':
+            pool_list = bot.hard_secrets
+        else:
+            pool_list = bot.secrets
             
-        pick = random.choice(available_words)
+        total_words = len(pool_list)
+        if total_words == 0:
+            return random.choice(['ABOUT', 'PANIC', 'PIZZA', 'LIGHT', 'DREAM']) # Absolute fallback
+
+        # 2. Call RPC to get a random unused index
+        params = {
+            'p_guild_id': guild_id,
+            'p_pool_type': pool_type,
+            'p_total_words': total_words
+        }
         
-        # 3. INSERT new secret
-        bot.supabase_client.table('guild_history_classic') \
-            .insert({'guild_id': guild_id, 'word': pick}) \
-            .execute()
+        response = bot.supabase_client.rpc('pick_next_word', params).execute()
+        
+        if response.data is not None:
+            idx = int(response.data)
+            # 3. Return word at that index
+            return pool_list[idx]
             
-        return pick
-    
+        return random.choice(pool_list)
+        
     except Exception as e:
-        print(f"DB ERROR (General) in get_next_classic_secret: {e}")
-        print("CRITICAL: Falling back to random word (Classic) due to DB failure.")
-        return random.choice(bot.hard_secrets)
+        print(f"DB ERROR in get_next_word_bitset: {e}")
+        # Final fallback
+        pool = bot.hard_secrets if pool_type == 'classic' else bot.secrets
+        return random.choice(pool) if pool else "PANIC"
 
 def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, guesses: int, time_taken: float, xp: int, wr: int, rank: int):
     """Record race mode result in database."""

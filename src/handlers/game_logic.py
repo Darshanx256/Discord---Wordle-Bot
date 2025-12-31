@@ -5,7 +5,7 @@ import asyncio
 import datetime
 import discord
 from src.game import WordleGame
-from src.database import record_game_v2, get_next_secret, get_next_classic_secret
+from src.database import record_game_v2, get_next_word_bitset
 from src.utils import get_badge_emoji, get_win_flavor, get_cached_username
 
 
@@ -288,7 +288,7 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
             if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
-        secret = get_next_classic_secret(bot, guild.id)
+        secret = get_next_word_bitset(bot, guild.id, 'classic')
         title = "⚔️ Wordle Started! (Classic)"
         color = discord.Color.dark_gold()
         desc = "**Hard Mode!** 6 attempts."
@@ -298,7 +298,7 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
             if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
-        secret = get_next_secret(bot, guild.id)
+        secret = get_next_word_bitset(bot, guild.id, 'simple')
         title = "✨ Wordle Started! (Simple)"
         color = discord.Color.blue()
         desc = "A simple **5-letter word** has been chosen. **6 attempts** total."
