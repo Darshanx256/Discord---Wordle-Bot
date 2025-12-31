@@ -352,6 +352,8 @@ async def migrate_word_pools(bot: commands.Bot):
     simple_sorted = getattr(bot, 'secrets', [])
     classic_sorted = getattr(bot, 'hard_secrets', [])
     
+    print(f"📊 [MIGRATION] Ref Lists: Simple={len(simple_sorted)}, Classic={len(classic_sorted)}")
+    
     if not simple_sorted or not classic_sorted:
         print("❌ [MIGRATION] Word lists not loaded! Cannot migrate.")
         return
@@ -360,33 +362,43 @@ async def migrate_word_pools(bot: commands.Bot):
     classic_map = {word: i for i, word in enumerate(classic_sorted)}
 
     def build_bitset(words, word_map, total_words):
+        if total_words == 0: return b'', 0
         size = (total_words + 7) // 8
         ba = bytearray(size)
         count = 0
         for w in words:
             if w in word_map:
                 idx = word_map[w]
-                # Postgres BYTEA bit indexing (0 = leftmost bit of first byte)
+                # Postgres BYTEA bit indexing (left-to-right)
                 ba[idx // 8] |= (1 << (7 - (idx % 8)))
                 count += 1
-        return list(ba), count # Convert to list for JSON compatibility
+        return bytes(ba), count # Return as bytes for Supabase/PostgREST
 
     # 3. Perform migration
     migrate_count = 0
+    print(f"🔍 [MIGRATION] Found {len(guild_data)} guilds to process.")
+    
     for gid, data in guild_data.items():
         s_pool, s_count = build_bitset(data['simple'], simple_map, len(simple_sorted))
         c_pool, c_count = build_bitset(data['classic'], classic_map, len(classic_sorted))
         
         try:
+            # Note: supabase-py handles binary data by hex-encoding it for PostgREST
             payload = {
                 'guild_id': gid,
-                'simple_pool': s_pool,
+                'simple_pool': s_pool.hex(), # Using .hex() for maximum compatibility with JSON payload
                 'simple_count': s_count,
-                'classic_pool': c_pool,
+                'classic_pool': c_pool.hex(),
                 'classic_count': c_count
             }
+            # Add prefix \x for Postgres HEX format
+            payload['simple_pool'] = f"\\x{payload['simple_pool']}"
+            payload['classic_pool'] = f"\\x{payload['classic_pool']}"
+            
             bot.supabase_client.table('guild_word_pools').upsert(payload).execute()
             migrate_count += 1
+            if migrate_count % 10 == 0:
+                print(f"⏳ [MIGRATION] Processed {migrate_count} guilds...")
         except Exception as e:
             print(f"⚠️ [MIGRATION] Failed for guild {gid}: {e}")
 
