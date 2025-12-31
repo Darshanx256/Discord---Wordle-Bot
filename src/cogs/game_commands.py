@@ -570,5 +570,17 @@ class GameCommands(commands.Cog):
         await ctx.send(embed=embed, view=view, ephemeral=True)
 
 
+    @app_commands.command(name="force_migrate", description="[OWNER ONLY] Force word pool migration from legacy tables.")
+    async def force_migrate(self, interaction: discord.Interaction):
+        """Force word pool migration manual trigger."""
+        if not await self.bot.is_owner(interaction.user):
+            return await interaction.response.send_message("❌ Command restricted to owner.", ephemeral=True)
+            
+        await interaction.response.send_message("🚀 Starting manual migration... Check console for detailed logs.", ephemeral=True)
+        from src.database import migrate_word_pools
+        await migrate_word_pools(self.bot)
+        await interaction.followup.send("✅ Manual migration process completed.", ephemeral=True)
+
+
 async def setup(bot):
     await bot.add_cog(GameCommands(bot))
