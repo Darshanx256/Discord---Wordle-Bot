@@ -19,6 +19,7 @@ class WordleBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.guilds = True
+        intents.members = True
 
         super().__init__(command_prefix=self.get_custom_prefix, intents=intents, max_messages=10)
         self.games = {}
@@ -65,18 +66,21 @@ class WordleBot(commands.Bot):
             
         print(f"⚠️ Command Error in {ctx.command}: {error}")
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Global Ban Check for Slash Commands."""
+        if interaction.user.id in self.banned_users:
+            if not interaction.response.is_done():
+                await interaction.response.send_message("⚠️ You are banned from using this bot.", ephemeral=True)
+            return False
+        return True
+
     async def setup_hook(self):
         self.load_local_data()
         self.load_banned_users()
         self.setup_db()
         
-        # Global Ban Check for Slash Commands
-        @self.tree.interaction_check
-        async def global_ban_check(interaction: discord.Interaction) -> bool:
-            if interaction.user.id in self.banned_users:
-                await interaction.response.send_message("⚠️ You are banned from using this bot.", ephemeral=True)
-                return False
-            return True
+        # Register Global Ban Check for Slash Commands
+        self.tree.interaction_check = self.interaction_check
 
         # Load cogs first so their app-commands are registered before syncing
         await self.load_cogs()

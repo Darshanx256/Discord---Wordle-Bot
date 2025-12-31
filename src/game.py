@@ -7,7 +7,7 @@ class WordleGame:
     __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
                  'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time',
                  'reveal_on_loss', 'difficulty', 'custom_dict', 'time_limit', 'allowed_players', 'show_keyboard',
-                 'blind_mode', 'custom_only', 'discovered_green_positions', 'title')
+                 'blind_mode', 'custom_only', 'discovered_green_positions', 'title', 'monotonic_end_time')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
@@ -18,6 +18,7 @@ class WordleGame:
         self.history = [] 
         self.participants = set() 
         self.guessed_words = set()
+        self.monotonic_end_time = None
         self.used_letters = {'correct': set(), 'present': set(), 'absent': set()}
         self.last_interaction = datetime.datetime.now()
         self.start_time = datetime.datetime.now()

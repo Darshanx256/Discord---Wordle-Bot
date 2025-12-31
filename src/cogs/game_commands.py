@@ -5,6 +5,9 @@ import asyncio
 import discord
 from discord.ext import commands
 from discord import ui
+import random
+import datetime
+import time
 from src.game import WordleGame
 from src.database import fetch_user_profile_v2
 from src.utils import EMOJIS
@@ -131,11 +134,10 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                 
                 elif key == 'time':
                     try:
-                        # Accepting float (e.g. 0.5 = 30s)
                         time_val = float(val)
-                        if time_val <= 0 or time_val > 360:
+                        if time_val < 0.5 or time_val > 360:
                             return await interaction.response.send_message(
-                                "❌ Time limit must be between 0.01 and 360 minutes!",
+                                "❌ Time limit must be between 0.5 and 360 minutes!",
                                 ephemeral=True
                             )
                         time_limit_mins = time_val
@@ -146,16 +148,39 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                         )
                 
                 elif key == 'player':
-                    # Support multiple players: @u1, @u2 or ID1, ID2
                     entries = [e.strip() for e in val.split(',') if e.strip()]
                     import re
+                    
+                    # Security: Only allow members present in this channel
+                    channel_members = interaction.channel.members if hasattr(interaction.channel, 'members') else []
+                    if not channel_members and interaction.guild:
+                         # Fallback if channel.members is empty (unlikely but possible depending on cache)
+                        channel_members = interaction.guild.members
+                    
                     for entry in entries:
+                        found_id = None
+                        
+                        # Use first match to handle both mentions <@ID> and raw IDs
                         match = re.search(r'<@!?(\d+)>|^(\d+)$', entry)
+                        
                         if match:
-                            allowed_players.add(int(match.group(1) or match.group(2)))
+                            target_id = int(match.group(1) or match.group(2))
+                            # Security check: Is this ID in the channel?
+                            if any(m.id == target_id for m in channel_members):
+                                found_id = target_id
+                        elif entry.startswith('@'):
+                            name_to_find = entry[1:].lower()
+                            # Search ONLY in channel members
+                            for member in channel_members:
+                                if member.display_name.lower() == name_to_find or member.name.lower() == name_to_find:
+                                    found_id = member.id
+                                    break
+                        
+                        if found_id:
+                            allowed_players.add(found_id)
                         else:
                             return await interaction.response.send_message(
-                                f"❌ Invalid player format: `{entry}`. Use @mention or ID.",
+                                f"❌ Could not find player `{entry}` in this channel. They must be present in the channel to be added.",
                                 ephemeral=True
                             )
                 
@@ -251,6 +276,14 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         self.bot.custom_games[cid] = game
         self.bot.stopped_games.discard(cid)
 
+        # Launch timer if needed
+        if time_limit_mins:
+            end_ts = int(time.time() + (time_limit_mins * 60))
+            game.monotonic_end_time = time.monotonic() + (end_ts - time.time())
+            cog = self.bot.get_cog("GameCommands")
+            if cog:
+                await cog.start_custom_timer(cid, game)
+
         # Build setup summary for ephemeral response
         setup_details = [
             f"**Tries:** {tries}",
@@ -330,6 +363,62 @@ class CustomSetupView(ui.View):
 class GameCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self._custom_timers = {} # channel_id: Task
+
+    def cog_unload(self):
+        for task in self._custom_timers.values():
+            task.cancel()
+
+    async def _run_custom_timer(self, channel_id, game):
+        """Monotonic timer for custom games with a time limit."""
+        try:
+            while channel_id in self.bot.custom_games:
+                now = time.monotonic()
+                remaining = game.monotonic_end_time - now
+                
+                if remaining <= 0:
+                    break
+                
+                if remaining > 60: sleep_time = 30
+                elif remaining > 10: sleep_time = 5
+                elif remaining > 2: sleep_time = 1
+                elif remaining > 0.05: sleep_time = 0.05
+                else: sleep_time = 0
+                
+                if sleep_time > 0:
+                    await asyncio.sleep(min(sleep_time, remaining))
+                else:
+                    break
+            
+            # Time's up
+            if channel_id in self.bot.custom_games:
+                game = self.bot.custom_games.pop(channel_id, None)
+                if game:
+                    channel = self.bot.get_channel(channel_id)
+                    if channel:
+                        embed = discord.Embed(
+                            title="⏰ Time's Up!",
+                            color=discord.Color.dark_grey()
+                        )
+                        desc = "The custom game has timed out."
+                        if getattr(game, 'reveal_on_loss', True):
+                            desc += f"\nThe word was **{game.secret.upper()}**."
+                        embed.description = desc
+                        await channel.send(embed=embed)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"❌ Error in custom timer {channel_id}: {e}")
+        finally:
+            self._custom_timers.pop(channel_id, None)
+
+    async def start_custom_timer(self, channel_id, game):
+        """Helper to launch the custom game timer task."""
+        if channel_id in self._custom_timers:
+            self._custom_timers[channel_id].cancel()
+        
+        task = asyncio.create_task(self._run_custom_timer(channel_id, game))
+        self._custom_timers[channel_id] = task
 
     @commands.hybrid_command(name="wordle", description="Start a new game (Simple word list).")
     @commands.guild_only()
