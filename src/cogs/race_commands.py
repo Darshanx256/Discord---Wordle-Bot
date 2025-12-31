@@ -4,7 +4,6 @@ Race mode commands: /race and /showrace
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
-import random
 import datetime
 import time
 import asyncio
