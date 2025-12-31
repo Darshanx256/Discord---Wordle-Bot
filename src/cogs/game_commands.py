@@ -4,7 +4,7 @@ Game commands cog: /wordle, /wordle_classic, /solo, /show_solo, /cancel_solo, /s
 import asyncio
 import discord
 from discord.ext import commands
-from discord import ui
+from discord import ui, app_commands
 import random
 import datetime
 import time

@@ -83,10 +83,14 @@ class WordleBot(commands.Bot):
         self.setup_db()
         
         # ONE-TIME Bitset Migration (BETA Branch Only)
-        print("🔍 [BOOT] Calling migrate_word_pools...")
-        from src.database import migrate_word_pools
-        await migrate_word_pools(self)
-        print("🔍 [BOOT] migrate_word_pools returned.")
+        try:
+            print("🔍 [BOOT] Calling migrate_word_pools...")
+            from src.database import migrate_word_pools
+            await migrate_word_pools(self)
+            print("🔍 [BOOT] migrate_word_pools returned.")
+        except Exception as mig_err:
+            print(f"❌ [BOOT] Migration failed with error: {mig_err}")
+            print("⚠️ [BOOT] Continuing to load cogs despite migration failure...")
         
         # Register Global Ban Check for Slash Commands
         self.tree.interaction_check = self.interaction_check
