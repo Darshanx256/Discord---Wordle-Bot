@@ -79,6 +79,10 @@ class WordleBot(commands.Bot):
         self.load_banned_users()
         self.setup_db()
         
+        # ONE-TIME Bitset Migration (BETA Branch Only)
+        from src.database import migrate_word_pools
+        await migrate_word_pools(self)
+        
         # Register Global Ban Check for Slash Commands
         self.tree.interaction_check = self.interaction_check
 

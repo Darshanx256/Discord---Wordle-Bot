@@ -149,38 +149,37 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                 
                 elif key == 'player':
                     entries = [e.strip() for e in val.split(',') if e.strip()]
-                    import re
+                    if len(entries) > 20:
+                        return await interaction.response.send_message(
+                            "❌ Maximum 20 players allowed in a custom game.",
+                            ephemeral=True
+                        )
                     
+                    import re
                     # Security: Only allow members present in this channel
                     channel_members = interaction.channel.members if hasattr(interaction.channel, 'members') else []
                     if not channel_members and interaction.guild:
-                         # Fallback if channel.members is empty (unlikely but possible depending on cache)
                         channel_members = interaction.guild.members
                     
                     for entry in entries:
-                        found_id = None
+                        found_member = None
                         
-                        # Use first match to handle both mentions <@ID> and raw IDs
                         match = re.search(r'<@!?(\d+)>|^(\d+)$', entry)
-                        
                         if match:
                             target_id = int(match.group(1) or match.group(2))
-                            # Security check: Is this ID in the channel?
-                            if any(m.id == target_id for m in channel_members):
-                                found_id = target_id
+                            # Security: Must be in channel members cache
+                            found_member = next((m for m in channel_members if m.id == target_id), None)
                         elif entry.startswith('@'):
                             name_to_find = entry[1:].lower()
-                            # Search ONLY in channel members
-                            for member in channel_members:
-                                if member.display_name.lower() == name_to_find or member.name.lower() == name_to_find:
-                                    found_id = member.id
-                                    break
+                            found_member = next((m for m in channel_members if (m.display_name.lower() == name_to_find or m.name.lower() == name_to_find)), None)
                         
-                        if found_id:
-                            allowed_players.add(found_id)
+                        if found_member:
+                            if found_member.bot:
+                                return await interaction.response.send_message(f"❌ `{entry}` is a bot. Only humans can play!", ephemeral=True)
+                            allowed_players.add(found_member.id)
                         else:
                             return await interaction.response.send_message(
-                                f"❌ Could not find player `{entry}` in this channel. They must be present in the channel to be added.",
+                                f"❌ Could not find player `{entry}` in this channel. They must be present here to be added.",
                                 ephemeral=True
                             )
                 
@@ -205,6 +204,11 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                                 "❌ A starting word cannot be the answer!",
                                 ephemeral=True
                             )
+                    if len(words) > 10:
+                        return await interaction.response.send_message(
+                            "❌ Maximum 10 starting words allowed.",
+                            ephemeral=True
+                        )
                     start_words = words
 
                 elif key == 'title':

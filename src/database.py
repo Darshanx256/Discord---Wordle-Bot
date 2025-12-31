@@ -314,3 +314,80 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
     except Exception as e:
         print(f"DB ERROR in record_race_result: {e}")
         return False
+
+async def migrate_word_pools(bot: commands.Bot):
+    """
+    ONE-TIME MIGRATION (BETA): Moves data from legacy row-per-word tables to bitset format.
+    Ensures that existing guild history is preserved during the transition.
+    """
+    print("🚀 [MIGRATION] Starting Word Pool Migration...")
+    
+    # 1. Fetch old history
+    try:
+        simple_res = bot.supabase_client.table('guild_history').select('guild_id, word').execute()
+        classic_res = bot.supabase_client.table('guild_history_classic').select('guild_id, word').execute()
+    except Exception as e:
+        print(f"ℹ️ [MIGRATION] Legacy tables not found or empty, skipping migration. ({e})")
+        return
+
+    # Map: guild_id -> { 'simple': [words], 'classic': [words] }
+    guild_data = {}
+    
+    for row in simple_res.data:
+        gid = row['guild_id']
+        if gid not in guild_data: guild_data[gid] = {'simple': [], 'classic': []}
+        guild_data[gid]['simple'].append(row['word'].strip().lower())
+        
+    for row in classic_res.data:
+        gid = row['guild_id']
+        if gid not in guild_data: guild_data[gid] = {'simple': [], 'classic': []}
+        guild_data[gid]['classic'].append(row['word'].strip().lower())
+
+    if not guild_data:
+        print("ℹ️ [MIGRATION] No legacy data found to migrate.")
+        return
+
+    # 2. Reference sorted lists for mapping
+    # Note: These must be already loaded and sorted in bot.secrets / bot.hard_secrets
+    simple_sorted = getattr(bot, 'secrets', [])
+    classic_sorted = getattr(bot, 'hard_secrets', [])
+    
+    if not simple_sorted or not classic_sorted:
+        print("❌ [MIGRATION] Word lists not loaded! Cannot migrate.")
+        return
+        
+    simple_map = {word: i for i, word in enumerate(simple_sorted)}
+    classic_map = {word: i for i, word in enumerate(classic_sorted)}
+
+    def build_bitset(words, word_map, total_words):
+        size = (total_words + 7) // 8
+        ba = bytearray(size)
+        count = 0
+        for w in words:
+            if w in word_map:
+                idx = word_map[w]
+                # Postgres BYTEA bit indexing (0 = leftmost bit of first byte)
+                ba[idx // 8] |= (1 << (7 - (idx % 8)))
+                count += 1
+        return list(ba), count # Convert to list for JSON compatibility
+
+    # 3. Perform migration
+    migrate_count = 0
+    for gid, data in guild_data.items():
+        s_pool, s_count = build_bitset(data['simple'], simple_map, len(simple_sorted))
+        c_pool, c_count = build_bitset(data['classic'], classic_map, len(classic_sorted))
+        
+        try:
+            payload = {
+                'guild_id': gid,
+                'simple_pool': s_pool,
+                'simple_count': s_count,
+                'classic_pool': c_pool,
+                'classic_count': c_count
+            }
+            bot.supabase_client.table('guild_word_pools').upsert(payload).execute()
+            migrate_count += 1
+        except Exception as e:
+            print(f"⚠️ [MIGRATION] Failed for guild {gid}: {e}")
+
+    print(f"✅ [MIGRATION] Complete! {migrate_count} guilds successfully migrated.")
