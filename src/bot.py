@@ -75,13 +75,18 @@ class WordleBot(commands.Bot):
         return True
 
     async def setup_hook(self):
+        """Standard discord.py setup hook for initializing async components."""
+        print("🔍 [BOOT] setup_hook triggered...")
         self.load_local_data()
+        print(f"🔍 [BOOT] Local data loaded: {len(self.secrets)} secrets, {len(self.hard_secrets)} hard_secrets")
         self.load_banned_users()
         self.setup_db()
         
         # ONE-TIME Bitset Migration (BETA Branch Only)
+        print("🔍 [BOOT] Calling migrate_word_pools...")
         from src.database import migrate_word_pools
         await migrate_word_pools(self)
+        print("🔍 [BOOT] migrate_word_pools returned.")
         
         # Register Global Ban Check for Slash Commands
         self.tree.interaction_check = self.interaction_check

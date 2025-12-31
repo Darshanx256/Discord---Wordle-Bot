@@ -320,14 +320,18 @@ async def migrate_word_pools(bot: commands.Bot):
     ONE-TIME MIGRATION (BETA): Moves data from legacy row-per-word tables to bitset format.
     Ensures that existing guild history is preserved during the transition.
     """
-    print("🚀 [MIGRATION] Starting Word Pool Migration...")
+    print("🚀 [MIGRATION] Migration function invoked!")
     
     # 1. Fetch old history
     try:
+        print("📡 [MIGRATION] Fetching legacy tables...")
+        # Note: We use .select('*') to get all columns including guild_id and word
         simple_res = bot.supabase_client.table('guild_history').select('guild_id, word').execute()
         classic_res = bot.supabase_client.table('guild_history_classic').select('guild_id, word').execute()
+        
+        print(f"📡 [MIGRATION] Fetched {len(simple_res.data)} simple rows, {len(classic_res.data)} classic rows.")
     except Exception as e:
-        print(f"ℹ️ [MIGRATION] Legacy tables not found or empty, skipping migration. ({e})")
+        print(f"ℹ️ [MIGRATION] Legacy tables check failed or they are missing: {e}")
         return
 
     # Map: guild_id -> { 'simple': [words], 'classic': [words] }
