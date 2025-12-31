@@ -83,6 +83,11 @@ class RaceLobbyView(ui.View):
         self.race_session.end_time = datetime.datetime.fromtimestamp(end_ts)
         self.race_session.monotonic_end_time = time.monotonic() + (end_ts - time.time())
         
+        # Pick the secret from the synchronized bitset pool
+        from src.database import get_next_word_bitset
+        secret = get_next_word_bitset(self.bot, interaction.guild.id, 'simple')
+        self.race_session.secret = secret
+
         # Initialize games for ALL participants
         from src.game import WordleGame
         

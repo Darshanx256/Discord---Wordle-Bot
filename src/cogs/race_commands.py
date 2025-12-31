@@ -113,9 +113,6 @@ class RaceCommands(commands.Cog):
                 ephemeral=True
             )
         
-        # Pick a random word for the race
-        secret = random.choice(self.bot.secrets)
-        
         # Create placeholder message to get message ID
         temp_embed = discord.Embed(
             title="🏁 Creating Race Lobby...",
@@ -124,8 +121,8 @@ class RaceCommands(commands.Cog):
         )
         message = await interaction.followup.send(embed=temp_embed)
         
-        # Create race session
-        race_session = RaceSession(cid, interaction.user, secret, message.id)
+        # Create race session (Secret will be picked when it starts)
+        race_session = RaceSession(cid, interaction.user, lobby_message_id=message.id)
         self.bot.race_sessions[cid] = race_session
         
         # Create lobby view

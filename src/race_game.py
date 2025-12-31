@@ -14,7 +14,7 @@ class RaceSession:
                  'lobby_message_id', 'status', 'race_games', 'completion_order', 'end_time', 
                  'duration_minutes', 'green_scores', 'final_results', 'monotonic_end_time')
     
-    def __init__(self, channel_id: int, started_by: discord.User, secret: str, lobby_message_id: int):
+    def __init__(self, channel_id: int, started_by: discord.User, secret: str = None, lobby_message_id: int = 0):
         self.channel_id = channel_id
         self.started_by = started_by
         self.participants: Dict[int, discord.User] = {started_by.id: started_by}  # user_id: User object
