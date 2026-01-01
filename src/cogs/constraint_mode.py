@@ -78,7 +78,7 @@ class ConstraintMode(commands.Cog):
         
         # LOBBY EMBED (RULES)
         embed = discord.Embed(title="🏃 WORD RUSH LOBBY", color=discord.Color.from_rgb(0, 255, 255))
-        embed.set_thumbnail(url="https://i.imgur.com/uW9XyvO.png") # Optional trophy icon or similar
+        embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199350693789696.png") # HARD CODED signal_unlit
         
         rules = [
             "🎯 **Goal:** Find a 5-letter word matching the constraint.",
@@ -154,10 +154,11 @@ class ConstraintMode(commands.Cog):
                 "Word Rush: Where dictionary meets adrenaline."
             ]
             
-            welcome_embed = discord.Embed(title="🚦 THE RUSH BEGINS!", color=discord.Color.red())
+            welcome_embed = discord.Embed(title="THE RUSH BEGINS!", color=discord.Color.red())
             
             p_text = f"👥 **{len(game.participants)}** participants confirmed." if len(game.participants) > 1 else "🔦 **You are the only participant.** Good luck!"
-            welcome_embed.description = f"### {self.get_signal_emoji('red')}\n{random.choice(welcome_msgs)}\n\n{p_text}\n\nStarting in..."
+            welcome_embed.description = f"### {random.choice(welcome_msgs)}\n\n{p_text}\n\nStarting in..."
+            welcome_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199431803244624.png") #hardcoded red
             
             try:
                 await game.game_msg.edit(embed=welcome_embed, view=None)
@@ -166,12 +167,12 @@ class ConstraintMode(commands.Cog):
 
             # Sequence: Red -> Yellow -> Green
             await asyncio.sleep(2)
-            welcome_embed.description = f"### {self.get_signal_emoji('yellow')}\nGet ready...\n\n{p_text}"
+            welcome_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199439277494418.png") #hardcoded yellow
             welcome_embed.color = discord.Color.gold()
             await game.game_msg.edit(embed=welcome_embed)
             
             await asyncio.sleep(2)
-            welcome_embed.description = f"### {self.get_signal_emoji('green')}\n### 🟢 GO GO GO!\n\n{p_text}"
+            welcome_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199439277494418.png") #hardcoded green
             welcome_embed.color = discord.Color.green()
             await game.game_msg.edit(embed=welcome_embed)
             
@@ -197,11 +198,11 @@ class ConstraintMode(commands.Cog):
                 
                 # Round Start Embed
                 round_embed = discord.Embed(title=f"ROUND {game.round_number}", color=discord.Color.green())
-                desc = f"# {self.get_signal_emoji('green')}\n\n### {puzzle_desc}"
+                round_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199350693789696.png")
+                desc = f"#\n### {puzzle_desc}"
                 if visual:
                     desc += f"\n\n{visual}"
                 round_embed.description = desc
-                round_embed.set_footer(text="Hurry! Time is ticking... 🟢 -> 🟡 -> 🔴")
                 
                 msg = await channel.send(embed=round_embed)
                 game.game_msg = msg
@@ -210,20 +211,22 @@ class ConstraintMode(commands.Cog):
                 try:
                     # 4s Green
                     await asyncio.sleep(4)
-                    round_embed.description = f"# {self.get_signal_emoji('yellow')}\n\n### {puzzle_desc}\n\n**HURRY UP!**"
+                    round_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199439277494418.png") #hardcoded green
                     if visual: round_embed.description += f"\n\n{visual}"
                     round_embed.color = discord.Color.gold()
                     await msg.edit(embed=round_embed)
                     
                     # 3s Yellow
                     await asyncio.sleep(3)
-                    round_embed.description = f"# {self.get_signal_emoji('red')}\n\n### {puzzle_desc}\n\n**LAST CHANCE!**"
+                    round_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199439277494418.png") #hardcoded yellow
                     if visual: round_embed.description += f"\n\n{visual}"
                     round_embed.color = discord.Color.red()
                     await msg.edit(embed=round_embed)
                     
                     # 3s Red
                     await asyncio.sleep(3)
+                    round_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199431803244624.png") #hardcoded red
+                    if visual: round_embed.description += f"\n\n{visual}"
                 except asyncio.CancelledError:
                     break
                 
@@ -233,11 +236,8 @@ class ConstraintMode(commands.Cog):
                 # If NO ONE guessed, show some examples
                 solutions_text = ""
                 if not game.winners_in_round:
-                    samples = random.sample(list(game.active_puzzle['solutions']), min(3, len(game.active_puzzle['solutions'])))
-                    samples_str = ", ".join([f"`{s.upper()}`" for s in samples])
-                    solutions_text = f"\n\n❌ **No one found it!** Examples: {samples_str}"
-                
-                round_embed.description = f"# {self.get_signal_emoji('unlit')}\nRound Ended!{solutions_text}\n\nUse `/stop_rush` to stop."
+                    failed_text = f"\n\n**No one guessed!**"
+                round_embed.description = f"# {self.get_signal_emoji('unlit')}\nRound Ended!{failed_text}\n\nUse `/stop_rush` to stop."
                 round_embed.color = discord.Color.dark_gray()
                 await msg.edit(embed=round_embed)
                 
@@ -320,11 +320,12 @@ class ConstraintMode(commands.Cog):
             except Exception as e:
                 print(f"Failed to record checkpoint for {uid}: {e}")
             
-            medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🏃"
+            medal = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else "🐢"
             lines.append(f"{medal} **{user_name}** — +{wr_total} WR | `{rounds}` rounds won")
 
         checkpoint_embed.add_field(name="🏆 RANKINGS", value="\n".join(lines), inline=False)
-        checkpoint_embed.description = f"# {self.get_signal_emoji('green')}\n### Rush continues in 10 seconds!"
+        checkpoint_embed.description = f"#\n### Rush continues in 10 seconds!"
+        checkpoint_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199350693789696.png")
         checkpoint_embed.color = discord.Color.green()
         await msg.edit(embed=checkpoint_embed)
         
@@ -356,8 +357,6 @@ class ConstraintMode(commands.Cog):
         game = self.bot.constraint_games[cid]
         if not game.is_round_active or not game.active_puzzle: return
         
-        # Check if user is a confirmed participant (if any joined, otherwise anyone can play for first round)
-        # But user requested "confirm participation", so let's be strict or lenient.
         # Let's be semi-strict: if they guess correctly, add them to participants if not already.
         
         content = message.content.strip().lower()
