@@ -152,7 +152,7 @@ class ConstraintMode(commands.Cog):
                 char_low = char.lower()
                 if char_low.isalpha():
                     # Use green block for known letters
-                    formatted += EMOJIS.get(f"block_{char_low}_green", "🟩")
+                    formatted += EMOJIS.get(f"block_{char_low}_green", "")
                 elif char == '-':
                     # Use grey block for unknown positions
                     formatted += "⬜"
