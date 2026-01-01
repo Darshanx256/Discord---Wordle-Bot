@@ -182,6 +182,7 @@ class ConstraintMode(commands.Cog):
                 title="Starting Rush",
                 description=f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready",
                 color=discord.Color.from_rgb(220, 20, 60)
+                countdown_embed.description = "READY?"
             )
             countdown_embed.set_thumbnail(url=self.signal_urls['red'])
             
@@ -192,14 +193,14 @@ class ConstraintMode(commands.Cog):
 
             await asyncio.sleep(1.2)
             countdown_embed.set_thumbnail(url=self.signal_urls['yellow'])
+            countdown_embed.description = "GET SET!"
             countdown_embed.color = discord.Color.gold()
             await game.game_msg.edit(embed=countdown_embed)
             
             await asyncio.sleep(1.2)
             countdown_embed.set_thumbnail(url=self.signal_urls['green'])
-            countdown_embed.description = f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready\n\n**GO!**"
+            countdown_embed.description = "GO!"
             countdown_embed.color = discord.Color.green()
-            countdown_embed.title = "GO!"
             await game.game_msg.edit(embed=countdown_embed)
             
             await asyncio.sleep(1.5)
@@ -241,7 +242,7 @@ class ConstraintMode(commands.Cog):
                     color=discord.Color.green()
                 )
                 round_embed.set_thumbnail(url=self.signal_urls['green'])
-                round_embed.set_footer(text=f"{round_duration} seconds • Type your answer!")
+                round_embed.set_footer(text="Type your answer!")
                 
                 msg = await channel.send(embed=round_embed)
                 game.game_msg = msg
@@ -253,13 +254,11 @@ class ConstraintMode(commands.Cog):
                         await asyncio.sleep(8)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                         round_embed.color = discord.Color.gold()
-                        round_embed.set_footer(text="12 seconds left")
                         await msg.edit(embed=round_embed)
                         
                         await asyncio.sleep(7)
                         round_embed.set_thumbnail(url=self.signal_urls['red'])
                         round_embed.color = discord.Color.red()
-                        round_embed.set_footer(text="5 seconds left!")
                         await msg.edit(embed=round_embed)
                         
                         await asyncio.sleep(5)
@@ -268,13 +267,11 @@ class ConstraintMode(commands.Cog):
                         await asyncio.sleep(5)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                         round_embed.color = discord.Color.gold()
-                        round_embed.set_footer(text="7 seconds left")
                         await msg.edit(embed=round_embed)
                         
                         await asyncio.sleep(4)
                         round_embed.set_thumbnail(url=self.signal_urls['red'])
                         round_embed.color = discord.Color.red()
-                        round_embed.set_footer(text="3 seconds left!")
                         await msg.edit(embed=round_embed)
                         
                         await asyncio.sleep(3)
@@ -380,7 +377,7 @@ class ConstraintMode(commands.Cog):
 
         checkpoint_embed.description = "\n".join(lines) + "\n\n*Resuming in 8 seconds...*"
         checkpoint_embed.color = discord.Color.green()
-        checkpoint_embed.set_thumbnail(url=self.signal_urls['green'])
+        checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
         await msg.edit(embed=checkpoint_embed)
         
         # Reset scores
