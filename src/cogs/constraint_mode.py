@@ -27,6 +27,7 @@ class ConstraintGame:
         self.game_msg = None
         self.participants = {started_by.id} # Track confirmed players
         self.start_confirmed = asyncio.Event()
+        self.total_wr_per_user = {} # For final MVP tracking
 
     def add_score(self, user_id, wr_gain):
         if user_id not in self.scores:
@@ -117,8 +118,19 @@ class ConstraintMode(commands.Cog):
         if game.round_task:
             game.round_task.cancel()
         
+        # Show final summary if game had any progress
+        if game.total_wr_per_user:
+            sorted_mvp = sorted(game.total_wr_per_user.items(), key=lambda x: x[1], reverse=True)
+            mvp_id, mvp_wr = sorted_mvp[0]
+            mvp_name = await get_cached_username(self.bot, mvp_id)
+            
+            summary_embed = discord.Embed(title="🏆 RUSH SESSION ENDED", color=discord.Color.gold())
+            summary_embed.description = f"### Session MVP: **{mvp_name}** (`{mvp_wr}` WR total)\n\nThanks for playing Word Rush!"
+            await interaction.response.send_message(embed=summary_embed)
+        else:
+            await interaction.response.send_message("🛑 **Word Rush has been stopped!**")
+        
         self.bot.constraint_games.pop(cid, None)
-        await interaction.response.send_message("🛑 **Word Rush has been stopped!**")
 
     async def run_game_loop(self, interaction, game):
         try:
@@ -217,12 +229,20 @@ class ConstraintMode(commands.Cog):
                 
                 # End Round
                 game.is_round_active = False
-                round_embed.description = f"# {self.get_signal_emoji('unlit')}\nRound Ended!\n\nUse `/stop_rush` to stop."
+                
+                # If NO ONE guessed, show some examples
+                solutions_text = ""
+                if not game.winners_in_round:
+                    samples = random.sample(list(game.active_puzzle['solutions']), min(3, len(game.active_puzzle['solutions'])))
+                    samples_str = ", ".join([f"`{s.upper()}`" for s in samples])
+                    solutions_text = f"\n\n❌ **No one found it!** Examples: {samples_str}"
+                
+                round_embed.description = f"# {self.get_signal_emoji('unlit')}\nRound Ended!{solutions_text}\n\nUse `/stop_rush` to stop."
                 round_embed.color = discord.Color.dark_gray()
                 await msg.edit(embed=round_embed)
                 
                 # Deleting round message to avoid clutter
-                await asyncio.sleep(1)
+                await asyncio.sleep(2) # Give users a moment to see examples
                 try:
                     await msg.delete()
                 except: pass
@@ -235,7 +255,15 @@ class ConstraintMode(commands.Cog):
                 
                 if game.rounds_without_guess >= 3:
                     final_embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.dark_red())
-                    final_embed.description = "### No correct guesses for 3 rounds.\nThe rush has ended. Better luck next time!"
+                    
+                    mvp_line = ""
+                    if game.total_wr_per_user:
+                        sorted_mvp = sorted(game.total_wr_per_user.items(), key=lambda x: x[1], reverse=True)
+                        m_id, m_wr = sorted_mvp[0]
+                        m_name = await get_cached_username(self.bot, m_id)
+                        mvp_line = f"\n\n🏆 **Session MVP:** {m_name} ({m_wr} WR)"
+
+                    final_embed.description = f"### No correct guesses for 3 rounds.{mvp_line}\nThe rush has ended. Better luck next time!"
                     await channel.send(embed=final_embed)
                     game.is_running = False
                     break
@@ -271,6 +299,9 @@ class ConstraintMode(commands.Cog):
             user_name = await get_cached_username(self.bot, uid)
             wr_total = data['wr']
             rounds = data['rounds_won']
+            
+            # Track for session MVP
+            game.total_wr_per_user[uid] = game.total_wr_per_user.get(uid, 0) + wr_total
             
             # Persist to DB
             try:
