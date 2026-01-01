@@ -61,7 +61,8 @@ class ConstraintMode(commands.Cog):
             'green': "https://cdn.discordapp.com/emojis/1456199435682975827.png",
             'yellow': "https://cdn.discordapp.com/emojis/1456199439277494418.png",
             'red': "https://cdn.discordapp.com/emojis/1456199431803244624.png",
-            'unlit': "https://cdn.discordapp.com/emojis/1456199350693789696.png"
+            'unlit': "https://cdn.discordapp.com/emojis/1456199350693789696.png",
+            'checkpoint': "https://cdn.discordapp.com/emojis/1456313204597588101.png"
         }
 
     @app_commands.command(name="word_rush", description="Fast-paced word hunt with linguistic constraints")
@@ -94,7 +95,7 @@ class ConstraintMode(commands.Cog):
                 "**📋 Rules**\n"
                 "• No word can be used twice in a session\n"
                 "• Rewards distributed every 12 rounds\n"
-                "• Game ends after 3 rounds without guesses\n\n"
+                "• Game ends after 5 rounds without guesses\n\n"
                 "Ready to test your vocabulary? Join below!"
             ),
             color=discord.Color.from_rgb(88, 101, 242)
@@ -292,8 +293,7 @@ class ConstraintMode(commands.Cog):
                     winners_count = len(game.winners_in_round)
                     round_embed.set_footer(text=f"✓ {winners_count} correct guess{'es' if winners_count > 1 else ''}")
                 else:
-                    round_embed.description = "*No correct guesses*"
-                    round_embed.set_footer(text="Better luck next time!")
+                    round_embed.set_footer(text="✗ No correct guesses!")
                 
                 await msg.edit(embed=round_embed)
                 
@@ -303,10 +303,10 @@ class ConstraintMode(commands.Cog):
                 else:
                     game.rounds_without_guess = 0
                 
-                if game.rounds_without_guess >= 3:
+                if game.rounds_without_guess >= 5:
                     final_embed = discord.Embed(
                         title="💀 Game Over",
-                        description="Three consecutive rounds without correct guesses.",
+                        description="Five consecutive rounds without correct guesses.",
                         color=discord.Color.dark_red()
                     )
                     
@@ -334,11 +334,11 @@ class ConstraintMode(commands.Cog):
 
     async def show_checkpoint(self, channel, game):
         checkpoint_embed = discord.Embed(
-            title="🏁 Checkpoint",
+            title="Checkpoint",
             description="Calculating scores and distributing rewards...",
             color=discord.Color.blue()
         )
-        checkpoint_embed.set_thumbnail(url=self.signal_urls['unlit'])
+        checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
         msg = await channel.send(embed=checkpoint_embed)
         
         sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
