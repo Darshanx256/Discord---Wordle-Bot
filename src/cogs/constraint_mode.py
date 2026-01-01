@@ -178,9 +178,9 @@ class ConstraintMode(commands.Cog):
             
             # Beautiful countdown sequence
             countdown_embed = discord.Embed(
-                title="🎬 Starting Rush",
-                description=f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready\n\nGet ready...",
-                color=discord.Color.from_rgb(88, 101, 242)
+                title="Starting Rush",
+                description=f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready",
+                color=discord.Color.from_rgb(220, 20, 60)
             )
             countdown_embed.set_thumbnail(url=self.signal_urls['red'])
             
@@ -189,18 +189,26 @@ class ConstraintMode(commands.Cog):
             except:
                 game.game_msg = await channel.send(embed=countdown_embed)
 
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1.2)
             countdown_embed.set_thumbnail(url=self.signal_urls['yellow'])
             countdown_embed.color = discord.Color.gold()
             await game.game_msg.edit(embed=countdown_embed)
             
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1.2)
             countdown_embed.set_thumbnail(url=self.signal_urls['green'])
             countdown_embed.description = f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready\n\n**GO!**"
             countdown_embed.color = discord.Color.green()
+            countdown_embed.title = "GO!"
             await game.game_msg.edit(embed=countdown_embed)
             
-            await asyncio.sleep(1)
+            await asyncio.sleep(1.5)
+            
+            # Turn off the light
+            countdown_embed.set_thumbnail(url=self.signal_urls['unlit'])
+            countdown_embed.color = discord.Color.dark_gray()
+            await game.game_msg.edit(embed=countdown_embed)
+            
+            await asyncio.sleep(0.5)
 
             # Main round loop
             while game.is_running:
@@ -216,38 +224,59 @@ class ConstraintMode(commands.Cog):
                 # Generate puzzle
                 game.active_puzzle = game.generator.generate_puzzle()
                 puzzle_desc = game.active_puzzle['description']
-                visual = self.format_visual_pattern(game.active_puzzle.get('visual', ''))
+                visual_raw = game.active_puzzle.get('visual', '')
+                visual = self.format_visual_pattern(visual_raw)
                 
-                # Create round embed with fixed structure
+                # Determine if this is a pattern puzzle (has visual blocks)
+                has_pattern = bool(visual)
+                round_duration = 20 if has_pattern else 12
+                
+                # Create round embed with fixed structure - show only emoji pattern if available
+                display_text = visual if visual else puzzle_desc
+                
                 round_embed = discord.Embed(
                     title=f"Round {game.round_number}",
-                    description=puzzle_desc + (f"\n\n{visual}" if visual else ""),
+                    description=display_text,
                     color=discord.Color.green()
                 )
                 round_embed.set_thumbnail(url=self.signal_urls['green'])
-                round_embed.set_footer(text="12 seconds • Type your answer!")
+                round_embed.set_footer(text=f"{round_duration} seconds • Type your answer!")
                 
                 msg = await channel.send(embed=round_embed)
                 game.game_msg = msg
                 game.is_round_active = True
                 
                 try:
-                    # Green: 5s
-                    await asyncio.sleep(5)
-                    round_embed.set_thumbnail(url=self.signal_urls['yellow'])
-                    round_embed.color = discord.Color.gold()
-                    round_embed.set_footer(text="7 seconds left")
-                    await msg.edit(embed=round_embed)
-                    
-                    # Yellow: 4s
-                    await asyncio.sleep(4)
-                    round_embed.set_thumbnail(url=self.signal_urls['red'])
-                    round_embed.color = discord.Color.red()
-                    round_embed.set_footer(text="3 seconds left!")
-                    await msg.edit(embed=round_embed)
-                    
-                    # Red: 3s
-                    await asyncio.sleep(3)
+                    if has_pattern:
+                        # Pattern puzzle: 20 seconds (8-7-5)
+                        await asyncio.sleep(8)
+                        round_embed.set_thumbnail(url=self.signal_urls['yellow'])
+                        round_embed.color = discord.Color.gold()
+                        round_embed.set_footer(text="12 seconds left")
+                        await msg.edit(embed=round_embed)
+                        
+                        await asyncio.sleep(7)
+                        round_embed.set_thumbnail(url=self.signal_urls['red'])
+                        round_embed.color = discord.Color.red()
+                        round_embed.set_footer(text="5 seconds left!")
+                        await msg.edit(embed=round_embed)
+                        
+                        await asyncio.sleep(5)
+                    else:
+                        # Regular puzzle: 12 seconds (5-4-3)
+                        await asyncio.sleep(5)
+                        round_embed.set_thumbnail(url=self.signal_urls['yellow'])
+                        round_embed.color = discord.Color.gold()
+                        round_embed.set_footer(text="7 seconds left")
+                        await msg.edit(embed=round_embed)
+                        
+                        await asyncio.sleep(4)
+                        round_embed.set_thumbnail(url=self.signal_urls['red'])
+                        round_embed.color = discord.Color.red()
+                        round_embed.set_footer(text="3 seconds left!")
+                        await msg.edit(embed=round_embed)
+                        
+                        await asyncio.sleep(3)
                     
                 except asyncio.CancelledError:
                     break
@@ -263,7 +292,7 @@ class ConstraintMode(commands.Cog):
                     winners_count = len(game.winners_in_round)
                     round_embed.set_footer(text=f"✓ {winners_count} correct guess{'es' if winners_count > 1 else ''}")
                 else:
-                    round_embed.description = puzzle_desc + (f"\n\n{visual}" if visual else "") + "\n\n*No correct guesses this round*"
+                    round_embed.description = "*No correct guesses*"
                     round_embed.set_footer(text="Better luck next time!")
                 
                 await msg.edit(embed=round_embed)
