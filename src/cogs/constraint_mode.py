@@ -40,12 +40,12 @@ class RushStartView(discord.ui.View):
         super().__init__(timeout=60)
         self.game = game
 
-    @discord.ui.button(label="Join", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Join Rush", style=discord.ButtonStyle.primary, emoji="⚡")
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.game.participants.add(interaction.user.id)
         await interaction.response.send_message(f"You've joined the rush!", ephemeral=True)
 
-    @discord.ui.button(label="Start", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Start Game", style=discord.ButtonStyle.success, emoji="▶️")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.game.started_by.id and not interaction.user.guild_permissions.manage_messages:
             return await interaction.response.send_message("Only the host or an admin can start the game.", ephemeral=True)
@@ -69,31 +69,38 @@ class ConstraintMode(commands.Cog):
     async def word_rush(self, interaction: discord.Interaction):
         cid = interaction.channel_id
         if cid in self.bot.constraint_games:
-            return await interaction.response.send_message("A Word Rush session is already active in this channel.", ephemeral=True)
+            return await interaction.response.send_message("⚠️ A Word Rush session is already active in this channel.", ephemeral=True)
         
         if cid in self.bot.games or cid in self.bot.custom_games:
-             return await interaction.response.send_message("A Wordle game is already active here. Finish it first.", ephemeral=True)
+             return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
 
         game = ConstraintGame(self.bot, cid, interaction.user)
         self.bot.constraint_games[cid] = game
         
-        # Clean lobby embed
+        # Gorgeous lobby embed
         embed = discord.Embed(
-            title="Word Rush",
+            title="⚡ Word Rush",
             description=(
                 "Find 5-letter words matching each constraint.\n"
-                "Rounds last 10 seconds with traffic light timing.\n\n"
-                "**Scoring**\n"
-                "1st: 5 WR • 2nd: 4 WR • 3rd: 3 WR • Others: 1 WR\n\n"
-                "**Rules**\n"
-                "• No word can be used twice\n"
-                "• Checkpoints every 12 rounds\n"
+                "Each round lasts **12 seconds** with traffic light timing.\n\n"
+                "**🎯 Scoring**\n"
+                "```\n"
+                "1st place  →  5 WR\n"
+                "2nd place  →  4 WR\n"
+                "3rd place  →  3 WR\n"
+                "4th place  →  2 WR\n"
+                "Others     →  1 WR\n"
+                "```\n"
+                "**📋 Rules**\n"
+                "• No word can be used twice in a session\n"
+                "• Rewards distributed every 12 rounds\n"
                 "• Game ends after 3 rounds without guesses\n\n"
-                f"Ready to play? Click **Join** below."
+                "Ready to test your vocabulary? Join below!"
             ),
-            color=discord.Color.blue()
+            color=discord.Color.from_rgb(88, 101, 242)
         )
-        embed.set_footer(text=f"Hosted by {interaction.user.display_name}")
+        embed.set_thumbnail(url=self.signal_urls['unlit'])
+        embed.set_footer(text=f"🎮 Hosted by {interaction.user.display_name}")
         
         view = RushStartView(game)
         await interaction.response.send_message(embed=embed, view=view)
@@ -120,15 +127,41 @@ class ConstraintMode(commands.Cog):
             mvp_name = await get_cached_username(self.bot, mvp_id)
             
             summary_embed = discord.Embed(
-                title="Rush Complete",
-                description=f"Session MVP: **{mvp_name}** ({mvp_wr} WR)\n\nThanks for playing!",
+                title="🏆 Rush Complete",
+                description=f"**Session MVP**\n{mvp_name} • {mvp_wr} WR\n\nThanks for playing!",
                 color=discord.Color.gold()
             )
             await interaction.response.send_message(embed=summary_embed)
         else:
-            await interaction.response.send_message("Word Rush stopped.")
+            await interaction.response.send_message("🛑 Word Rush stopped.")
         
         self.bot.constraint_games.pop(cid, None)
+
+    def format_visual_pattern(self, visual):
+        """Convert text pattern to emoji blocks."""
+        if not visual:
+            return ""
+        
+        # Process each line
+        lines = visual.split('\n')
+        formatted_lines = []
+        
+        for line in lines:
+            formatted = ""
+            for char in line:
+                char_low = char.lower()
+                if char_low.isalpha():
+                    # Use green block for known letters
+                    formatted += EMOJIS.get(f"block_{char_low}_green", "🟩")
+                elif char == '-':
+                    # Use grey block for unknown positions
+                    formatted += "⬜"
+                else:
+                    # Keep other characters (spaces, etc.)
+                    formatted += char
+            formatted_lines.append(formatted)
+        
+        return '\n'.join(formatted_lines)
 
     async def run_game_loop(self, interaction, game):
         try:
@@ -139,28 +172,35 @@ class ConstraintMode(commands.Cog):
                 await asyncio.wait_for(game.start_confirmed.wait(), timeout=60)
             except asyncio.TimeoutError:
                 if len(game.participants) < 1:
-                    await channel.send("Rush cancelled: no participants joined.")
+                    await channel.send("⏰ Rush cancelled: no participants joined in time.")
                     self.bot.constraint_games.pop(game.channel_id, None)
                     return
             
-            # Countdown
+            # Beautiful countdown sequence
             countdown_embed = discord.Embed(
-                title="Starting...",
-                description=f"{len(game.participants)} player{'s' if len(game.participants) > 1 else ''} ready",
-                color=discord.Color.blue()
+                title="🎬 Starting Rush",
+                description=f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready\n\nGet ready...",
+                color=discord.Color.from_rgb(88, 101, 242)
             )
+            countdown_embed.set_thumbnail(url=self.signal_urls['red'])
             
             try:
                 await game.game_msg.edit(embed=countdown_embed, view=None)
             except:
                 game.game_msg = await channel.send(embed=countdown_embed)
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.5)
+            countdown_embed.set_thumbnail(url=self.signal_urls['yellow'])
+            countdown_embed.color = discord.Color.gold()
+            await game.game_msg.edit(embed=countdown_embed)
             
-            try:
-                await game.game_msg.delete()
-            except:
-                pass
+            await asyncio.sleep(1.5)
+            countdown_embed.set_thumbnail(url=self.signal_urls['green'])
+            countdown_embed.description = f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready\n\n**GO!**"
+            countdown_embed.color = discord.Color.green()
+            await game.game_msg.edit(embed=countdown_embed)
+            
+            await asyncio.sleep(1)
 
             # Main round loop
             while game.is_running:
@@ -176,7 +216,7 @@ class ConstraintMode(commands.Cog):
                 # Generate puzzle
                 game.active_puzzle = game.generator.generate_puzzle()
                 puzzle_desc = game.active_puzzle['description']
-                visual = game.active_puzzle.get('visual', '')
+                visual = self.format_visual_pattern(game.active_puzzle.get('visual', ''))
                 
                 # Create round embed with fixed structure
                 round_embed = discord.Embed(
@@ -185,22 +225,25 @@ class ConstraintMode(commands.Cog):
                     color=discord.Color.green()
                 )
                 round_embed.set_thumbnail(url=self.signal_urls['green'])
+                round_embed.set_footer(text="12 seconds • Type your answer!")
                 
                 msg = await channel.send(embed=round_embed)
                 game.game_msg = msg
                 game.is_round_active = True
                 
                 try:
-                    # Green: 4s
-                    await asyncio.sleep(4)
+                    # Green: 5s
+                    await asyncio.sleep(5)
                     round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                     round_embed.color = discord.Color.gold()
+                    round_embed.set_footer(text="7 seconds left")
                     await msg.edit(embed=round_embed)
                     
-                    # Yellow: 3s
-                    await asyncio.sleep(3)
+                    # Yellow: 4s
+                    await asyncio.sleep(4)
                     round_embed.set_thumbnail(url=self.signal_urls['red'])
                     round_embed.color = discord.Color.red()
+                    round_embed.set_footer(text="3 seconds left!")
                     await msg.edit(embed=round_embed)
                     
                     # Red: 3s
@@ -212,21 +255,18 @@ class ConstraintMode(commands.Cog):
                 # End round
                 game.is_round_active = False
                 
-                # Update to unlit state
+                # Update to unlit state with results
                 round_embed.set_thumbnail(url=self.signal_urls['unlit'])
                 round_embed.color = discord.Color.dark_gray()
                 
-                if not game.winners_in_round:
-                    round_embed.description = puzzle_desc + (f"\n\n{visual}" if visual else "") + "\n\n*No correct guesses*"
+                if game.winners_in_round:
+                    winners_count = len(game.winners_in_round)
+                    round_embed.set_footer(text=f"✓ {winners_count} correct guess{'es' if winners_count > 1 else ''}")
+                else:
+                    round_embed.description = puzzle_desc + (f"\n\n{visual}" if visual else "") + "\n\n*No correct guesses this round*"
+                    round_embed.set_footer(text="Better luck next time!")
                 
                 await msg.edit(embed=round_embed)
-                
-                # Brief pause to see results
-                await asyncio.sleep(2)
-                try:
-                    await msg.delete()
-                except:
-                    pass
                 
                 # Check failure condition
                 if not game.winners_in_round:
@@ -236,8 +276,8 @@ class ConstraintMode(commands.Cog):
                 
                 if game.rounds_without_guess >= 3:
                     final_embed = discord.Embed(
-                        title="Game Over",
-                        description="Three rounds without correct guesses.",
+                        title="💀 Game Over",
+                        description="Three consecutive rounds without correct guesses.",
                         color=discord.Color.dark_red()
                     )
                     
@@ -245,14 +285,18 @@ class ConstraintMode(commands.Cog):
                         sorted_mvp = sorted(game.total_wr_per_user.items(), key=lambda x: x[1], reverse=True)
                         m_id, m_wr = sorted_mvp[0]
                         m_name = await get_cached_username(self.bot, m_id)
-                        final_embed.description += f"\n\nSession MVP: **{m_name}** ({m_wr} WR)"
+                        final_embed.add_field(
+                            name="🏆 Session MVP",
+                            value=f"**{m_name}**\n{m_wr} WR earned",
+                            inline=False
+                        )
 
                     await channel.send(embed=final_embed)
                     game.is_running = False
                     break
                 
                 # Buffer between rounds
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(2)
 
         except Exception as e:
             print(f"Error in Rush Loop: {e}")
@@ -261,26 +305,25 @@ class ConstraintMode(commands.Cog):
 
     async def show_checkpoint(self, channel, game):
         checkpoint_embed = discord.Embed(
-            title="Checkpoint",
-            description="Calculating scores...",
+            title="🏁 Checkpoint",
+            description="Calculating scores and distributing rewards...",
             color=discord.Color.blue()
         )
+        checkpoint_embed.set_thumbnail(url=self.signal_urls['unlit'])
         msg = await channel.send(embed=checkpoint_embed)
         
         sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
         
         if not sorted_scores:
-            checkpoint_embed.description = "No scores to report.\n\nContinuing..."
+            checkpoint_embed.description = "No scores to report this checkpoint.\n\nContinuing in 5 seconds..."
             await msg.edit(embed=checkpoint_embed)
             await asyncio.sleep(5)
-            try:
-                await msg.delete()
-            except:
-                pass
             return
 
         # Award scores
         lines = []
+        medals = ["🥇", "🥈", "🥉"]
+        
         for i, (uid, data) in enumerate(sorted_scores):
             user_name = await get_cached_username(self.bot, uid)
             wr_total = data['wr']
@@ -303,30 +346,18 @@ class ConstraintMode(commands.Cog):
             except Exception as e:
                 print(f"Failed to record checkpoint for {uid}: {e}")
             
-            rank = ""
-            if i == 0:
-                rank = "1st"
-            elif i == 1:
-                rank = "2nd"
-            elif i == 2:
-                rank = "3rd"
-            else:
-                rank = f"{i+1}th"
-            
-            lines.append(f"{rank} • **{user_name}** — {wr_total} WR ({rounds} rounds)")
+            medal = medals[i] if i < 3 else "▫️"
+            lines.append(f"{medal} **{user_name}** • {wr_total} WR • {rounds} rounds")
 
-        checkpoint_embed.description = "\n".join(lines) + "\n\nResuming in 10 seconds..."
+        checkpoint_embed.description = "\n".join(lines) + "\n\n*Resuming in 8 seconds...*"
         checkpoint_embed.color = discord.Color.green()
+        checkpoint_embed.set_thumbnail(url=self.signal_urls['green'])
         await msg.edit(embed=checkpoint_embed)
         
         # Reset scores
         game.scores = {}
         
-        await asyncio.sleep(10)
-        try:
-            await msg.delete()
-        except:
-            pass
+        await asyncio.sleep(8)
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
@@ -386,6 +417,7 @@ class ConstraintMode(commands.Cog):
             reaction = "🥉"
         elif rank == 4:
             wr_gain = 2
+            reaction = "⭐"
         
         game.add_score(message.author.id, wr_gain)
         
