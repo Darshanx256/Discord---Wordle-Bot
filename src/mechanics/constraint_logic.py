@@ -27,6 +27,8 @@ def _build_dictionary():
     Build a memory-efficient dictionary using only NLTK words corpus.
     WordNet is loaded lazily only when needed for synonyms/antonyms.
     This reduces memory from ~500MB to ~50MB.
+    
+    Optimization: Uses set comprehension for faster building and lower memory.
     """
     global _cached_dictionary_set, _cached_dictionary_list
     if _cached_dictionary_set is not None:
@@ -34,24 +36,21 @@ def _build_dictionary():
     
     # Use only NLTK words corpus - much smaller and faster
     # Filter to 4-8 letter words that are alphabetic
-    # Use a generator first to avoid loading everything into memory
     print("🔍 Building word dictionary (this may take a moment)...")
     
-    # Build set first for deduplication and fast lookups
-    word_set = set()
-    nltk_word_list = nltk_words.words()
-    
-    # Process in chunks to be memory efficient
-    for w in nltk_word_list:
-        w_lower = w.lower()
-        if 4 <= len(w_lower) <= 8 and w_lower.isalpha():
-            word_set.add(w_lower)
+    # Use set comprehension for efficient filtering and deduplication
+    # This is more memory-efficient than building a list first
+    word_set = {
+        w.lower() for w in nltk_words.words() 
+        if 4 <= len(w) <= 8 and w.isalpha() and w.lower().isalpha()
+    }
     
     # Convert to sorted list only once (needed for random.choice)
+    # Store as set for O(1) lookups and list for random.choice
     _cached_dictionary_set = word_set
     _cached_dictionary_list = sorted(list(word_set))
     
-    print(f"✅ Dictionary built: {len(_cached_dictionary_list)} words")
+    print(f"✅ Dictionary built: {len(_cached_dictionary_list)} words (~{len(_cached_dictionary_list) * 8 / 1024 / 1024:.1f}MB)")
     return _cached_dictionary_list
 
 def _word_in_wordnet(word):
