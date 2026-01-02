@@ -1,0 +1,250 @@
+{"type": "synonym", "description": "Word similar to **INDUCED**", "constraint": "induced", "expected_length": 7, "count": 7}
+{"type": "substring", "description": "Word containing **RDB** together", "constraint": "rdb", "expected_length": 8, "count": 6}
+{"type": "jumble", "description": "Unscramble: **NNIKGCOK**", "constraint": "knocking", "scrambled": "nnikgcok", "expected_length": 8, "visual": "NNIKGCOK", "count": 1}
+{"type": "synonym", "description": "Word similar to **FILM**", "constraint": "film", "expected_length": 4, "count": 6}
+{"type": "synonym", "description": "Word similar to **ADDRESS**", "constraint": "address", "expected_length": 7, "count": 10}
+{"type": "jumble", "description": "Unscramble: **SOHD**", "constraint": "shod", "scrambled": "sohd", "expected_length": 4, "visual": "SOHD", "count": 1}
+{"type": "substring", "description": "Word containing **UEL** together", "constraint": "uel", "expected_length": 6, "count": 17}
+{"type": "jumble", "description": "Unscramble: **CTTEHI**", "constraint": "thetic", "scrambled": "cttehi", "expected_length": 6, "visual": "CTTEHI", "count": 1}
+{"type": "synonym", "description": "Word similar to **PROVE**", "constraint": "prove", "expected_length": 5, "count": 12}
+{"type": "rhyme", "description": "Words rhyming with **ABNAKI**", "constraint": "ki", "expected_length": 6, "count": 13}
+{"type": "synonym", "description": "Word similar to **BAUBLE**", "constraint": "bauble", "expected_length": 6, "count": 5}
+{"type": "synonym", "description": "Word similar to **URGE**", "constraint": "urge", "expected_length": 4, "count": 8}
+{"type": "jumble", "description": "Unscramble: **ALVEELL**", "constraint": "velella", "scrambled": "alveell", "expected_length": 7, "visual": "ALVEELL", "count": 1}
+{"type": "rhyme", "description": "Words rhyming with **TUNED**", "constraint": "ned", "expected_length": 5, "count": 17}
+{"type": "synonym", "description": "Word similar to **LEANING**", "constraint": "leaning", "expected_length": 7, "count": 11}
+{"type": "wordle_block", "description": "Word matching pattern", "constraint": ["-", "-", "t", "-", "k", "-"], "expected_length": 6, "visual": "--t-k-", "count": 14}
+{"type": "jumble", "description": "Unscramble: **PHSIERK**", "constraint": "perkish", "scrambled": "phsierk", "expected_length": 7, "visual": "PHSIERK", "count": 1}
+{"type": "synonym", "description": "Word similar to **TRIFLING**", "constraint": "trifling", "expected_length": 8, "count": 8}
+{"type": "jumble", "description": "Unscramble: **ONSMUOEV**", "constraint": "venomous", "scrambled": "onsmuoev", "expected_length": 8, "visual": "ONSMUOEV", "count": 1}
+{"type": "jumble", "description": "Unscramble: **ERHBEG**", "constraint": "gheber", "scrambled": "erhbeg", "expected_length": 6, "visual": "ERHBEG", "count": 1}
+{"type": "jumble", "description": "Unscramble: **POHVNRMA**", "constraint": "vamphorn", "scrambled": "pohvnrma", "expected_length": 8, "visual": "POHVNRMA", "count": 1}
+{"type": "wordle_block", "description": "Word matching pattern", "constraint": ["-", "h", "-", "g", "-", "-"], "expected_length": 6, "visual": "-h-g--", "count": 12}
+{"type": "jumble", "description": "Unscramble: **DVSCEIO**", "constraint": "sedovic", "scrambled": "dvsceio", "expected_length": 7, "visual": "DVSCEIO", "count": 1}
+{"type": "jumble", "description": "Unscramble: **EAZYODR**", "constraint": "zedoary", "scrambled": "eazyodr", "expected_length": 7, "visual": "EAZYODR", "count": 1}
+{"type": "jumble", "description": "Unscramble: **OFESWREN**", "constraint": "forenews", "scrambled": "ofeswren", "expected_length": 8, "visual": "OFESWREN", "count": 1}
+{"type": "synonym", "description": "Word similar to **EDGING**", "constraint": "edging", "expected_length": 6, "count": 8}
+{"type": "jumble", "description": "Unscramble: **NAASDMN**", "constraint": "sandman", "scrambled": "naasdmn", "expected_length": 7, "visual": "NAASDMN", "count": 1}
+{"type": "synonym", "description": "Word similar to **TUMBLING**", "constraint": "tumbling", "expected_length": 8, "count": 7}
+{"type": "jumble", "description": "Unscramble: **LIPTMYAE**", "constraint": "playtime", "scrambled": "liptmyae", "expected_length": 8, "visual": "LIPTMYAE", "count": 1}
+{"type": "synonym", "description": "Word similar to **FLASHING**", "constraint": "flashing", "expected_length": 8, "count": 12}
+{"type": "rhyme", "description": "Words rhyming with **BERSIL**", "constraint": "sil", "expected_length": 6, "count": 10}
+{"type": "jumble", "description": "Unscramble: **HEUGMOSU**", "constraint": "mughouse", "scrambled": "heugmosu", "expected_length": 8, "visual": "HEUGMOSU", "count": 1}
+{"type": "jumble", "description": "Unscramble: **CDKTEGE**", "constraint": "gedeckt", "scrambled": "cdktege", "expected_length": 7, "visual": "CDKTEGE", "count": 1}
+{"type": "jumble", "description": "Unscramble: **THACIK**", "constraint": "chitak", "scrambled": "thacik", "expected_length": 6, "visual": "THACIK", "count": 1}
+{"type": "substring", "description": "Word containing **URR** together", "constraint": "urr", "expected_length": 5, "count": 18}
+{"type": "synonym", "description": "Word similar to **CREASING**", "constraint": "creasing", "expected_length": 8, "count": 11}
+{"type": "jumble", "description": "Unscramble: **EDOWIWR**", "constraint": "widower", "scrambled": "edowiwr", "expected_length": 7, "visual": "EDOWIWR", "count": 1}
+{"type": "jumble", "description": "Unscramble: **LAMILBER**", "constraint": "mirabell", "scrambled": "lamilber", "expected_length": 8, "visual": "LAMILBER", "count": 1}
+{"type": "synonym", "description": "Word similar to **FORCED**", "constraint": "forced", "expected_length": 6, "count": 14}
+{"type": "synonym", "description": "Word similar to **EDGING**", "constraint": "edging", "expected_length": 6, "count": 8}
+{"type": "synonym", "description": "Word similar to **DIVIDE**", "constraint": "divide", "expected_length": 6, "count": 6}
+{"type": "jumble", "description": "Unscramble: **UFCFL**", "constraint": "cluff", "scrambled": "ufcfl", "expected_length": 5, "visual": "UFCFL", "count": 1}
+{"type": "jumble", "description": "Unscramble: **UEDNDVIO**", "constraint": "unvoided", "scrambled": "uedndvio", "expected_length": 8, "visual": "UEDNDVIO", "count": 1}
+{"type": "jumble", "description": "Unscramble: **LLMU**", "constraint": "mull", "scrambled": "llmu", "expected_length": 4, "visual": "LLMU", "count": 1}
+{"type": "jumble", "description": "Unscramble: **EBSODS**", "constraint": "bossed", "scrambled": "ebsods", "expected_length": 6, "visual": "EBSODS", "count": 1}
+{"type": "jumble", "description": "Unscramble: **LYKITN**", "constraint": "tinkly", "scrambled": "lykitn", "expected_length": 6, "visual": "LYKITN", "count": 1}
+{"type": "jumble", "description": "Unscramble: **PRRCOOAL**", "constraint": "corporal", "scrambled": "prrcooal", "expected_length": 8, "visual": "PRRCOOAL", "count": 1}
+{"type": "jumble", "description": "Unscramble: **CTSYLRA**", "constraint": "crystal", "scrambled": "ctsylra", "expected_length": 7, "visual": "CTSYLRA", "count": 1}
+{"type": "double_letter", "description": "Word with double **P**", "constraint": "pp", "expected_length": 4, "count": 8}
+{"type": "jumble", "description": "Unscramble: **PEIANZI**", "constraint": "piazine", "scrambled": "peianzi", "expected_length": 7, "visual": "PEIANZI", "count": 1}
+{"type": "jumble", "description": "Unscramble: **NAUFEC**", "constraint": "unface", "scrambled": "naufec", "expected_length": 6, "visual": "NAUFEC", "count": 1}
+{"type": "substring", "description": "Word containing **TMA** together", "constraint": "tma", "expected_length": 6, "count": 13}
+{"type": "jumble", "description": "Unscramble: **LBEELPS**", "constraint": "bespell", "scrambled": "lbeelps", "expected_length": 7, "visual": "LBEELPS", "count": 1}
+{"type": "jumble", "description": "Unscramble: **TEESANBE**", "constraint": "absentee", "scrambled": "teesanbe", "expected_length": 8, "visual": "TEESANBE", "count": 1}
+{"type": "rhyme", "description": "Words rhyming with **ROBININ**", "constraint": "nin", "expected_length": 7, "count": 19}
+{"type": "jumble", "description": "Unscramble: **EBLCI**", "constraint": "cebil", "scrambled": "eblci", "expected_length": 5, "visual": "EBLCI", "count": 1}
+{"type": "jumble", "description": "Unscramble: **UKTKLISE**", "constraint": "tusklike", "scrambled": "uktklise", "expected_length": 8, "visual": "UKTKLISE", "count": 1}
+{"type": "jumble", "description": "Unscramble: **MARIABD**", "constraint": "barmaid", "scrambled": "mariabd", "expected_length": 7, "visual": "MARIABD", "count": 1}
+{"type": "jumble", "description": "Unscramble: **KKHUBI**", "constraint": "bhikku", "scrambled": "kkhubi", "expected_length": 6, "visual": "KKHUBI", "count": 1}
+{"type": "rhyme", "description": "Words rhyming with **BRAIREAU**", "constraint": "au", "expected_length": 8, "count": 5}
+{"type": "synonym", "description": "Word similar to **JAGGY**", "constraint": "jaggy", "expected_length": 5, "count": 5}
+{"type": "substring", "description": "Word containing **IST** together", "constraint": "ist", "expected_length": 4, "count": 11}
+{"type": "jumble", "description": "Unscramble: **NEGELIMN**", "constraint": "mingelen", "scrambled": "negelimn", "expected_length": 8, "visual": "NEGELIMN", "count": 1}
+{"type": "jumble", "description": "Unscramble: **LCTOTE**", "constraint": "toltec", "scrambled": "lctote", "expected_length": 6, "visual": "LCTOTE", "count": 1}
+{"type": "synonym", "description": "Word similar to **BEAMING**", "constraint": "beaming", "expected_length": 7, "count": 9}
+{"type": "jumble", "description": "Unscramble: **SDAISPUC**", "constraint": "dipsacus", "scrambled": "sdaispuc", "expected_length": 8, "visual": "SDAISPUC", "count": 1}
+{"type": "jumble", "description": "Unscramble: **YOYPM**", "constraint": "myopy", "scrambled": "yoypm", "expected_length": 5, "visual": "YOYPM", "count": 1}
+{"type": "substring", "description": "Word containing **MAN** together", "constraint": "man", "expected_length": 4, "count": 13}
+{"type": "synonym", "description": "Word similar to **STABBING**", "constraint": "stabbing", "expected_length": 8, "count": 8}
+{"type": "jumble", "description": "Unscramble: **MTESOZV**", "constraint": "zemstvo", "scrambled": "mtesozv", "expected_length": 7, "visual": "MTESOZV", "count": 1}
+{"type": "synonym", "description": "Word similar to **HEDGING**", "constraint": "hedging", "expected_length": 7, "count": 8}
+{"type": "synonym", "description": "Word similar to **FALSE**", "constraint": "false", "expected_length": 5, "count": 8}
+{"type": "substring", "description": "Word containing **UJ** together", "constraint": "uj", "expected_length": 8, "count": 6}
+{"type": "jumble", "description": "Unscramble: **DIITS**", "constraint": "idist", "scrambled": "diits", "expected_length": 5, "visual": "DIITS", "count": 1}
+{"type": "substring", "description": "Word containing **ICO** together", "constraint": "ico", "expected_length": 6, "count": 20}
+{"type": "jumble", "description": "Unscramble: **UOHMOSCR**", "constraint": "chromous", "scrambled": "uohmoscr", "expected_length": 8, "visual": "UOHMOSCR", "count": 1}
+{"type": "substring", "description": "Word containing **YRI** together", "constraint": "yri", "expected_length": 6, "count": 17}
+{"type": "substring", "description": "Word containing **NIA** together", "constraint": "nia", "expected_length": 5, "count": 14}
+{"type": "synonym", "description": "Word similar to **LEFT**", "constraint": "left", "expected_length": 4, "count": 14}
+{"type": "jumble", "description": "Unscramble: **NDEDEF**", "constraint": "defend", "scrambled": "ndedef", "expected_length": 6, "visual": "NDEDEF", "count": 1}
+{"type": "jumble", "description": "Unscramble: **RBEERBRY**", "constraint": "berberry", "scrambled": "rbeerbry", "expected_length": 8, "visual": "RBEERBRY", "count": 1}
+{"type": "wordle_block", "description": "Word matching pattern", "constraint": ["d", "-", "-", "g", "-"], "expected_length": 5, "visual": "d--g-", "count": 20}
+{"type": "synonym", "description": "Word similar to **FIERY**", "constraint": "fiery", "expected_length": 5, "count": 6}
+{"type": "rhyme", "description": "Words rhyming with **GRAME**", "constraint": "ame", "expected_length": 5, "count": 8}
+{"type": "synonym", "description": "Word similar to **HORRIFIC**", "constraint": "horrific", "expected_length": 8, "count": 10}
+{"type": "synonym", "description": "Word similar to **PASSABLY**", "constraint": "passably", "expected_length": 8, "count": 5}
+{"type": "synonym", "description": "Word similar to **PEEL**", "constraint": "peel", "expected_length": 4, "count": 9}
+{"type": "jumble", "description": "Unscramble: **BTSUNRU**", "constraint": "unburst", "scrambled": "btsunru", "expected_length": 7, "visual": "BTSUNRU", "count": 1}
+{"type": "synonym", "description": "Word similar to **SOLIDI**", "constraint": "solidi", "expected_length": 6, "count": 6}
+{"type": "synonym", "description": "Word similar to **BLOODY**", "constraint": "bloody", "expected_length": 6, "count": 5}
+{"type": "synonym", "description": "Word similar to **LOUNGING**", "constraint": "lounging", "expected_length": 8, "count": 7}
+{"type": "wordle_block", "description": "Word matching pattern", "constraint": ["-", "t", "-", "-", "-", "z", "-"], "expected_length": 7, "visual": "-t---z-", "count": 6}
+{"type": "rhyme", "description": "Words rhyming with **MENTHOL**", "constraint": "hol", "expected_length": 7, "count": 7}
+{"type": "synonym", "description": "Word similar to **BODING**", "constraint": "boding", "expected_length": 6, "count": 9}
+{"type": "synonym", "description": "Word similar to **STEEP**", "constraint": "steep", "expected_length": 5, "count": 7}
+{"type": "rhyme", "description": "Words rhyming with **RESEAM**", "constraint": "eam", "expected_length": 6, "count": 13}
+{"type": "jumble", "description": "Unscramble: **LEPKIEG**", "constraint": "peglike", "scrambled": "lepkieg", "expected_length": 7, "visual": "LEPKIEG", "count": 1}
+{"type": "synonym", "description": "Word similar to **FURIES**", "constraint": "furies", "expected_length": 6, "count": 10}
+{"type": "substring", "description": "Word containing **BRE** together", "constraint": "bre", "expected_length": 5, "count": 16}
+{"type": "synonym", "description": "Word similar to **LEAN**", "constraint": "lean", "expected_length": 4, "count": 9}
+{"type": "jumble", "description": "Unscramble: **RXSTINFA**", "constraint": "transfix", "scrambled": "rxstinfa", "expected_length": 8, "visual": "RXSTINFA", "count": 1}
+{"type": "jumble", "description": "Unscramble: **ERLBE**", "constraint": "rebel", "scrambled": "erlbe", "expected_length": 5, "visual": "ERLBE", "count": 1}
+{"type": "jumble", "description": "Unscramble: **VRENEIC**", "constraint": "cervine", "scrambled": "vreneic", "expected_length": 7, "visual": "VRENEIC", "count": 1}
+{"type": "jumble", "description": "Unscramble: **BGCOAN**", "constraint": "cobang", "scrambled": "bgcoan", "expected_length": 6, "visual": "BGCOAN", "count": 1}
+{"type": "jumble", "description": "Unscramble: **DLODEFO**", "constraint": "flooded", "scrambled": "dlodefo", "expected_length": 7, "visual": "DLODEFO", "count": 1}
+{"type": "jumble", "description": "Unscramble: **EDOLNAPC**", "constraint": "lancepod", "scrambled": "edolnapc", "expected_length": 8, "visual": "EDOLNAPC", "count": 1}
+{"type": "synonym", "description": "Word similar to **SULLY**", "constraint": "sully", "expected_length": 5, "count": 13}
+{"type": "synonym", "description": "Word similar to **NAILING**", "constraint": "nailing", "expected_length": 7, "count": 9}
+{"type": "rhyme", "description": "Words rhyming with **PRABHU**", "constraint": "hu", "expected_length": 6, "count": 5}
+{"type": "jumble", "description": "Unscramble: **TUEFES**", "constraint": "fustee", "scrambled": "tuefes", "expected_length": 6, "visual": "TUEFES", "count": 1}
+{"type": "substring", "description": "Word containing **FTM** together", "constraint": "ftm", "expected_length": 7, "count": 5}
+{"type": "jumble", "description": "Unscramble: **OYHHODS**", "constraint": "hoodshy", "scrambled": "oyhhods", "expected_length": 7, "visual": "OYHHODS", "count": 1}
+{"type": "synonym", "description": "Word similar to **RUMP**", "constraint": "rump", "expected_length": 4, "count": 15}
+{"type": "synonym", "description": "Word similar to **REPRESS**", "constraint": "repress", "expected_length": 7, "count": 8}
+{"type": "substring", "description": "Word containing **FIE** together", "constraint": "fie", "expected_length": 7, "count": 19}
+{"type": "synonym", "description": "Word similar to **GROUNDED**", "constraint": "grounded", "expected_length": 8, "count": 6}
+{"type": "rhyme", "description": "Words rhyming with **BRACE**", "constraint": "ace", "expected_length": 5, "count": 9}
+{"type": "jumble", "description": "Unscramble: **VLEEHR**", "constraint": "helver", "scrambled": "vleehr", "expected_length": 6, "visual": "VLEEHR", "count": 1}
+{"type": "substring", "description": "Word containing **HUL** together", "constraint": "hul", "expected_length": 5, "count": 7}
+{"type": "jumble", "description": "Unscramble: **YUHBB**", "constraint": "hubby", "scrambled": "yuhbb", "expected_length": 5, "visual": "YUHBB", "count": 1}
+{"type": "substring", "description": "Word containing **VIF** together", "constraint": "vif", "expected_length": 8, "count": 7}
+{"type": "rhyme", "description": "Words rhyming with **THIERRY**", "constraint": "rry", "expected_length": 7, "count": 14}
+{"type": "rhyme", "description": "Words rhyming with **SHOOP**", "constraint": "oop", "expected_length": 5, "count": 14}
+{"type": "wordle_block", "description": "Word matching pattern", "constraint": ["w", "-", "-", "-", "r", "-", "-"], "expected_length": 7, "visual": "w---r--", "count": 20}
+{"type": "synonym", "description": "Word similar to **CRIMPING**", "constraint": "crimping", "expected_length": 8, "count": 6}
+{"type": "synonym", "description": "Word similar to **OUTWEAR**", "constraint": "outwear", "expected_length": 7, "count": 5}
+{"type": "jumble", "description": "Unscramble: **PIUNDLEK**", "constraint": "upkindle", "scrambled": "piundlek", "expected_length": 8, "visual": "PIUNDLEK", "count": 1}
+{"type": "substring", "description": "Word containing **PAL** together", "constraint": "pal", "expected_length": 4, "count": 9}
+{"type": "synonym", "description": "Word similar to **ORDERED**", "constraint": "ordered", "expected_length": 7, "count": 17}
+{"type": "synonym", "description": "Word similar to **CROW**", "constraint": "crow", "expected_length": 4, "count": 7}
+{"type": "synonym", "description": "Word similar to **DOTED**", "constraint": "doted", "expected_length": 5, "count": 6}
+{"type": "letters_anywhere", "description": "Word containing **E, K, M** (anywhere)", "constraint": ["e", "k", "m"], "expected_length": 5, "count": 20}
+{"type": "rhyme", "description": "Words rhyming with **RECIPE**", "constraint": "ipe", "expected_length": 6, "count": 5}
+{"type": "jumble", "description": "Unscramble: **JKUNAAI**", "constraint": "kanauji", "scrambled": "jkunaai", "expected_length": 7, "visual": "JKUNAAI", "count": 1}
+{"type": "synonym", "description": "Word similar to **FROSTY**", "constraint": "frosty", "expected_length": 6, "count": 9}
+{"type": "jumble", "description": "Unscramble: **ORHEUCEQ**", "constraint": "querecho", "scrambled": "orheuceq", "expected_length": 8, "visual": "ORHEUCEQ", "count": 1}
+{"type": "substring", "description": "Word containing **PTI** together", "constraint": "pti", "expected_length": 6, "count": 17}
+{"type": "jumble", "description": "Unscramble: **YOXP**", "constraint": "poxy", "scrambled": "yoxp", "expected_length": 4, "visual": "YOXP", "count": 1}
+{"type": "jumble", "description": "Unscramble: **KNYIPR**", "constraint": "prinky", "scrambled": "knyipr", "expected_length": 6, "visual": "KNYIPR", "count": 1}
+{"type": "synonym", "description": "Word similar to **HELLISH**", "constraint": "hellish", "expected_length": 7, "count": 7}
+{"type": "substring", "description": "Word containing **AUN** together", "constraint": "aun", "expected_length": 4, "count": 10}
+{"type": "jumble", "description": "Unscramble: **SAETEVP**", "constraint": "septave", "scrambled": "saetevp", "expected_length": 7, "visual": "SAETEVP", "count": 1}
+{"type": "jumble", "description": "Unscramble: **NIFEUN**", "constraint": "unfine", "scrambled": "nifeun", "expected_length": 6, "visual": "NIFEUN", "count": 1}
+{"type": "substring", "description": "Word containing **ETA** together", "constraint": "eta", "expected_length": 5, "count": 19}
+{"type": "jumble", "description": "Unscramble: **SPYMOIC**", "constraint": "copyism", "scrambled": "spymoic", "expected_length": 7, "visual": "SPYMOIC", "count": 1}
+{"type": "synonym", "description": "Word similar to **AWAKEN**", "constraint": "awaken", "expected_length": 6, "count": 5}
+{"type": "substring", "description": "Word containing **SG** together", "constraint": "sg", "expected_length": 7, "count": 10}
+{"type": "substring", "description": "Word containing **NNY** together", "constraint": "nny", "expected_length": 8, "count": 17}
+{"type": "synonym", "description": "Word similar to **AROSE**", "constraint": "arose", "expected_length": 5, "count": 10}
+{"type": "jumble", "description": "Unscramble: **NOLDI**", "constraint": "lindo", "scrambled": "noldi", "expected_length": 5, "visual": "NOLDI", "count": 1}
+{"type": "jumble", "description": "Unscramble: **KIIIVIVK**", "constraint": "kivikivi", "scrambled": "kiiivivk", "expected_length": 8, "visual": "KIIIVIVK", "count": 1}
+{"type": "synonym", "description": "Word similar to **FLEECED**", "constraint": "fleeced", "expected_length": 7, "count": 6}
+{"type": "jumble", "description": "Unscramble: **RUSILYTT**", "constraint": "trustily", "scrambled": "rusilytt", "expected_length": 8, "visual": "RUSILYTT", "count": 1}
+{"type": "synonym", "description": "Word similar to **SERVICE**", "constraint": "service", "expected_length": 7, "count": 5}
+{"type": "synonym", "description": "Word similar to **PRECEDE**", "constraint": "precede", "expected_length": 7, "count": 8}
+{"type": "synonym", "description": "Word similar to **SCORED**", "constraint": "scored", "expected_length": 6, "count": 7}
+{"type": "jumble", "description": "Unscramble: **KLFAEIWF**", "constraint": "wafflike", "scrambled": "klfaeiwf", "expected_length": 8, "visual": "KLFAEIWF", "count": 1}
+{"type": "jumble", "description": "Unscramble: **AWOR**", "constraint": "arow", "scrambled": "awor", "expected_length": 4, "visual": "AWOR", "count": 1}
+{"type": "substring", "description": "Word containing **NF** together", "constraint": "nf", "expected_length": 5, "count": 11}
+{"type": "jumble", "description": "Unscramble: **AMFRLUB**", "constraint": "flabrum", "scrambled": "amfrlub", "expected_length": 7, "visual": "AMFRLUB", "count": 1}
+{"type": "synonym", "description": "Word similar to **MILDNESS**", "constraint": "mildness", "expected_length": 8, "count": 5}
+{"type": "substring", "description": "Word containing **GOO** together", "constraint": "goo", "expected_length": 6, "count": 11}
+{"type": "jumble", "description": "Unscramble: **ATLIUNQ**", "constraint": "quintal", "scrambled": "atliunq", "expected_length": 7, "visual": "ATLIUNQ", "count": 1}
+{"type": "rhyme", "description": "Words rhyming with **AMANDIN**", "constraint": "din", "expected_length": 7, "count": 10}
+{"type": "synonym", "description": "Word similar to **PLOD**", "constraint": "plod", "expected_length": 4, "count": 5}
+{"type": "jumble", "description": "Unscramble: **LAEAC**", "constraint": "alcae", "scrambled": "laeac", "expected_length": 5, "visual": "LAEAC", "count": 1}
+{"type": "jumble", "description": "Unscramble: **KTEKE**", "constraint": "tekke", "scrambled": "kteke", "expected_length": 5, "visual": "KTEKE", "count": 1}
+{"type": "jumble", "description": "Unscramble: **PSTHISEL**", "constraint": "pithless", "scrambled": "psthisel", "expected_length": 8, "visual": "PSTHISEL", "count": 1}
+{"type": "jumble", "description": "Unscramble: **IHTCYOOP**", "constraint": "oophytic", "scrambled": "ihtcyoop", "expected_length": 8, "visual": "IHTCYOOP", "count": 1}
+{"type": "jumble", "description": "Unscramble: **TEHR**", "constraint": "erth", "scrambled": "tehr", "expected_length": 4, "visual": "TEHR", "count": 1}
+{"type": "jumble", "description": "Unscramble: **AAPRC**", "constraint": "capra", "scrambled": "aaprc", "expected_length": 5, "visual": "AAPRC", "count": 1}
+{"type": "synonym", "description": "Word similar to **REVERED**", "constraint": "revered", "expected_length": 7, "count": 6}
+{"type": "jumble", "description": "Unscramble: **WENIERET**", "constraint": "winetree", "scrambled": "wenieret", "expected_length": 8, "visual": "WENIERET", "count": 1}
+{"type": "jumble", "description": "Unscramble: **TEYLRT**", "constraint": "tetryl", "scrambled": "teylrt", "expected_length": 6, "visual": "TEYLRT", "count": 1}
+{"type": "substring", "description": "Word containing **BLE** together", "constraint": "ble", "expected_length": 4, "count": 5}
+{"type": "jumble", "description": "Unscramble: **NDUOOBK**", "constraint": "bundook", "scrambled": "nduoobk", "expected_length": 7, "visual": "NDUOOBK", "count": 1}
+{"type": "jumble", "description": "Unscramble: **TOEBRO**", "constraint": "booter", "scrambled": "toebro", "expected_length": 6, "visual": "TOEBRO", "count": 1}
+{"type": "jumble", "description": "Unscramble: **COBRCNO**", "constraint": "corncob", "scrambled": "cobrcno", "expected_length": 7, "visual": "COBRCNO", "count": 1}
+{"type": "jumble", "description": "Unscramble: **TYTUOBN**", "constraint": "buttony", "scrambled": "tytuobn", "expected_length": 7, "visual": "TYTUOBN", "count": 1}
+{"type": "synonym", "description": "Word similar to **SHRUNK**", "constraint": "shrunk", "expected_length": 6, "count": 12}
+{"type": "rhyme", "description": "Words rhyming with **DISAGIO**", "constraint": "io", "expected_length": 7, "count": 17}
+{"type": "rhyme", "description": "Words rhyming with **RAIA**", "constraint": "ia", "expected_length": 4, "count": 19}
+{"type": "rhyme", "description": "Words rhyming with **CALUMET**", "constraint": "met", "expected_length": 7, "count": 6}
+{"type": "synonym", "description": "Word similar to **SPORTS**", "constraint": "sports", "expected_length": 6, "count": 15}
+{"type": "jumble", "description": "Unscramble: **ALERKE**", "constraint": "leaker", "scrambled": "alerke", "expected_length": 6, "visual": "ALERKE", "count": 1}
+{"type": "jumble", "description": "Unscramble: **SLINOPUO**", "constraint": "polonius", "scrambled": "slinopuo", "expected_length": 8, "visual": "SLINOPUO", "count": 1}
+{"type": "synonym", "description": "Word similar to **BABIED**", "constraint": "babied", "expected_length": 6, "count": 7}
+{"type": "jumble", "description": "Unscramble: **RPIEMT**", "constraint": "permit", "scrambled": "rpiemt", "expected_length": 6, "visual": "RPIEMT", "count": 1}
+{"type": "jumble", "description": "Unscramble: **NISMSI**", "constraint": "sinism", "scrambled": "nismsi", "expected_length": 6, "visual": "NISMSI", "count": 1}
+{"type": "jumble", "description": "Unscramble: **AAGTEESL**", "constraint": "stealage", "scrambled": "aagteesl", "expected_length": 8, "visual": "AAGTEESL", "count": 1}
+{"type": "synonym", "description": "Word similar to **DECREE**", "constraint": "decree", "expected_length": 6, "count": 5}
+{"type": "jumble", "description": "Unscramble: **STOHOYP**", "constraint": "toyshop", "scrambled": "stohoyp", "expected_length": 7, "visual": "STOHOYP", "count": 1}
+{"type": "jumble", "description": "Unscramble: **EETBDL**", "constraint": "belted", "scrambled": "eetbdl", "expected_length": 6, "visual": "EETBDL", "count": 1}
+{"type": "rhyme", "description": "Words rhyming with **BORG**", "constraint": "rg", "expected_length": 4, "count": 7}
+{"type": "rhyme", "description": "Words rhyming with **TENT**", "constraint": "ent", "expected_length": 4, "count": 15}
+{"type": "jumble", "description": "Unscramble: **ITQU**", "constraint": "quit", "scrambled": "itqu", "expected_length": 4, "visual": "ITQU", "count": 1}
+{"type": "jumble", "description": "Unscramble: **OSPELITI**", "constraint": "pisolite", "scrambled": "ospeliti", "expected_length": 8, "visual": "OSPELITI", "count": 1}
+{"type": "jumble", "description": "Unscramble: **ETSEPP**", "constraint": "steppe", "scrambled": "etsepp", "expected_length": 6, "visual": "ETSEPP", "count": 1}
+{"type": "wordle_block", "description": "Word matching pattern", "constraint": ["r", "-", "-", "c", "-", "-", "-"], "expected_length": 7, "visual": "r--c---", "count": 20}
+{"type": "jumble", "description": "Unscramble: **VEMDERO**", "constraint": "removed", "scrambled": "vemdero", "expected_length": 7, "visual": "VEMDERO", "count": 1}
+{"type": "jumble", "description": "Unscramble: **ADWEALN**", "constraint": "danelaw", "scrambled": "adwealn", "expected_length": 7, "visual": "ADWEALN", "count": 1}
+{"type": "jumble", "description": "Unscramble: **ILQUONYL**", "constraint": "quinolyl", "scrambled": "ilquonyl", "expected_length": 8, "visual": "ILQUONYL", "count": 1}
+{"type": "synonym", "description": "Word similar to **CHUMP**", "constraint": "chump", "expected_length": 5, "count": 5}
+{"type": "letters_anywhere", "description": "Word containing **P, U, Q** (anywhere)", "constraint": ["p", "u", "q"], "expected_length": 7, "count": 13}
+{"type": "jumble", "description": "Unscramble: **PAUFTW**", "constraint": "upwaft", "scrambled": "pauftw", "expected_length": 6, "visual": "PAUFTW", "count": 1}
+{"type": "synonym", "description": "Word similar to **CHICANE**", "constraint": "chicane", "expected_length": 7, "count": 10}
+{"type": "synonym", "description": "Word similar to **GARISH**", "constraint": "garish", "expected_length": 6, "count": 11}
+{"type": "substring", "description": "Word containing **LIM** together", "constraint": "lim", "expected_length": 4, "count": 9}
+{"type": "jumble", "description": "Unscramble: **TBCAEWK**", "constraint": "wetback", "scrambled": "tbcaewk", "expected_length": 7, "visual": "TBCAEWK", "count": 1}
+{"type": "jumble", "description": "Unscramble: **NIUTEAL**", "constraint": "alunite", "scrambled": "niuteal", "expected_length": 7, "visual": "NIUTEAL", "count": 1}
+{"type": "jumble", "description": "Unscramble: **IENOWNV**", "constraint": "inwoven", "scrambled": "ienownv", "expected_length": 7, "visual": "IENOWNV", "count": 1}
+{"type": "synonym", "description": "Word similar to **FORECAST**", "constraint": "forecast", "expected_length": 8, "count": 11}
+{"type": "synonym", "description": "Word similar to **IDLER**", "constraint": "idler", "expected_length": 5, "count": 9}
+{"type": "jumble", "description": "Unscramble: **BSITIAL**", "constraint": "stibial", "scrambled": "bsitial", "expected_length": 7, "visual": "BSITIAL", "count": 1}
+{"type": "jumble", "description": "Unscramble: **BANOLKCB**", "constraint": "blacknob", "scrambled": "banolkcb", "expected_length": 8, "visual": "BANOLKCB", "count": 1}
+{"type": "jumble", "description": "Unscramble: **XLYELNEY**", "constraint": "xylylene", "scrambled": "xlyelney", "expected_length": 8, "visual": "XLYELNEY", "count": 1}
+{"type": "wordle_block", "description": "Word matching pattern", "constraint": ["-", "a", "-", "-", "-", "z", "-"], "expected_length": 7, "visual": "-a---z-", "count": 13}
+{"type": "synonym", "description": "Word similar to **STORMING**", "constraint": "storming", "expected_length": 8, "count": 5}
+{"type": "jumble", "description": "Unscramble: **AGEUSAN**", "constraint": "guanase", "scrambled": "ageusan", "expected_length": 7, "visual": "AGEUSAN", "count": 1}
+{"type": "jumble", "description": "Unscramble: **NDNIMAG**", "constraint": "damning", "scrambled": "ndnimag", "expected_length": 7, "visual": "NDNIMAG", "count": 1}
+{"type": "jumble", "description": "Unscramble: **VAMLREPI**", "constraint": "primeval", "scrambled": "vamlrepi", "expected_length": 8, "visual": "VAMLREPI", "count": 1}
+{"type": "rhyme", "description": "Words rhyming with **KILLCALF**", "constraint": "alf", "expected_length": 8, "count": 5}
+{"type": "jumble", "description": "Unscramble: **ATKFOLWO**", "constraint": "footwalk", "scrambled": "atkfolwo", "expected_length": 8, "visual": "ATKFOLWO", "count": 1}
+{"type": "jumble", "description": "Unscramble: **LOABTAL**", "constraint": "ballota", "scrambled": "loabtal", "expected_length": 7, "visual": "LOABTAL", "count": 1}
+{"type": "jumble", "description": "Unscramble: **BROBEB**", "constraint": "bobber", "scrambled": "brobeb", "expected_length": 6, "visual": "BROBEB", "count": 1}
+{"type": "synonym", "description": "Word similar to **GUILE**", "constraint": "guile", "expected_length": 5, "count": 8}
+{"type": "jumble", "description": "Unscramble: **ASQWUK**", "constraint": "squawk", "scrambled": "asqwuk", "expected_length": 6, "visual": "ASQWUK", "count": 1}
+{"type": "rhyme", "description": "Words rhyming with **STEAMY**", "constraint": "amy", "expected_length": 6, "count": 9}
+{"type": "jumble", "description": "Unscramble: **DUSAMNS**", "constraint": "sudsman", "scrambled": "dusamns", "expected_length": 7, "visual": "DUSAMNS", "count": 1}
+{"type": "jumble", "description": "Unscramble: **COGATISR**", "constraint": "orgastic", "scrambled": "cogatisr", "expected_length": 8, "visual": "COGATISR", "count": 1}
+{"type": "jumble", "description": "Unscramble: **TMZYOOO**", "constraint": "zootomy", "scrambled": "tmzyooo", "expected_length": 7, "visual": "TMZYOOO", "count": 1}
+{"type": "synonym", "description": "Word similar to **REVOKE**", "constraint": "revoke", "expected_length": 6, "count": 8}
+{"type": "synonym", "description": "Word similar to **QUINT**", "constraint": "quint", "expected_length": 5, "count": 7}
+{"type": "jumble", "description": "Unscramble: **FISC**", "constraint": "fisc", "scrambled": "fisc", "expected_length": 4, "visual": "FISC", "count": 1}
+{"type": "jumble", "description": "Unscramble: **RRAYCBRE**", "constraint": "carberry", "scrambled": "rraycbre", "expected_length": 8, "visual": "RRAYCBRE", "count": 1}
+{"type": "jumble", "description": "Unscramble: **CSATLP**", "constraint": "claspt", "scrambled": "csatlp", "expected_length": 6, "visual": "CSATLP", "count": 1}
+{"type": "substring", "description": "Word containing **UGE** together", "constraint": "uge", "expected_length": 8, "count": 18}
+{"type": "synonym", "description": "Word similar to **BATTY**", "constraint": "batty", "expected_length": 5, "count": 16}
+{"type": "jumble", "description": "Unscramble: **HWSSO**", "constraint": "swosh", "scrambled": "hwsso", "expected_length": 5, "visual": "HWSSO", "count": 1}
+{"type": "synonym", "description": "Word similar to **SUGAR**", "constraint": "sugar", "expected_length": 5, "count": 14}
+{"type": "jumble", "description": "Unscramble: **WIEADRHE**", "constraint": "hairweed", "scrambled": "wieadrhe", "expected_length": 8, "visual": "WIEADRHE", "count": 1}
+{"type": "jumble", "description": "Unscramble: **IGTRVE**", "constraint": "grivet", "scrambled": "igtrve", "expected_length": 6, "visual": "IGTRVE", "count": 1}
+{"type": "synonym", "description": "Word similar to **GROWED**", "constraint": "growed", "expected_length": 6, "count": 12}
+{"type": "synonym", "description": "Word similar to **SPITE**", "constraint": "spite", "expected_length": 5, "count": 7}
+{"type": "jumble", "description": "Unscramble: **UKHBERB**", "constraint": "khubber", "scrambled": "ukhberb", "expected_length": 7, "visual": "UKHBERB", "count": 1}
+{"type": "jumble", "description": "Unscramble: **IAVKA**", "constraint": "vakia", "scrambled": "iavka", "expected_length": 5, "visual": "IAVKA", "count": 1}
+{"type": "jumble", "description": "Unscramble: **NUPXMEET**", "constraint": "unexempt", "scrambled": "nupxmeet", "expected_length": 8, "visual": "NUPXMEET", "count": 1}
+{"type": "jumble", "description": "Unscramble: **YEKWAY**", "constraint": "keyway", "scrambled": "yekway", "expected_length": 6, "visual": "YEKWAY", "count": 1}
+{"type": "jumble", "description": "Unscramble: **IIHNEHRC**", "constraint": "heinrich", "scrambled": "iihnehrc", "expected_length": 8, "visual": "IIHNEHRC", "count": 1}
+{"type": "substring", "description": "Word containing **WIG** together", "constraint": "wig", "expected_length": 7, "count": 20}
