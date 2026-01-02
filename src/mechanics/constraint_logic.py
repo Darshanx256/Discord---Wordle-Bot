@@ -25,7 +25,8 @@ class ConstraintGenerator:
         """
         if dictionary is None:
             # Use NLTK for full dictionary, filtered to 4-8 letter English words
-            self.dictionary = [w.lower() for w in nltk_words.words() if 4 <= len(w) <= 8 and w.isalpha() and w.lower() in wordnet._lemma_from_key]
+            # Check if word exists in WordNet by checking if it has synsets
+            self.dictionary = [w.lower() for w in nltk_words.words() if 4 <= len(w) <= 8 and w.isalpha() and wordnet.synsets(w.lower())]
         else:
             self.dictionary = list(dictionary)
         self.vowels = set('aeiou')
