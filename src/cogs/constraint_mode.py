@@ -62,7 +62,8 @@ class ConstraintMode(commands.Cog):
             'yellow': "https://cdn.discordapp.com/emojis/1456199439277494418.png",
             'red': "https://cdn.discordapp.com/emojis/1456199431803244624.png",
             'unlit': "https://cdn.discordapp.com/emojis/1456199350693789696.png",
-            'checkpoint': "https://cdn.discordapp.com/emojis/1456313204597588101.png"
+            'checkpoint': "https://cdn.discordapp.com/emojis/1456313204597588101.png",
+            'unknown': "https://cdn.discordapp.com/emojis/1456488648923938846.png"
         }
 
     @app_commands.command(name="word_rush", description="Fast-paced word hunt with linguistic constraints")
@@ -78,7 +79,6 @@ class ConstraintMode(commands.Cog):
         game = ConstraintGame(self.bot, cid, interaction.user)
         self.bot.constraint_games[cid] = game
         
-        # Gorgeous lobby embed
         embed = discord.Embed(
             title="⚡ Word Rush",
             description=(
@@ -143,7 +143,6 @@ class ConstraintMode(commands.Cog):
         if not visual:
             return ""
         
-        # Process each line
         lines = visual.split('\n')
         formatted_lines = []
         
@@ -152,13 +151,12 @@ class ConstraintMode(commands.Cog):
             for char in line:
                 char_low = char.lower()
                 if char_low.isalpha():
-                    # Use green block for known letters
-                    formatted += EMOJIS.get(f"block_{char_low}_green", "")
+                    formatted += EMOJIS.get(f"block_{char_low}_green", "🟩")
                 elif char == '-':
-                    # Use grey block for unknown positions
-                    formatted += "⬜"
+                    # Use custom unknown emoji (replace EMOJI_ID_HERE with actual ID)
+                    emoji_id = self.signal_urls['unknown'].split('/')[-1].replace('.png', '')
+                    formatted += f"<:unknown:{emoji_id}>"
                 else:
-                    # Keep other characters (spaces, etc.)
                     formatted += char
             formatted_lines.append(formatted)
         
@@ -168,7 +166,6 @@ class ConstraintMode(commands.Cog):
         try:
             channel = interaction.channel
             
-            # Wait for start
             try:
                 await asyncio.wait_for(game.start_confirmed.wait(), timeout=60)
             except asyncio.TimeoutError:
@@ -177,12 +174,11 @@ class ConstraintMode(commands.Cog):
                     self.bot.constraint_games.pop(game.channel_id, None)
                     return
             
-            # Beautiful countdown sequence
+            # Countdown sequence
             countdown_embed = discord.Embed(
                 title="Starting Rush",
-                description=f"**{len(game.participants)}** player{'s' if len(game.participants) > 1 else ''} ready",
+                description="READY?",
                 color=discord.Color.from_rgb(220, 20, 60)
-                countdown_embed.description = "READY?"
             )
             countdown_embed.set_thumbnail(url=self.signal_urls['red'])
             
@@ -205,7 +201,6 @@ class ConstraintMode(commands.Cog):
             
             await asyncio.sleep(1.5)
             
-            # Turn off the light
             countdown_embed.set_thumbnail(url=self.signal_urls['unlit'])
             countdown_embed.color = discord.Color.dark_gray()
             await game.game_msg.edit(embed=countdown_embed)
@@ -217,23 +212,19 @@ class ConstraintMode(commands.Cog):
                 game.round_number += 1
                 game.winners_in_round = []
                 
-                # Checkpoint check
                 if game.round_number > 1 and (game.round_number - 1) % 12 == 0:
                     await self.show_checkpoint(channel, game)
                     if not game.is_running:
                         break
 
-                # Generate puzzle
                 game.active_puzzle = game.generator.generate_puzzle()
                 puzzle_desc = game.active_puzzle['description']
                 visual_raw = game.active_puzzle.get('visual', '')
                 visual = self.format_visual_pattern(visual_raw)
                 
-                # Determine if this is a pattern puzzle (has visual blocks)
                 has_pattern = bool(visual)
                 round_duration = 20 if has_pattern else 12
                 
-                # Create round embed with fixed structure - show only emoji pattern if available
                 display_text = visual if visual else puzzle_desc
                 
                 round_embed = discord.Embed(
@@ -250,7 +241,6 @@ class ConstraintMode(commands.Cog):
                 
                 try:
                     if has_pattern:
-                        # Pattern puzzle: 20 seconds (8-7-5)
                         await asyncio.sleep(8)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                         round_embed.color = discord.Color.gold()
@@ -263,7 +253,6 @@ class ConstraintMode(commands.Cog):
                         
                         await asyncio.sleep(5)
                     else:
-                        # Regular puzzle: 12 seconds (5-4-3)
                         await asyncio.sleep(5)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                         round_embed.color = discord.Color.gold()
@@ -279,10 +268,8 @@ class ConstraintMode(commands.Cog):
                 except asyncio.CancelledError:
                     break
                 
-                # End round
                 game.is_round_active = False
                 
-                # Update to unlit state with results
                 round_embed.set_thumbnail(url=self.signal_urls['unlit'])
                 round_embed.color = discord.Color.dark_gray()
                 
@@ -294,7 +281,6 @@ class ConstraintMode(commands.Cog):
                 
                 await msg.edit(embed=round_embed)
                 
-                # Check failure condition
                 if not game.winners_in_round:
                     game.rounds_without_guess += 1
                 else:
@@ -321,7 +307,6 @@ class ConstraintMode(commands.Cog):
                     game.is_running = False
                     break
                 
-                # Buffer between rounds
                 await asyncio.sleep(2)
 
         except Exception as e:
@@ -330,6 +315,7 @@ class ConstraintMode(commands.Cog):
             self.bot.constraint_games.pop(interaction.channel_id, None)
 
     async def show_checkpoint(self, channel, game):
+        """Display checkpoint with scores and distribute rewards."""
         checkpoint_embed = discord.Embed(
             title="Checkpoint",
             description="Calculating scores and distributing rewards...",
@@ -342,11 +328,11 @@ class ConstraintMode(commands.Cog):
         
         if not sorted_scores:
             checkpoint_embed.description = "No scores to report this checkpoint.\n\nContinuing in 5 seconds..."
+            checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
             await msg.edit(embed=checkpoint_embed)
             await asyncio.sleep(5)
             return
 
-        # Award scores
         lines = []
         medals = ["🥇", "🥈", "🥉"]
         
@@ -380,7 +366,6 @@ class ConstraintMode(commands.Cog):
         checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
         await msg.edit(embed=checkpoint_embed)
         
-        # Reset scores
         game.scores = {}
         
         await asyncio.sleep(8)
@@ -421,14 +406,12 @@ class ConstraintMode(commands.Cog):
         if content not in game.active_puzzle['solutions']:
             return
 
-        # Valid guess
         game.used_words.add(content)
         game.participants.add(message.author.id)
         
         rank = len(game.winners_in_round) + 1
         game.winners_in_round.append(message.author.id)
         
-        # Score calculation
         wr_gain = 1
         reaction = "✓"
         
