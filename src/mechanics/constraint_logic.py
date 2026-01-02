@@ -18,15 +18,53 @@ try:
 except LookupError:
     nltk.download('omw-1.4', quiet=True)
 
+# Cache for the full dictionary to avoid rebuilding it every time
+_cached_dictionary = None
+_wordnet_words_cache = None
+
+def _build_wordnet_cache():
+    """Build a cache of words that exist in WordNet for fast lookup."""
+    global _wordnet_words_cache
+    if _wordnet_words_cache is not None:
+        return _wordnet_words_cache
+    
+    # Build a set of valid words from WordNet lemmas
+    valid_words = set()
+    for synset in wordnet.all_synsets():
+        for lemma in synset.lemmas():
+            word = lemma.name().replace('_', ' ').lower().split()[0]  # Get first word, handle multi-word lemmas
+            if 4 <= len(word) <= 8 and word.isalpha():
+                valid_words.add(word)
+    
+    _wordnet_words_cache = valid_words
+    return _wordnet_words_cache
+
+def _build_dictionary():
+    """Build the dictionary once and cache it for reuse."""
+    global _cached_dictionary
+    if _cached_dictionary is not None:
+        return _cached_dictionary
+    
+    # Build WordNet cache for fast lookup
+    wordnet_words = _build_wordnet_cache()
+    
+    # Filter NLTK words to only include those in WordNet (fast set lookup)
+    nltk_all = nltk_words.words()
+    filtered = [w.lower() for w in nltk_all if 4 <= len(w) <= 8 and w.isalpha() and w.lower() in wordnet_words]
+    
+    # Also add WordNet words that might not be in NLTK words corpus
+    combined = set(filtered) | wordnet_words
+    _cached_dictionary = sorted(list(combined))
+    return _cached_dictionary
+
 class ConstraintGenerator:
     def __init__(self, dictionary=None):
         """
         :param dictionary: List or Set of valid words. If None, uses NLTK full English words (4-8 letters).
         """
         if dictionary is None:
-            # Use NLTK for full dictionary, filtered to 4-8 letter English words
-            # Check if word exists in WordNet by checking if it has synsets
-            self.dictionary = [w.lower() for w in nltk_words.words() if 4 <= len(w) <= 8 and w.isalpha() and wordnet.synsets(w.lower())]
+            # Use cached dictionary for faster initialization
+            self.dictionary = _build_dictionary()
         else:
             self.dictionary = list(dictionary)
         self.vowels = set('aeiou')

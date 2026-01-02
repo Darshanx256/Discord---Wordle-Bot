@@ -83,6 +83,10 @@ class ConstraintMode(commands.Cog):
         if cid in self.bot.games or cid in self.bot.custom_games:
              return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
 
+        # Defer response immediately to prevent interaction timeout
+        await interaction.response.defer()
+        
+        # Initialize game (this may take time due to dictionary loading)
         game = ConstraintGame(self.bot, cid, interaction.user)
         self.bot.constraint_games[cid] = game
         
@@ -111,8 +115,7 @@ class ConstraintMode(commands.Cog):
         embed.set_footer(text=f"🎮 Hosted by {interaction.user.display_name}")
         
         view = RushStartView(game)
-        await interaction.response.send_message(embed=embed, view=view)
-        lobby_msg = await interaction.original_response()
+        lobby_msg = await interaction.followup.send(embed=embed, view=view)
         game.game_msg = lobby_msg
         
         asyncio.create_task(self.run_game_loop(interaction, game))
