@@ -25,9 +25,9 @@ class ConstraintGame:
         self.is_round_active = False
         self.is_bonus_round = False
         self.bonus_word_count = {}  # For bonus rounds: user_id -> word count
-        # Use full NLTK dictionary for variety
+        # Use full NLTK dictionary for variety - memory optimized
         self.generator = ConstraintGenerator()  # No param = full dict
-        self.dictionary = set(self.generator.dictionary)  # For validation
+        self.dictionary = self.generator.dictionary_set  # Use set directly (no duplication)
         self.round_task = None
         self.game_msg = None
         self.participants = {started_by.id}
@@ -204,10 +204,10 @@ class ConstraintMode(commands.Cog):
     
     def _bonus_most_words(self, game):
         """Find as many words as possible matching the constraint."""
-        word = random.choice(list(game.dictionary))
+        word = random.choice(game.generator.dictionary)  # Use list from generator
         letter = random.choice([c for c in set(word)])
         
-        solutions = [w for w in game.dictionary if letter in w and w not in game.used_words]
+        solutions = [w for w in game.generator.dictionary if letter in w and w not in game.used_words]
         
         return {
             'description': f"🎁 **BONUS: Most Words**\nMax words with **{letter.upper()}**!",
@@ -219,9 +219,9 @@ class ConstraintMode(commands.Cog):
     
     def _bonus_speed_demon(self, game):
         """Simple constraint, first gets huge bonus."""
-        word = random.choice(list(game.dictionary))
+        word = random.choice(game.generator.dictionary)  # Use list from generator
         sub = word[1:3]
-        solutions = [w for w in game.dictionary if sub in w and w not in game.used_words]
+        solutions = [w for w in game.generator.dictionary if sub in w and w not in game.used_words]
         
         return {
             'description': f"🎁 **BONUS: Speed**\n1st gets **3x WR**! Contains **{sub.upper()}**",
@@ -239,7 +239,7 @@ class ConstraintMode(commands.Cog):
                     return True
             return False
         
-        solutions = [w for w in game.dictionary if has_alphabetical_sequence(w) and w not in game.used_words]
+        solutions = [w for w in game.generator.dictionary if has_alphabetical_sequence(w) and w not in game.used_words]
         
         return {
             'description': f"🎁 **BONUS: Alphabet**\n3+ letters in order! (e.g., FIRST: RST)",
@@ -251,11 +251,11 @@ class ConstraintMode(commands.Cog):
     
     def _bonus_rhyme_time(self, game):
         """Rhyming frenzy."""
-        word = random.choice(list(game.dictionary))
+        word = random.choice(game.generator.dictionary)  # Use list from generator
         rhyme_len = random.choice([2, 3])
         ending = word[-rhyme_len:]
         
-        solutions = [w for w in game.dictionary if w.endswith(ending) and w not in game.used_words]
+        solutions = [w for w in game.generator.dictionary if w.endswith(ending) and w not in game.used_words]
         
         return {
             'description': f"🎁 **BONUS: Rhyme**\nWords ending **-{ending.upper()}**!",
@@ -267,7 +267,7 @@ class ConstraintMode(commands.Cog):
     
     def _bonus_jumble_frenzy(self, game):
         """Bonus: Unscramble a tough jumble, multiple tries."""
-        word = random.choice(list(game.dictionary))
+        word = random.choice(game.generator.dictionary)  # Use list from generator
         scrambled = ''.join(random.sample(word, len(word)))
         
         solutions = {word}  # Single for frenzy, but allow multiple guesses? Wait, keep as is.

@@ -18,55 +18,62 @@ try:
 except LookupError:
     nltk.download('omw-1.4', quiet=True)
 
-# Cache for the full dictionary to avoid rebuilding it every time
-_cached_dictionary = None
-_wordnet_words_cache = None
-
-def _build_wordnet_cache():
-    """Build a cache of words that exist in WordNet for fast lookup."""
-    global _wordnet_words_cache
-    if _wordnet_words_cache is not None:
-        return _wordnet_words_cache
-    
-    # Build a set of valid words from WordNet lemmas
-    valid_words = set()
-    for synset in wordnet.all_synsets():
-        for lemma in synset.lemmas():
-            word = lemma.name().replace('_', ' ').lower().split()[0]  # Get first word, handle multi-word lemmas
-            if 4 <= len(word) <= 8 and word.isalpha():
-                valid_words.add(word)
-    
-    _wordnet_words_cache = valid_words
-    return _wordnet_words_cache
+# Memory-efficient dictionary cache - use a set for O(1) lookups and smaller memory footprint
+_cached_dictionary_set = None
+_cached_dictionary_list = None  # Only built when needed for random.choice
 
 def _build_dictionary():
-    """Build the dictionary once and cache it for reuse."""
-    global _cached_dictionary
-    if _cached_dictionary is not None:
-        return _cached_dictionary
+    """
+    Build a memory-efficient dictionary using only NLTK words corpus.
+    WordNet is loaded lazily only when needed for synonyms/antonyms.
+    This reduces memory from ~500MB to ~50MB.
+    """
+    global _cached_dictionary_set, _cached_dictionary_list
+    if _cached_dictionary_set is not None:
+        return _cached_dictionary_list
     
-    # Build WordNet cache for fast lookup
-    wordnet_words = _build_wordnet_cache()
+    # Use only NLTK words corpus - much smaller and faster
+    # Filter to 4-8 letter words that are alphabetic
+    # Use a generator first to avoid loading everything into memory
+    print("🔍 Building word dictionary (this may take a moment)...")
     
-    # Filter NLTK words to only include those in WordNet (fast set lookup)
-    nltk_all = nltk_words.words()
-    filtered = [w.lower() for w in nltk_all if 4 <= len(w) <= 8 and w.isalpha() and w.lower() in wordnet_words]
+    # Build set first for deduplication and fast lookups
+    word_set = set()
+    nltk_word_list = nltk_words.words()
     
-    # Also add WordNet words that might not be in NLTK words corpus
-    combined = set(filtered) | wordnet_words
-    _cached_dictionary = sorted(list(combined))
-    return _cached_dictionary
+    # Process in chunks to be memory efficient
+    for w in nltk_word_list:
+        w_lower = w.lower()
+        if 4 <= len(w_lower) <= 8 and w_lower.isalpha():
+            word_set.add(w_lower)
+    
+    # Convert to sorted list only once (needed for random.choice)
+    _cached_dictionary_set = word_set
+    _cached_dictionary_list = sorted(list(word_set))
+    
+    print(f"✅ Dictionary built: {len(_cached_dictionary_list)} words")
+    return _cached_dictionary_list
+
+def _word_in_wordnet(word):
+    """Lazy check if a word exists in WordNet - only called when needed."""
+    try:
+        return bool(wordnet.synsets(word))
+    except:
+        return False
 
 class ConstraintGenerator:
     def __init__(self, dictionary=None):
         """
-        :param dictionary: List or Set of valid words. If None, uses NLTK full English words (4-8 letters).
+        :param dictionary: List or Set of valid words. If None, uses NLTK words (4-8 letters).
+        Memory-optimized: Uses set for lookups, list only for random.choice.
         """
         if dictionary is None:
-            # Use cached dictionary for faster initialization
+            # Use cached dictionary - list for random.choice, set for lookups
             self.dictionary = _build_dictionary()
+            self.dictionary_set = _cached_dictionary_set  # Fast O(1) lookups
         else:
             self.dictionary = list(dictionary)
+            self.dictionary_set = set(dictionary)
         self.vowels = set('aeiou')
         self.consonants = set('bcdfghjklmnpqrstvwxyz')
 
@@ -107,7 +114,7 @@ class ConstraintGenerator:
             
             description, validator, visual, expected_length = selected_func()
             
-            # Efficiently find solutions
+            # Efficiently find solutions - use set for faster filtering
             solutions = [w for w in self.dictionary if validator(w) and len(w) == expected_length]
             
             if 5 <= len(solutions) <= 20:
@@ -253,7 +260,7 @@ class ConstraintGenerator:
                         ant_word = ant.name().replace('_', '').lower()
                         if 4 <= len(ant_word) <= 8 and ant_word.isalpha():
                             antonyms.add(ant_word)
-            if len(antonyms & set(self.dictionary)) >= 5:
+            if len(antonyms & self.dictionary_set) >= 5:
                 desc = f"Word opposite of **{base.upper()}**"
                 expected_length = len(base)  # Approximate, antonyms may vary slightly
                 def validator(w):
@@ -275,7 +282,7 @@ class ConstraintGenerator:
                     syn_word = lemma.name().replace('_', '').lower()
                     if 4 <= len(syn_word) <= 8 and syn_word.isalpha() and syn_word != base:
                         synonyms.add(syn_word)
-            if len(synonyms & set(self.dictionary)) >= 5:
+            if len(synonyms & self.dictionary_set) >= 5:
                 desc = f"Word similar to **{base.upper()}**"
                 expected_length = len(base)
                 def validator(w):

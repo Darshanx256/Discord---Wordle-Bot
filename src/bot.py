@@ -5,6 +5,7 @@ import datetime
 import random
 import time
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 from supabase import create_client, Client
 
@@ -99,14 +100,29 @@ class WordleBot(commands.Bot):
         # Load cogs first so their app-commands are registered before syncing
         await self.load_cogs()
         
+        # Wait a moment for all commands to register
+        await asyncio.sleep(0.5)
+        
+        # Count commands before sync
+        all_commands = list(self.tree.walk_commands())
+        app_commands = [c for c in all_commands if isinstance(c, app_commands.Command)]
+        hybrid_commands = [c for c in all_commands if isinstance(c, commands.HybridCommand)]
+        
+        print(f"📋 Found {len(app_commands)} app commands and {len(hybrid_commands)} hybrid commands")
+        
         # Sync commands with Discord
         try:
             synced = await self.tree.sync()
             print(f"✅ Synced {len(synced)} command(s) to Discord")
             if synced:
-                print(f"   Commands: {', '.join(cmd.name for cmd in synced)}")
+                cmd_names = [cmd.name for cmd in synced]
+                print(f"   Commands: {', '.join(cmd_names[:20])}")
+                if len(cmd_names) > 20:
+                    print(f"   ... and {len(cmd_names) - 20} more")
         except Exception as e:
             print(f"⚠️ Command sync error: {e}")
+            import traceback
+            traceback.print_exc()
             # Try to continue anyway - commands might still work
         
         # Start refactored background tasks
