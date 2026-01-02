@@ -67,15 +67,26 @@ class FeedbackCommands(commands.Cog):
     @app_commands.command(name="message", description="Send feedback, bug reports, or feature requests to the bot developer.")
     async def message(self, interaction: discord.Interaction):
         """Present feedback modal to user."""
-        # Check if user is banned
-        if hasattr(self.bot, 'banned_users') and interaction.user.id in self.bot.banned_users:
-            return await interaction.response.send_message(
-                "🚫 You are banned from using this bot.",
-                ephemeral=True
-            )
-        
-        modal = FeedbackModal()
-        await interaction.response.send_modal(modal)
+        try:
+            # Check if user is banned
+            if hasattr(self.bot, 'banned_users') and interaction.user.id in self.bot.banned_users:
+                if not interaction.response.is_done():
+                    return await interaction.response.send_message(
+                        "🚫 You are banned from using this bot.",
+                        ephemeral=True
+                    )
+                else:
+                    return await interaction.followup.send(
+                        "🚫 You are banned from using this bot.",
+                        ephemeral=True
+                    )
+            
+            modal = FeedbackModal()
+            if not interaction.response.is_done():
+                await interaction.response.send_modal(modal)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded):
+            # Interaction expired or already responded
+            pass
 
 
 async def setup(bot):

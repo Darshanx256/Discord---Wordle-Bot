@@ -256,30 +256,44 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
     # 2. Check existence
     if cid in bot.games:
         msg = "⚠️ A game is already active in this channel! Use `/stop_game` to end it."
-        if is_interaction: 
-            if not interaction_or_ctx.response.is_done():
-                await interaction_or_ctx.response.send_message(msg, ephemeral=True)
-            else:
-                await interaction_or_ctx.followup.send(msg, ephemeral=True)
-        else: await interaction_or_ctx.send(msg, ephemeral=True)
+        try:
+            if is_interaction: 
+                if not interaction_or_ctx.response.is_done():
+                    await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+                else:
+                    await interaction_or_ctx.followup.send(msg, ephemeral=True)
+            else: 
+                await interaction_or_ctx.send(msg, ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded):
+            # Interaction expired or already responded
+            pass
         return
     if cid in bot.custom_games:
         msg = "⚠️ A custom game is already active. Use `/stop_game` first."
-        if is_interaction:
-            if not interaction_or_ctx.response.is_done():
-                await interaction_or_ctx.response.send_message(msg, ephemeral=True)
-            else:
-                await interaction_or_ctx.followup.send(msg, ephemeral=True)
-        else: await interaction_or_ctx.send(msg, ephemeral=True)
+        try:
+            if is_interaction:
+                if not interaction_or_ctx.response.is_done():
+                    await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+                else:
+                    await interaction_or_ctx.followup.send(msg, ephemeral=True)
+            else: 
+                await interaction_or_ctx.send(msg, ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.InteractionResponded):
+            # Interaction expired or already responded
+            pass
         return
 
     # Defer early to prevent timeout during DB secret selection
-    if is_interaction:
-        if not interaction_or_ctx.response.is_done():
-            await interaction_or_ctx.response.defer()
-    else:
-        # For hybrid/prefix commands
-        await interaction_or_ctx.defer()
+    try:
+        if is_interaction:
+            if not interaction_or_ctx.response.is_done():
+                await interaction_or_ctx.response.defer()
+        else:
+            # For hybrid/prefix commands
+            await interaction_or_ctx.defer()
+    except (discord.errors.NotFound, discord.errors.InteractionResponded):
+        # Interaction expired or already responded
+        return
 
     # 3. Secret Selection
     if is_classic:

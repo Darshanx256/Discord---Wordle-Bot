@@ -77,14 +77,30 @@ class ConstraintMode(commands.Cog):
     @app_commands.guild_only()
     async def word_rush(self, interaction: discord.Interaction):
         cid = interaction.channel_id
-        if cid in self.bot.constraint_games:
-            return await interaction.response.send_message("⚠️ A Word Rush session is already active in this channel.", ephemeral=True)
         
-        if cid in self.bot.games or cid in self.bot.custom_games:
-             return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
+        # Early returns - respond immediately before any heavy work
+        try:
+            if cid in self.bot.constraint_games:
+                if not interaction.response.is_done():
+                    return await interaction.response.send_message("⚠️ A Word Rush session is already active in this channel.", ephemeral=True)
+                else:
+                    return await interaction.followup.send("⚠️ A Word Rush session is already active in this channel.", ephemeral=True)
+            
+            if cid in self.bot.games or cid in self.bot.custom_games:
+                if not interaction.response.is_done():
+                    return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
+                else:
+                    return await interaction.followup.send("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
+        except discord.errors.NotFound:
+            # Interaction expired, silently fail
+            return
 
         # Defer response immediately to prevent interaction timeout
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except (discord.errors.NotFound, discord.errors.InteractionResponded):
+            # Interaction already expired or responded to
+            return
         
         # Initialize game (this may take time due to dictionary loading)
         game = ConstraintGame(self.bot, cid, interaction.user)

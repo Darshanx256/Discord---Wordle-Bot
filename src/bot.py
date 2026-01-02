@@ -98,7 +98,16 @@ class WordleBot(commands.Bot):
 
         # Load cogs first so their app-commands are registered before syncing
         await self.load_cogs()
-        await self.tree.sync()
+        
+        # Sync commands with Discord
+        try:
+            synced = await self.tree.sync()
+            print(f"✅ Synced {len(synced)} command(s) to Discord")
+            if synced:
+                print(f"   Commands: {', '.join(cmd.name for cmd in synced)}")
+        except Exception as e:
+            print(f"⚠️ Command sync error: {e}")
+            # Try to continue anyway - commands might still work
         
         # Start refactored background tasks
         self._background_tasks['cleanup'] = asyncio.create_task(self.cleanup_task_loop())

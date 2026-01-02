@@ -570,6 +570,24 @@ class GameCommands(commands.Cog):
         await ctx.send(embed=embed, view=view, ephemeral=True)
 
 
+    @app_commands.command(name="force_sync", description="[OWNER ONLY] Force sync commands with Discord.")
+    async def force_sync(self, interaction: discord.Interaction):
+        """Force command sync for debugging."""
+        if not await self.bot.is_owner(interaction.user):
+            return await interaction.response.send_message("❌ Command restricted to owner.", ephemeral=True)
+        
+        try:
+            await interaction.response.defer(ephemeral=True)
+            synced = await self.bot.tree.sync()
+            await interaction.followup.send(
+                f"✅ Synced {len(synced)} command(s) to Discord.\n"
+                f"Commands: {', '.join(cmd.name for cmd in synced[:20])}"
+                + (f" and {len(synced) - 20} more..." if len(synced) > 20 else ""),
+                ephemeral=True
+            )
+        except Exception as e:
+            await interaction.followup.send(f"❌ Sync failed: {e}", ephemeral=True)
+
     @app_commands.command(name="force_migrate", description="[OWNER ONLY] Force word pool migration from legacy tables.")
     async def force_migrate(self, interaction: discord.Interaction):
         """Force word pool migration manual trigger."""
