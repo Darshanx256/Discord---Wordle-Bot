@@ -105,10 +105,10 @@ class WordleBot(commands.Bot):
         
         # Count commands before sync
         all_commands = list(self.tree.walk_commands())
-        app_commands = [c for c in all_commands if isinstance(c, app_commands.Command)]
-        hybrid_commands = [c for c in all_commands if isinstance(c, commands.HybridCommand)]
+        app_cmds = [c for c in all_commands if isinstance(c, app_commands.Command)]
+        hybrid_cmds = [c for c in all_commands if isinstance(c, commands.HybridCommand)]
         
-        print(f"📋 Found {len(app_commands)} app commands and {len(hybrid_commands)} hybrid commands")
+        print(f"📋 Found {len(app_cmds)} app commands and {len(hybrid_cmds)} hybrid commands")
         
         # Sync commands with Discord
         try:

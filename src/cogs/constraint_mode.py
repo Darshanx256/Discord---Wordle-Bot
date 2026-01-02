@@ -579,9 +579,10 @@ class ConstraintMode(commands.Cog):
         
         if content in game.used_words:
             return
-        if content not in game.dictionary:
-            return
-        if content not in game.active_puzzle['solutions']:
+        
+        # Use optimized validation from generator
+        is_valid, is_solution = game.generator.validate_guess(content, game.active_puzzle)
+        if not is_valid or not is_solution:
             return
 
         # Check if user already guessed this round (except bonus most_words)

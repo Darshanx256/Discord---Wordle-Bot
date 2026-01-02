@@ -1,301 +1,279 @@
+"""
+Memory-optimized constraint puzzle generator.
+Uses pre-generated puzzles from word_rush_puzzles.txt for instant puzzle selection.
+WordNet is only loaded when needed for synonyms/antonyms validation.
+"""
 import random
-import re
-import nltk
-from nltk.corpus import words as nltk_words
+import json
+import os
 from nltk.corpus import wordnet
 
-# Lazy load NLTK data
-try:
-    nltk.data.find('corpora/words')
-except LookupError:
-    nltk.download('words', quiet=True)
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet', quiet=True)
-try:
-    nltk.data.find('corpora/omw-1.4')
-except LookupError:
-    nltk.download('omw-1.4', quiet=True)
+# Lazy load WordNet only when needed
+_wordnet_loaded = False
 
-# Memory-efficient dictionary cache - use a set for O(1) lookups and smaller memory footprint
+def _ensure_wordnet():
+    """Lazy load WordNet only when needed for synonyms/antonyms."""
+    global _wordnet_loaded
+    if _wordnet_loaded:
+        return
+    
+    import nltk
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet', quiet=True)
+    try:
+        nltk.data.find('corpora/omw-1.4')
+    except LookupError:
+        nltk.download('omw-1.4', quiet=True)
+    
+    _wordnet_loaded = True
+
+# Pre-generated puzzles cache
+_cached_puzzles = None
 _cached_dictionary_set = None
-_cached_dictionary_list = None  # Only built when needed for random.choice
+_cached_dictionary_list = None
+
+def _load_puzzles():
+    """Load pre-generated puzzles from file."""
+    global _cached_puzzles
+    if _cached_puzzles is not None:
+        return _cached_puzzles
+    
+    # Try multiple possible paths
+    possible_paths = [
+        "word_rush_puzzles.txt",  # Root directory
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "word_rush_puzzles.txt"),  # Project root
+    ]
+    
+    puzzle_file = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            puzzle_file = path
+            break
+    
+    puzzles = []
+    
+    if puzzle_file:
+        try:
+            with open(puzzle_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        puzzles.append(json.loads(line))
+            print(f"✅ Loaded {len(puzzles)} pre-generated puzzles from {puzzle_file}")
+        except Exception as e:
+            print(f"⚠️ Failed to load puzzles: {e}. Falling back to runtime generation.")
+            puzzles = []
+    else:
+        print(f"⚠️ Puzzle file {puzzle_file} not found. Run generate_word_rush_puzzles.py first.")
+        puzzles = []
+    
+    _cached_puzzles = puzzles
+    return puzzles
 
 def _build_dictionary():
     """
-    Build a memory-efficient dictionary using only NLTK words corpus.
-    WordNet is loaded lazily only when needed for synonyms/antonyms.
-    This reduces memory from ~500MB to ~50MB.
-    
-    Optimization: Uses set comprehension for faster building and lower memory.
+    Build dictionary for word validation only.
+    Much smaller memory footprint - only used for validation, not generation.
     """
     global _cached_dictionary_set, _cached_dictionary_list
     if _cached_dictionary_set is not None:
         return _cached_dictionary_list
     
-    # Use only NLTK words corpus - much smaller and faster
-    # Filter to 4-8 letter words that are alphabetic
-    print("🔍 Building word dictionary (this may take a moment)...")
+    import nltk
+    from nltk.corpus import words as nltk_words
     
-    # Use set comprehension for efficient filtering and deduplication
-    # This is more memory-efficient than building a list first
+    try:
+        nltk.data.find('corpora/words')
+    except LookupError:
+        nltk.download('words', quiet=True)
+    
+    print("🔍 Building validation dictionary...")
     word_set = {
         w.lower() for w in nltk_words.words() 
         if 4 <= len(w) <= 8 and w.isalpha() and w.lower().isalpha()
     }
     
-    # Convert to sorted list only once (needed for random.choice)
-    # Store as set for O(1) lookups and list for random.choice
     _cached_dictionary_set = word_set
     _cached_dictionary_list = sorted(list(word_set))
     
-    print(f"✅ Dictionary built: {len(_cached_dictionary_list)} words (~{len(_cached_dictionary_list) * 8 / 1024 / 1024:.1f}MB)")
+    print(f"✅ Dictionary: {len(_cached_dictionary_list)} words")
     return _cached_dictionary_list
-
-def _word_in_wordnet(word):
-    """Lazy check if a word exists in WordNet - only called when needed."""
-    try:
-        return bool(wordnet.synsets(word))
-    except:
-        return False
 
 class ConstraintGenerator:
     def __init__(self, dictionary=None):
         """
-        :param dictionary: List or Set of valid words. If None, uses NLTK words (4-8 letters).
-        Memory-optimized: Uses set for lookups, list only for random.choice.
+        Memory-optimized generator using pre-generated puzzles.
+        :param dictionary: Optional custom dictionary. If None, uses NLTK words.
         """
         if dictionary is None:
-            # Use cached dictionary - list for random.choice, set for lookups
             self.dictionary = _build_dictionary()
-            self.dictionary_set = _cached_dictionary_set  # Fast O(1) lookups
+            self.dictionary_set = _cached_dictionary_set
         else:
             self.dictionary = list(dictionary)
             self.dictionary_set = set(dictionary)
+        
+        self.puzzles = _load_puzzles()
         self.vowels = set('aeiou')
         self.consonants = set('bcdfghjklmnpqrstvwxyz')
 
     def generate_puzzle(self, max_attempts=100):
         """
-        Generates a constraint puzzle that has between 5 and 20 solutions.
-        Supports variable word lengths (4-8 letters).
+        Select a random pre-generated puzzle.
+        Falls back to simple generation if no puzzles available.
         """
-        weights = [
-            (self._type_substring, 12),              # Adjusted for variety
-            (self._type_substring_plus_letter, 15),
-            (self._type_letters_anywhere, 10),
-            (self._type_include_exclude, 10),
-            (self._type_double_letter, 8),
-            (self._type_double_plus_letter, 6),
-            (self._type_ends_with, 10),
-            (self._type_starts_with, 8),
-            (self._type_start_end_same, 4),
-            (self._type_wordle_block, 12),
-            (self._type_rhyme, 12),                  # New: Rhyming
-            (self._type_opposite, 6),                # New: Opposites
-            (self._type_synonym, 10),                # New: Similar (synonyms)
-            (self._type_jumble, 15)                  # New: Jumble
-        ]
+        if self.puzzles:
+            puzzle_data = random.choice(self.puzzles)
+            return self._create_puzzle_from_data(puzzle_data)
         
-        # Normalize weights
-        total_weight = sum(w[1] for w in weights)
+        # Fallback: simple substring puzzle if no pre-generated puzzles
+        return self._generate_fallback_puzzle()
+
+    def _create_puzzle_from_data(self, puzzle_data):
+        """Create puzzle object from pre-generated data."""
+        ptype = puzzle_data['type']
+        description = puzzle_data['description']
+        constraint = puzzle_data['constraint']
+        expected_length = puzzle_data['expected_length']
+        visual = puzzle_data.get('visual')
         
-        for _ in range(max_attempts):
-            r = random.uniform(0, total_weight)
-            current = 0
-            selected_func = weights[0][0]
-            for func, weight in weights:
-                current += weight
-                if r <= current:
-                    selected_func = func
-                    break
-            
-            description, validator, visual, expected_length = selected_func()
-            
-            # Efficiently find solutions - use set for faster filtering
-            solutions = [w for w in self.dictionary if validator(w) and len(w) == expected_length]
-            
-            if 5 <= len(solutions) <= 20:
-                return {
-                    'description': description,
-                    'solutions': set(solutions),
-                    'visual': visual,
-                    'expected_length': expected_length,
-                    'count': len(solutions)
-                }
+        # Create validator based on puzzle type
+        validator = self._create_validator(ptype, constraint, expected_length, puzzle_data)
         
-        # Fallback to a simple substring if multiple attempts fail
-        desc, val, _, el = self._type_substring()
-        solutions = [w for w in self.dictionary if val(w) and len(w) == el]
         return {
-            'description': desc,
-            'solutions': set(solutions),
-            'visual': None,
-            'expected_length': el,
-            'count': len(solutions)
+            'description': description,
+            'solutions': None,  # Don't store solutions - validate on-the-fly
+            'visual': visual,
+            'expected_length': expected_length,
+            'type': ptype,
+            'constraint': constraint,
+            'validator': validator,
+            'count': puzzle_data.get('count', 0)
         }
 
-    def _type_substring(self):
-        # Variable length substring (2-3 letters)
-        word = random.choice(self.dictionary)
-        length = random.choice([2, 3])
-        start = random.randint(0, len(word) - length)
-        sub = word[start:start+length]
-        desc = f"Word containing **{sub.upper()}** together"
-        expected_length = len(word)
-        return desc, lambda w: sub in w, None, expected_length
-
-    def _type_substring_plus_letter(self):
-        word = random.choice(self.dictionary)
-        length = random.choice([2, 3])
-        sub = word[:length]
-        other_word = random.choice(self.dictionary)
-        other_letter = random.choice([c for c in other_word if c not in sub])
-        desc = f"Word containing **{sub.upper()}** with **{other_letter.upper()}** anywhere"
-        expected_length = len(word)
-        return desc, lambda w: sub in w and other_letter in w, None, expected_length
-
-    def _type_letters_anywhere(self):
-        word = random.choice(self.dictionary)
-        num_letters = random.choice([2, 3])
-        letters = random.sample(list(set(word)), num_letters)
-        desc = f"Word containing **{', '.join(l.upper() for l in letters)}** (anywhere)"
-        expected_length = len(word)
-        return desc, lambda w: all(l in w for l in letters), None, expected_length
-
-    def _type_include_exclude(self):
-        word = random.choice(self.dictionary)
-        num_include = random.choice([1, 2])
-        include = random.sample(list(set(word)), num_include)
-        pool = [c for c in 'aeiorsnt' if c not in word]
-        num_exclude = random.choice([1, 2])
-        exclude = random.sample(pool, num_exclude) if len(pool) >= num_exclude else ['z', 'q'][:num_exclude]
-        desc = f"Word with **{', '.join(i.upper() for i in include)}** but NO **{', '.join(e.upper() for e in exclude)}**"
-        expected_length = len(word)
-        return desc, lambda w: all(i in w for i in include) and all(e not in w for e in exclude), None, expected_length
-
-    def _type_double_letter(self):
-        doubles = []
-        for w in self.dictionary:
-            for i in range(len(w)-1):
-                if w[i] == w[i+1]:
-                    doubles.append(w[i]*2)
-                    break
-        sub = random.choice(doubles) if doubles else "ll"
-        desc = f"Word with double **{sub.upper()[0]}**"
-        word = random.choice(self.dictionary)  # For length
-        expected_length = len(word)
-        return desc, lambda w: sub in w, None, expected_length
-
-    def _type_double_plus_letter(self):
-        desc, val, _, expected_length = self._type_double_letter()
-        double = re.search(r'\*\*(.+)\*\*', desc).group(1).lower()
-        other_word = random.choice(self.dictionary)
-        other_letter = random.choice([c for c in other_word if c not in double])
-        desc = f"Word with double **{double[0].upper()}** and **{other_letter.upper()}** anywhere"
-        return desc, lambda w: double in w and other_letter in w, None, expected_length
-
-    def _type_ends_with(self):
-        word = random.choice(self.dictionary)
-        letter = word[-1]
-        desc = f"Word ending with **{letter.upper()}**"
-        visual = f"----{letter}" if len(word)==5 else f"{'-'*(len(word)-1)}{letter}"
-        return desc, lambda w: w.endswith(letter), visual, len(word)
-
-    def _type_starts_with(self):
-        word = random.choice(self.dictionary)
-        letter = word[0]
-        desc = f"Word starting with **{letter.upper()}**"
-        visual = f"{letter}----" if len(word)==5 else f"{letter}{'-'*(len(word)-1)}"
-        return desc, lambda w: w.startswith(letter), visual, len(word)
-
-    def _type_start_end_same(self):
-        word = random.choice(self.dictionary)
-        letter = word[0]
-        other_word = random.choice(self.dictionary)
-        other_letter = random.choice([c for c in other_word if c != letter])
-        desc = f"Word starting and ending with **{letter.upper()}**, containing **{other_letter.upper()}**"
-        return desc, lambda w: w.startswith(letter) and w.endswith(letter) and other_letter in w, None, len(word)
-
-    def _type_wordle_block(self):
-        word = random.choice(self.dictionary)
-        num_fixed = random.choice([1, 2])
-        pos = random.sample(range(len(word)), num_fixed)
-        pattern = ['-'] * len(word)
-        for p in pos:
-            pattern[p] = word[p]
+    def _create_validator(self, ptype, constraint, expected_length, puzzle_data):
+        """Create validation function for puzzle type."""
+        if ptype == 'substring':
+            sub = constraint.lower()
+            return lambda w: len(w) == expected_length and sub in w
         
-        visual = "".join(pattern)
-        desc = f"Word matching pattern"
+        elif ptype == 'letters_anywhere':
+            letters = constraint if isinstance(constraint, list) else [constraint]
+            return lambda w: len(w) == expected_length and all(l in w for l in letters)
         
-        def validator(w):
-            if len(w) != len(pattern): return False
-            for i in range(len(pattern)):
-                if pattern[i] != '-' and w[i] != pattern[i]:
-                    return False
-            return True
-            
-        return desc, validator, visual, len(word)
-
-    def _type_rhyme(self):
-        """Rhyming words: same ending sound (last 2-3 letters)."""
-        word = random.choice(self.dictionary)
-        rhyme_len = random.choice([2, 3])
-        ending = word[-rhyme_len:]
-        desc = f"Words rhyming with **{word.upper()}**"
-        expected_length = len(word)
-        return desc, lambda w: w.endswith(ending), None, expected_length
-
-    def _type_opposite(self):
-        """Words that are opposites of a base word (using WordNet antonyms)."""
-        attempts = 0
-        while attempts < 20:
-            base = random.choice(self.dictionary)
+        elif ptype == 'ends_with':
+            letter = constraint.lower()
+            return lambda w: len(w) == expected_length and w.endswith(letter)
+        
+        elif ptype == 'starts_with':
+            letter = constraint.lower()
+            return lambda w: len(w) == expected_length and w.startswith(letter)
+        
+        elif ptype == 'double_letter':
+            double = constraint.lower()
+            return lambda w: len(w) == expected_length and double in w
+        
+        elif ptype == 'wordle_block':
+            pattern = constraint if isinstance(constraint, list) else list(constraint)
+            return lambda w: self._matches_pattern(w, pattern)
+        
+        elif ptype == 'rhyme':
+            ending = constraint.lower()
+            return lambda w: len(w) == expected_length and w.endswith(ending)
+        
+        elif ptype == 'jumble':
+            target_word = constraint.lower()  # The actual word
+            return lambda w: len(w) == expected_length and sorted(w) == sorted(target_word)
+        
+        elif ptype == 'synonym':
+            # Lazy load WordNet for synonyms
+            _ensure_wordnet()
+            base_word = constraint.lower()
+            synonyms = set()
+            for synset in wordnet.synsets(base_word):
+                for lemma in synset.lemmas():
+                    syn_word = lemma.name().replace('_', '').lower()
+                    if 4 <= len(syn_word) <= 8 and syn_word.isalpha() and syn_word != base_word:
+                        synonyms.add(syn_word)
+            return lambda w: len(w) == expected_length and w in synonyms
+        
+        elif ptype == 'opposite':
+            # Lazy load WordNet for antonyms
+            _ensure_wordnet()
+            base_word = constraint.lower()
             antonyms = set()
-            for synset in wordnet.synsets(base):
+            for synset in wordnet.synsets(base_word):
                 for lemma in synset.lemmas():
                     for ant in lemma.antonyms():
                         ant_word = ant.name().replace('_', '').lower()
                         if 4 <= len(ant_word) <= 8 and ant_word.isalpha():
                             antonyms.add(ant_word)
-            if len(antonyms & self.dictionary_set) >= 5:
-                desc = f"Word opposite of **{base.upper()}**"
-                expected_length = len(base)  # Approximate, antonyms may vary slightly
-                def validator(w):
-                    # Recompute for consistency
-                    return w in antonyms
-                return desc, validator, None, expected_length
-            attempts += 1
-        # Fallback to simple exclude
-        return self._type_include_exclude()
+            return lambda w: len(w) == expected_length and w in antonyms
+        
+        else:
+            # Default: accept any word of correct length
+            return lambda w: len(w) == expected_length
 
-    def _type_synonym(self):
-        """Words similar to (synonyms of) a base word (using WordNet)."""
-        attempts = 0
-        while attempts < 20:
-            base = random.choice(self.dictionary)
-            synonyms = set()
-            for synset in wordnet.synsets(base):
-                for lemma in synset.lemmas():
-                    syn_word = lemma.name().replace('_', '').lower()
-                    if 4 <= len(syn_word) <= 8 and syn_word.isalpha() and syn_word != base:
-                        synonyms.add(syn_word)
-            if len(synonyms & self.dictionary_set) >= 5:
-                desc = f"Word similar to **{base.upper()}**"
-                expected_length = len(base)
-                def validator(w):
-                    return w in synonyms
-                return desc, validator, None, expected_length
-            attempts += 1
-        # Fallback
-        return self._type_letters_anywhere()
+    def _matches_pattern(self, word, pattern):
+        """Check if word matches pattern (e.g., 'a----' or ['a', '-', '-', '-', '-'])."""
+        if len(word) != len(pattern):
+            return False
+        for i, char in enumerate(pattern):
+            if char != '-' and word[i] != char.lower():
+                return False
+        return True
 
-    def _type_jumble(self):
-        """Solve the jumble: unscramble letters."""
+    def _generate_fallback_puzzle(self):
+        """Fallback puzzle generation if no pre-generated puzzles available."""
+        if not self.dictionary:
+            return {
+                'description': "Word containing **ER** together",
+                'solutions': None,
+                'visual': None,
+                'expected_length': 5,
+                'type': 'substring',
+                'constraint': 'er',
+                'validator': lambda w: len(w) == 5 and 'er' in w,
+                'count': 0
+            }
+        
         word = random.choice(self.dictionary)
-        scrambled = ''.join(random.sample(word, len(word)))
-        desc = f"Unscramble: **{scrambled.upper()}**"
-        expected_length = len(word)
-        visual = scrambled.upper()
-        return desc, lambda w: sorted(w) == sorted(word), visual, expected_length
+        sub = word[:2] if len(word) >= 2 else word[0]
+        return {
+            'description': f"Word containing **{sub.upper()}** together",
+            'solutions': None,
+            'visual': None,
+            'expected_length': len(word),
+            'type': 'substring',
+            'constraint': sub,
+            'validator': lambda w, s=sub: len(w) == len(word) and s in w,
+            'count': 0
+        }
+
+    def validate_guess(self, word, puzzle):
+        """
+        Validate a user's guess against the puzzle.
+        Returns (is_valid, is_solution)
+        """
+        word_lower = word.lower()
+        
+        # Check if word is in dictionary
+        if word_lower not in self.dictionary_set:
+            return False, False
+        
+        # Check expected length
+        if len(word_lower) != puzzle['expected_length']:
+            return False, False
+        
+        # Check if word matches constraint
+        validator = puzzle.get('validator')
+        if validator:
+            try:
+                is_solution = validator(word_lower)
+                return True, is_solution
+            except Exception as e:
+                print(f"⚠️ Validation error: {e}")
+                return False, False
+        
+        return False, False
