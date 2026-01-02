@@ -63,7 +63,7 @@ class ConstraintMode(commands.Cog):
             'red': "https://cdn.discordapp.com/emojis/1456199431803244624.png",
             'unlit': "https://cdn.discordapp.com/emojis/1456199350693789696.png",
             'checkpoint': "https://cdn.discordapp.com/emojis/1456313204597588101.png",
-            'unknown': "https://cdn.discordapp.com/emojis/1456488648923938846.png"
+            'unknown': "https://cdn.discordapp.com/emojis/EMOJI_ID_HERE.png"
         }
 
     @app_commands.command(name="word_rush", description="Fast-paced word hunt with linguistic constraints")
@@ -151,11 +151,13 @@ class ConstraintMode(commands.Cog):
             for char in line:
                 char_low = char.lower()
                 if char_low.isalpha():
-                    formatted += EMOJIS.get(f"block_{char_low}_green", "🟩")
+                    # Get letter block from EMOJIS (no fallback)
+                    block = EMOJIS.get(f"block_{char_low}_green", "")
+                    if block:
+                        formatted += block
                 elif char == '-':
-                    # Use custom unknown emoji (replace EMOJI_ID_HERE with actual ID)
-                    emoji_id = self.signal_urls['unknown'].split('/')[-1].replace('.png', '')
-                    formatted += f"<:unknown:{emoji_id}>"
+                    # Use unknown emoji from EMOJIS module
+                    formatted += EMOJIS.get("unknown", "⬜")
                 else:
                     formatted += char
             formatted_lines.append(formatted)
