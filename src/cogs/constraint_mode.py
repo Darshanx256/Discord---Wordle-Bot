@@ -20,14 +20,20 @@ class ConstraintGame:
         self.active_puzzle = None
         self.used_words = set()
         self.winners_in_round = []
+        self.round_guesses = {}  # Track guesses per user per round
         self.is_running = True
         self.is_round_active = False
-        self.generator = ConstraintGenerator(bot.valid_set)
+        self.is_bonus_round = False
+        self.bonus_word_count = {}  # For bonus rounds: user_id -> word count
+        # Use full NLTK dictionary for variety
+        self.generator = ConstraintGenerator()  # No param = full dict
+        self.dictionary = set(self.generator.dictionary)  # For validation
         self.round_task = None
         self.game_msg = None
         self.participants = {started_by.id}
         self.start_confirmed = asyncio.Event()
         self.total_wr_per_user = {}
+        self.next_bonus_round = random.randint(8, 12)  # First bonus between 8-12
 
     def add_score(self, user_id, wr_gain):
         if user_id not in self.scores:
@@ -57,6 +63,7 @@ class RushStartView(discord.ui.View):
 class ConstraintMode(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        # Ensure NLTK is loaded (handled in constraint_logic)
         self.signal_urls = {
             'green': "https://cdn.discordapp.com/emojis/1456199435682975827.png",
             'yellow': "https://cdn.discordapp.com/emojis/1456199439277494418.png",
@@ -82,21 +89,21 @@ class ConstraintMode(commands.Cog):
         embed = discord.Embed(
             title="⚡ Word Rush",
             description=(
-                "Find 5-letter words matching each constraint.\n"
-                "Each round lasts **12 seconds** with traffic light timing.\n\n"
+                "Hunt words (4-8 letters) matching wild constraints!\n"
+                "Rounds: **12-20s** with traffic lights.\n\n"
                 "**🎯 Scoring**\n"
                 "```\n"
-                "1st place  →  5 WR\n"
-                "2nd place  →  4 WR\n"
-                "3rd place  →  3 WR\n"
-                "4th place  →  2 WR\n"
-                "Others     →  1 WR\n"
+                "1st → 5 WR | 2nd → 4 WR | 3rd → 3 WR\n"
+                "4th → 2 WR | Others → 1 WR\n"
                 "```\n"
+                "**🎁 Bonuses**\n"
+                "Random **2x WR** twists + special modes!\n\n"
                 "**📋 Rules**\n"
-                "• No word can be used twice in a session\n"
-                "• Rewards distributed every 12 rounds\n"
-                "• Game ends after 5 rounds without guesses\n\n"
-                "Ready to test your vocabulary? Join below!"
+                "• No repeats per session\n"
+                "• 1 guess/person/round (except bonuses)\n"
+                "• Rewards every 12 rounds\n"
+                "• Ends after 5 blank rounds\n\n"
+                "Vocabulary blitz awaits—join up!"
             ),
             color=discord.Color.from_rgb(88, 101, 242)
         )
@@ -138,31 +145,121 @@ class ConstraintMode(commands.Cog):
         
         self.bot.constraint_games.pop(cid, None)
 
-    def format_visual_pattern(self, visual):
-        """Convert text pattern to emoji blocks."""
+    def format_visual_pattern(self, visual, expected_length):
+        """Convert text pattern to emoji blocks, padded for consistency."""
         if not visual:
             return ""
         
+        # Pad to max expected length for visual consistency (e.g., 8 chars)
+        visual = visual.ljust(expected_length, '-')
         lines = visual.split('\n')
         formatted_lines = []
         
         for line in lines:
             formatted = ""
-            for char in line:
+            for char in line[:8]:  # Cap at 8 for embed row consistency
                 char_low = char.lower()
                 if char_low.isalpha():
-                    # Get letter block from EMOJIS (no fallback)
                     block = EMOJIS.get(f"block_{char_low}_green", "")
                     if block:
                         formatted += block
                 elif char == '-':
-                    # Use unknown emoji from EMOJIS module
                     formatted += EMOJIS.get("unknown", "⬜")
                 else:
                     formatted += char
             formatted_lines.append(formatted)
         
-        return '\n'.join(formatted_lines)
+        return '\n'.join(formatted_lines)[:1024]  # Embed limit safety
+
+    def generate_bonus_puzzle(self, game):
+        """Generate special bonus round puzzles with variety."""
+        bonus_types = [
+            self._bonus_most_words,
+            self._bonus_speed_demon,
+            self._bonus_alphabet_soup,
+            self._bonus_rhyme_time,
+            self._bonus_jumble_frenzy  # New bonus: multiple jumbles
+        ]
+        
+        return random.choice(bonus_types)(game)
+    
+    def _bonus_most_words(self, game):
+        """Find as many words as possible matching the constraint."""
+        word = random.choice(list(game.dictionary))
+        letter = random.choice([c for c in set(word)])
+        
+        solutions = [w for w in game.dictionary if letter in w and w not in game.used_words]
+        
+        return {
+            'description': f"🎁 **BONUS: Most Words**\nMax words with **{letter.upper()}**!",
+            'solutions': set(solutions),
+            'visual': None,
+            'type': 'most_words',
+            'expected_length': None  # Variable
+        }
+    
+    def _bonus_speed_demon(self, game):
+        """Simple constraint, first gets huge bonus."""
+        word = random.choice(list(game.dictionary))
+        sub = word[1:3]
+        solutions = [w for w in game.dictionary if sub in w and w not in game.used_words]
+        
+        return {
+            'description': f"🎁 **BONUS: Speed**\n1st gets **3x WR**! Contains **{sub.upper()}**",
+            'solutions': set(solutions),
+            'visual': None,
+            'type': 'speed_demon',
+            'expected_length': len(word)
+        }
+    
+    def _bonus_alphabet_soup(self, game):
+        """Words with alphabetical sequences."""
+        def has_alphabetical_sequence(w):
+            for i in range(len(w) - 2):
+                if ord(w[i]) < ord(w[i+1]) < ord(w[i+2]):
+                    return True
+            return False
+        
+        solutions = [w for w in game.dictionary if has_alphabetical_sequence(w) and w not in game.used_words]
+        
+        return {
+            'description': f"🎁 **BONUS: Alphabet**\n3+ letters in order! (e.g., FIRST: RST)",
+            'solutions': set(solutions),
+            'visual': None,
+            'type': 'most_words',
+            'expected_length': None
+        }
+    
+    def _bonus_rhyme_time(self, game):
+        """Rhyming frenzy."""
+        word = random.choice(list(game.dictionary))
+        rhyme_len = random.choice([2, 3])
+        ending = word[-rhyme_len:]
+        
+        solutions = [w for w in game.dictionary if w.endswith(ending) and w not in game.used_words]
+        
+        return {
+            'description': f"🎁 **BONUS: Rhyme**\nWords ending **-{ending.upper()}**!",
+            'solutions': set(solutions),
+            'visual': None,
+            'type': 'most_words',
+            'expected_length': None
+        }
+    
+    def _bonus_jumble_frenzy(self, game):
+        """Bonus: Unscramble a tough jumble, multiple tries."""
+        word = random.choice(list(game.dictionary))
+        scrambled = ''.join(random.sample(word, len(word)))
+        
+        solutions = {word}  # Single for frenzy, but allow multiple guesses? Wait, keep as is.
+        
+        return {
+            'description': f"🎁 **BONUS: Jumble**\nUnscramble: **{scrambled.upper()}** (tough one!)",
+            'solutions': set(solutions),
+            'visual': scrambled.upper(),
+            'type': 'jumble',
+            'expected_length': len(word)
+        }
 
     async def run_game_loop(self, interaction, game):
         try:
@@ -213,36 +310,72 @@ class ConstraintMode(commands.Cog):
             while game.is_running:
                 game.round_number += 1
                 game.winners_in_round = []
+                game.round_guesses = {}
+                game.is_bonus_round = False
+                game.bonus_word_count = {}
                 
                 if game.round_number > 1 and (game.round_number - 1) % 12 == 0:
                     await self.show_checkpoint(channel, game)
                     if not game.is_running:
                         break
 
-                game.active_puzzle = game.generator.generate_puzzle()
+                # Check for bonus round
+                if game.round_number == game.next_bonus_round:
+                    game.is_bonus_round = True
+                    game.next_bonus_round = game.round_number + random.randint(25, 35)
+                    
+                    # Bonus announcement
+                    bonus_announce = discord.Embed(
+                        title="🎁 BONUS ROUND!",
+                        description="**Double WR** + special twist!\nGet ready...",
+                        color=discord.Color.gold()
+                    )
+                    bonus_msg = await channel.send(embed=bonus_announce)
+                    await asyncio.sleep(3)
+                    try:
+                        await bonus_msg.delete()
+                    except:
+                        pass
+
+                # Generate puzzle
+                if game.is_bonus_round:
+                    game.active_puzzle = self.generate_bonus_puzzle(game)
+                else:
+                    game.active_puzzle = game.generator.generate_puzzle()
+                
                 puzzle_desc = game.active_puzzle['description']
                 visual_raw = game.active_puzzle.get('visual', '')
-                visual = self.format_visual_pattern(visual_raw)
+                expected_length = game.active_puzzle.get('expected_length', 5)
+                visual = self.format_visual_pattern(visual_raw, expected_length)
                 
                 has_pattern = bool(visual)
-                round_duration = 20 if has_pattern else 12
+                puzzle_type = game.active_puzzle.get('type', 'normal')
                 
-                display_text = visual if visual else puzzle_desc
+                # Determine round duration based on complexity
+                if game.is_bonus_round:
+                    round_duration = 20
+                elif has_pattern or puzzle_type in ['jumble', 'rhyme']:
+                    round_duration = 18
+                else:
+                    round_duration = 12
+                
+                # Consistent display: desc or visual, with length hint if needed
+                display_text = f"{visual}\n*(Len: {expected_length})*" if visual else f"{puzzle_desc}\n*(Len: {expected_length})*"
                 
                 round_embed = discord.Embed(
-                    title=f"Round {game.round_number}",
+                    title=f"{'🎁 BONUS ' if game.is_bonus_round else ''}Round {game.round_number}",
                     description=display_text,
-                    color=discord.Color.green()
+                    color=discord.Color.gold() if game.is_bonus_round else discord.Color.green()
                 )
                 round_embed.set_thumbnail(url=self.signal_urls['green'])
-                round_embed.set_footer(text="Type your answer!")
+                round_embed.set_footer(text="Type your answer!" + (" • 2x WR!" if game.is_bonus_round else ""))
                 
                 msg = await channel.send(embed=round_embed)
                 game.game_msg = msg
                 game.is_round_active = True
                 
                 try:
-                    if has_pattern:
+                    if round_duration >= 18:
                         await asyncio.sleep(8)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                         round_embed.color = discord.Color.gold()
@@ -253,7 +386,7 @@ class ConstraintMode(commands.Cog):
                         round_embed.color = discord.Color.red()
                         await msg.edit(embed=round_embed)
                         
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(round_duration - 15)
                     else:
                         await asyncio.sleep(5)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
@@ -275,15 +408,38 @@ class ConstraintMode(commands.Cog):
                 round_embed.set_thumbnail(url=self.signal_urls['unlit'])
                 round_embed.color = discord.Color.dark_gray()
                 
-                if game.winners_in_round:
+                # Handle bonus round scoring
+                if game.is_bonus_round and puzzle_type == 'most_words':
+                    if game.bonus_word_count:
+                        sorted_players = sorted(game.bonus_word_count.items(), key=lambda x: x[1], reverse=True)
+                        winner_id, winner_count = sorted_players[0]
+                        
+                        # Award bonus points
+                        for i, (uid, count) in enumerate(sorted_players):
+                            if i == 0:
+                                wr = count * 10
+                            elif i == 1:
+                                wr = count * 7
+                            elif i == 2:
+                                wr = count * 5
+                            else:
+                                wr = count * 3
+                            
+                            game.add_score(uid, wr)
+                        
+                        round_embed.set_footer(text=f"🏆 Most: {await get_cached_username(self.bot, winner_id)} ({winner_count})")
+                    else:
+                        round_embed.set_footer(text="✗ No guesses!")
+                
+                elif game.winners_in_round:
                     winners_count = len(game.winners_in_round)
-                    round_embed.set_footer(text=f"✓ {winners_count} correct guess{'es' if winners_count > 1 else ''}")
+                    round_embed.set_footer(text=f"✓ {winners_count} correct{'es' if winners_count > 1 else ''}" + (" • 2x!" if game.is_bonus_round else ""))
                 else:
-                    round_embed.set_footer(text="✗ No correct guesses!")
+                    round_embed.set_footer(text="✗ No correct!")
                 
                 await msg.edit(embed=round_embed)
                 
-                if not game.winners_in_round:
+                if not game.winners_in_round and not game.bonus_word_count:
                     game.rounds_without_guess += 1
                 else:
                     game.rounds_without_guess = 0
@@ -291,7 +447,7 @@ class ConstraintMode(commands.Cog):
                 if game.rounds_without_guess >= 5:
                     final_embed = discord.Embed(
                         title="💀 Game Over",
-                        description="Five consecutive rounds without correct guesses.",
+                        description="Five blank rounds in a row.",
                         color=discord.Color.dark_red()
                     )
                     
@@ -329,7 +485,7 @@ class ConstraintMode(commands.Cog):
         sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
         
         if not sorted_scores:
-            checkpoint_embed.description = "No scores to report this checkpoint.\n\nContinuing in 5 seconds..."
+            checkpoint_embed.description = "No scores to report.\n\nContinuing in 5 seconds..."
             checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
             await msg.edit(embed=checkpoint_embed)
             await asyncio.sleep(5)
@@ -398,19 +554,67 @@ class ConstraintMode(commands.Cog):
             return
         
         content = message.content.strip().lower()
-        if len(content) != 5 or not content.isalpha():
+        expected_length = game.active_puzzle.get('expected_length', 5)
+        if len(content) != expected_length or not content.isalpha():
             return
         
         if content in game.used_words:
             return
-        if content not in self.bot.valid_set:
+        if content not in game.dictionary:
             return
         if content not in game.active_puzzle['solutions']:
             return
 
+        # Check if user already guessed this round (except bonus most_words)
+        puzzle_type = game.active_puzzle.get('type', 'normal')
+        if puzzle_type != 'most_words' and message.author.id in game.round_guesses:
+            return
+
+        # Valid guess
         game.used_words.add(content)
         game.participants.add(message.author.id)
+        game.round_guesses[message.author.id] = content
         
+        # Handle bonus rounds
+        if game.is_bonus_round:
+            puzzle_type = game.active_puzzle.get('type', 'normal')
+            
+            if puzzle_type == 'most_words':
+                # Count words for this user
+                game.bonus_word_count[message.author.id] = game.bonus_word_count.get(message.author.id, 0) + 1
+                try:
+                    await message.add_reaction("✅")
+                except:
+                    pass
+                return
+            
+            elif puzzle_type == 'speed_demon':
+                # First person gets 3x, others 2x
+                rank = len(game.winners_in_round) + 1
+                game.winners_in_round.append(message.author.id)
+                
+                if rank == 1:
+                    wr_gain = 15  # 5 * 3
+                    reaction = "🥇"
+                elif rank == 2:
+                    wr_gain = 8  # 4 * 2
+                    reaction = "🥈"
+                elif rank == 3:
+                    wr_gain = 6  # 3 * 2
+                    reaction = "🥉"
+                else:
+                    wr_gain = 2  # 1 * 2
+                    reaction = "⭐"
+                
+                game.add_score(message.author.id, wr_gain)
+                
+                try:
+                    await message.add_reaction(reaction)
+                except:
+                    pass
+                return
+        
+        # Normal round scoring
         rank = len(game.winners_in_round) + 1
         game.winners_in_round.append(message.author.id)
         
@@ -429,6 +633,10 @@ class ConstraintMode(commands.Cog):
         elif rank == 4:
             wr_gain = 2
             reaction = "⭐"
+        
+        # Apply 2x multiplier for non-speed-demon bonus rounds
+        if game.is_bonus_round:
+            wr_gain *= 2
         
         game.add_score(message.author.id, wr_gain)
         
