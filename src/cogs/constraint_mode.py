@@ -76,14 +76,14 @@ class ConstraintMode(commands.Cog):
     @app_commands.guild_only()
     async def word_rush(self, interaction: discord.Interaction):
         cid = interaction.channel_id
-        if cid in self.bot.constraint_games:
+        if cid in self.bot.constraint_mode:
             return await interaction.response.send_message("⚠️ A Word Rush session is already active in this channel.", ephemeral=True)
         
         if cid in self.bot.games or cid in self.bot.custom_games:
              return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
 
         game = ConstraintGame(self.bot, cid, interaction.user)
-        self.bot.constraint_games[cid] = game
+        self.bot.constraint_mode[cid] = game
         
         embed = discord.Embed(
             title="⚡ Word Rush",
@@ -121,10 +121,10 @@ class ConstraintMode(commands.Cog):
     @app_commands.guild_only()
     async def stop_rush(self, interaction: discord.Interaction):
         cid = interaction.channel_id
-        if cid not in self.bot.constraint_games:
+        if cid not in self.bot.constraint_mode:
             return await interaction.response.send_message("No active Word Rush session here.", ephemeral=True)
         
-        game = self.bot.constraint_games[cid]
+        game = self.bot.constraint_mode[cid]
         game.is_running = False
         if game.round_task:
             game.round_task.cancel()
@@ -143,7 +143,7 @@ class ConstraintMode(commands.Cog):
         else:
             await interaction.response.send_message("🛑 Word Rush stopped.")
         
-        self.bot.constraint_games.pop(cid, None)
+        self.bot.constraint_mode.pop(cid, None)
 
     def format_visual_pattern(self, visual):
         """Convert text pattern to emoji blocks."""
@@ -177,7 +177,7 @@ class ConstraintMode(commands.Cog):
             except asyncio.TimeoutError:
                 if len(game.participants) < 1:
                     await channel.send("⏰ Rush cancelled: no participants joined in time.")
-                    self.bot.constraint_games.pop(game.channel_id, None)
+                    self.bot.constraint_mode.pop(game.channel_id, None)
                     return
             
             # Countdown sequence with consistent formatting
@@ -353,7 +353,7 @@ class ConstraintMode(commands.Cog):
             import traceback
             traceback.print_exc()
         finally:
-            self.bot.constraint_games.pop(interaction.channel_id, None)
+            self.bot.constraint_mode.pop(interaction.channel_id, None)
 
     async def process_multi_word_results(self, channel, game, msg):
         """Process results for multi-word bonus rounds."""
@@ -476,10 +476,10 @@ class ConstraintMode(commands.Cog):
         if user.bot:
             return
         cid = reaction.message.channel.id
-        if cid not in self.bot.constraint_games:
+        if cid not in self.bot.constraint_mode:
             return
         
-        game = self.bot.constraint_games[cid]
+        game = self.bot.constraint_mode[cid]
         if game.game_msg and reaction.message.id == game.game_msg.id:
             if not game.start_confirmed.is_set():
                 game.participants.add(user.id)
@@ -489,10 +489,10 @@ class ConstraintMode(commands.Cog):
         if message.author.bot:
             return
         cid = message.channel.id
-        if cid not in self.bot.constraint_games:
+        if cid not in self.bot.constraint_mode:
             return
         
-        game = self.bot.constraint_games[cid]
+        game = self.bot.constraint_mode[cid]
         if not game.is_round_active or not game.active_puzzle:
             return
         
