@@ -26,6 +26,7 @@ class WordleBot(commands.Bot):
         self.solo_games = {}
         self.custom_games = {}  # Custom mode games
         self.race_sessions = {}  # Race mode lobbies
+        self.constraint_mode = {} # Word Rush
         self.stopped_games = set()
         self.egg_cooldowns = {}
         self.secrets = []
