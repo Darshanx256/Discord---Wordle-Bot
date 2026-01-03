@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands, tasks
 from supabase import create_client, Client
 
-from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, CLASSIC_FILE, ROTATING_ACTIVITIES
+from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, FULL_WORDS, CLASSIC_FILE, ROTATING_ACTIVITIES
 from src.database import fetch_user_profile_v2
 from src.utils import EMOJIS, get_badge_emoji
 
@@ -127,7 +127,7 @@ class WordleBot(commands.Bot):
             self.valid_set = set()
 
         if os.path.exists(FULL_WORDS):
-            with open(VALID_FILE, "r", encoding="utf-8") as f:
+            with open(FULL_WORDS, "r", encoding="utf-8") as f:
                 self.full_dict = {w.strip().lower() for w in f if len(w.strip()) == 5}
         else:
             self.full_dict = set()
