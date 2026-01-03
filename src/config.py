@@ -15,6 +15,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SECRET_FILE = "words.txt" # Simple list (Original Wordle)
 VALID_FILE = "all_words.txt" # Full dictionary (Valid guesses)
 CLASSIC_FILE = "words_hard.txt" # Classic list
+FULL_WORDS = "cleaned_dict.txt" # Full dictionary for Constraint Mode
 BANNED_USERS_FILE = "/etc/secrets/ban.txt" # Secret path for Render/Docker
 if not os.path.exists(BANNED_USERS_FILE):
     BANNED_USERS_FILE = "banned_users.txt" # Local fallback

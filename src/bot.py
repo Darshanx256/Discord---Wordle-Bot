@@ -31,6 +31,7 @@ class WordleBot(commands.Bot):
         self.secrets = []
         self.hard_secrets = []
         self.valid_set = set()
+        self.full_dict = set()
         self.name_cache = {}
         self.supabase_client: Client = None
         self.banned_users = set()  # Banned user IDs
@@ -124,6 +125,12 @@ class WordleBot(commands.Bot):
                 self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
         else:
             self.valid_set = set()
+
+        if os.path.exists(FULL_WORDS):
+            with open(VALID_FILE, "r", encoding="utf-8") as f:
+                self.full_dict = {w.strip().lower() for w in f if len(w.strip()) == 5}
+        else:
+            self.full_dict = set()
 
         if os.path.exists(CLASSIC_FILE):
             with open(CLASSIC_FILE, "r", encoding="utf-8") as f:
