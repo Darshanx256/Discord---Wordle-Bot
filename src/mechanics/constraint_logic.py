@@ -210,7 +210,7 @@ class ConstraintGenerator:
         start = random.randint(0, 2)
         sub = word[start:start+3]
         desc = f"Word containing **{sub.upper()}** together\n*(5-letter words only)*"
-        return desc, lambda w: len(w) == 5 and sub in w, None, 'five'
+        return desc, lambda w: len(w) == 5 and sub in w, None, 'all'
 
     def _type_substring_plus_letter(self):
         """2-letter substring + another letter - all words."""
@@ -279,7 +279,7 @@ class ConstraintGenerator:
         letter = random.choice('aeiorstn')  # Common endings
         desc = f"Word ending with **{letter.upper()}**\n*(5-letter words only)*"
         visual = f"----{letter}"
-        return desc, lambda w: len(w) == 5 and w.endswith(letter), visual, 'five'
+        return desc, lambda w: len(w) == 5 and w.endswith(letter), visual, 'all'
 
     def _type_start_end_same(self):
         """Starts and ends with same letter + another letter - all words."""
@@ -313,4 +313,4 @@ class ConstraintGenerator:
                     return False
             return True
             
-        return desc, validator, visual, 'five'
+        return desc, validator, visual, 'all'

@@ -169,8 +169,8 @@ class WordleBot(commands.Bot):
 
         if os.path.exists(FULL_WORDS):
             with open(FULL_WORDS, "r", encoding="utf-8") as f:
-                # User requested: 5+ letters, excluding 5 and below. So > 5.
-                self.full_dict = {w.strip().lower() for w in f if len(w.strip()) > 5}
+                # Allow 5-letter words and above (requested to expand Word Rush pool)
+                self.full_dict = {w.strip().lower() for w in f if len(w.strip()) >= 5}
         else:
             self.full_dict = set()
 
