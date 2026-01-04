@@ -158,11 +158,10 @@ class ConstraintMode(commands.Cog):
             for char in line:
                 char_low = char.lower()
                 if char_low.isalpha():
-                    # Use custom emoji format: :green_X:
-                    formatted += f":green_{char.upper()}:"
+                    # Use custom emoji from EMOJIS dictionary
+                    formatted += EMOJIS.get(f"block_{char_low}_green", char.upper())
                 elif char == '-':
-                    emoji_id = self.signal_urls['unknown'].split('/')[-1].replace('.png', '')
-                    formatted += f"<:unknown:{emoji_id}>"
+                    formatted += EMOJIS.get('unknown', '⬜')
                 else:
                     formatted += char
             formatted_lines.append(formatted)

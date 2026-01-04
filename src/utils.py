@@ -47,8 +47,14 @@ def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
                 E[key] = token
             continue
 
-        # 3) EASTER EGGS & BADGES & TIERS
-        if raw_lower in ["eyes", "duck", "dragon", "candy", "duck_lord_badge", "dragon_slayer_badge", "candy_rush_badge", "legend_tier"]:
+        # 3. EASTER EGGS & BADGES & TIERS
+        fav_list = [
+            "eyes", "duck", "dragon", "candy", 
+            "duck_lord_badge", "dragon_slayer_badge", "candy_rush_badge", 
+            "legend_tier", "7_streak", "14_streak", "28_streak",
+            "unknown", "checkpoint", "fire"
+        ]
+        if raw_lower in fav_list:
             E[raw_lower] = token
             continue
 
@@ -58,14 +64,18 @@ def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
 EMOJIS = load_app_emojis()
 
 def get_badge_emoji(badge_type: str) -> str:
-    """Returns the full badge emoji with title for /profile, or just emoji for others."""
+    """Returns the full badge emoji for a given badge type."""
     badge_map = {
-        "duck_lord_badge": ("duck_lord_badge", "Duck Lord"),
-        "dragon_slayer_badge": ("dragon_slayer_badge", "Dragon Slayer"),
-        "candy_rush_badge": ("candy_rush_badge", "Sugar Rush"),
+        "duck_lord_badge": "duck_lord_badge",
+        "dragon_slayer_badge": "dragon_slayer_badge",
+        "candy_rush_badge": "candy_rush_badge",
+        "7_streak": "7_streak",
+        "14_streak": "14_streak",
+        "28_streak": "28_streak",
+        "dragon_badge": "dragon" # Map the display ID to the 'dragon' emoji
     }
     if badge_type in badge_map:
-        emoji_key = badge_map[badge_type][0]
+        emoji_key = badge_map[badge_type]
         return EMOJIS.get(emoji_key, "")
     return ""
 
@@ -75,11 +85,15 @@ def get_badge_full_display(badge_type: str) -> str:
         "duck_lord_badge": ("duck_lord_badge", "Duck Lord"),
         "dragon_slayer_badge": ("dragon_slayer_badge", "Dragon Slayer"),
         "candy_rush_badge": ("candy_rush_badge", "Sugar Rush"),
+        "7_streak": ("7_streak", "Shiny 7-Day"),
+        "14_streak": ("14_streak", "Hot 14-Day"),
+        "28_streak": ("28_streak", "Mythical 28-Day"),
+        "dragon_badge": ("dragon", "Dragon Milestone")
     }
     if badge_type in badge_map:
         emoji_key, title = badge_map[badge_type]
         emoji = EMOJIS.get(emoji_key, "")
-        return f"{emoji}{title}" if emoji else ""
+        return f"{emoji} {title}" if emoji else title
     return ""
 
 def get_win_flavor(attempts):

@@ -8,20 +8,20 @@ class StreakManager:
         self.messages = {
             1: "🥚 1 day streak! Play 3 days in a row to get double WR bonus!",
             2: "🐣 2 days streak! Just one more day for double WR bonus!",
-            3: "🙀 3 days streak! 2x WR activated🔥 Your first 3 wins everyday will give 2x more WR!",
+            3: f"🙀 3 days streak! 2x WR activated{EMOJIS.get('fire','🔥')} Your first 3 wins everyday will give 2x more WR!",
             # 4-6 handled dynamically
-            7: ":7_streak: 7 day streak! Congrats on your New Shiny Badge! Keep up with the streak and keep winning!",
+            7: f"{EMOJIS.get('7_streak', '')} 7 day streak! Congrats on your New Shiny Badge! Keep up with the streak and keep winning!",
             8: "🐙 8 days streak! Do it a Ten to get improved bonus!",
             9: "👀 9 days streak! One more day to get improved bonus!",
-            10: "🙀 10 days streak! 2.5x WR activated🔥 Your first 4 wins everyday will give increased WR!",
+            10: f"🙀 10 days streak! 2.5x WR activated{EMOJIS.get('fire','🔥')} Your first 4 wins everyday will give increased WR!",
             # 11-12 handled dynamically
-            13: "🔥 13 days streak! Just one day for a super hot surprise!",
-            14: ":14_streak: 14 day streak! Congrats on your Hot New Badge for the Hot You! Keep up with the streak and keep winning!",
+            13: f"{EMOJIS.get('fire','🔥')} 13 days streak! Just one day for a super hot surprise!",
+            14: f"{EMOJIS.get('14_streak', '')} 14 day streak! Congrats on your Hot New Badge for the Hot You! Keep up with the streak and keep winning!",
             # 21 handled dynamically
-            28: ":28_streak: 28 days streak! You Rock! You have got mythical flame badge!",
-            35: "🥳 35 days streak! 3x WR activated🔥 Your first 4 wins everyday will give increased WR!",
+            28: f"{EMOJIS.get('28_streak', '')} 28 days streak! You Rock! You have got mythical flame badge!",
+            35: f"🥳 35 days streak! 3x WR activated{EMOJIS.get('fire','🔥')} Your first 4 wins everyday will give increased WR!",
             40: "😶‍🌫️ 40 days streak! 10 more to get Dragon Badge!",
-            50: ":dragon: 50 days streak! Congrats on reaching this milestone! You have won the dragon badge!"
+            50: f"{EMOJIS.get('dragon', '')} 50 days streak! Congrats on reaching this milestone! You have won the dragon badge!"
         }
         
     def get_streak_message(self, streak_days):
@@ -30,7 +30,7 @@ class StreakManager:
             return self.messages[streak_days]
         
         if 4 <= streak_days <= 6:
-            return f"🪄 {streak_days} days streak! Do a 7 day streak to get a shiny badge :7_streak:"
+            return f"🪄 {streak_days} days streak! Do a 7 day streak to get a shiny badge {EMOJIS.get('7_streak', '')}"
         if 11 <= streak_days <= 12:
             return f"🔥 {streak_days} days streak! Make it 14 for a super hot surprise!"
         if streak_days == 21:
