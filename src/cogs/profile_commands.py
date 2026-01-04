@@ -35,6 +35,14 @@ class ProfileCommands(commands.Cog):
 
         embed.add_field(name="⚔️ Multiplayer", value=f"WR: **{p['multi_wr']}**\nWins: {p['multi_wins']}", inline=True)
         embed.add_field(name="🕵️ Solo", value=f"WR: **{p['solo_wr']}**\nWins: {p['solo_wins']}", inline=True)
+        
+        # --- STREAK DISPLAY ---
+        from src.utils import EMOJIS
+        curr_streak = p.get('current_streak', 0)
+        max_streak = p.get('max_streak', 0)
+        streak_emoji = EMOJIS.get('fire', '🔥') if curr_streak > 0 else '❄️'
+        streak_val = f"{streak_emoji} Current: **{curr_streak}**\n🏆 Highest: **{max_streak}**"
+        embed.add_field(name="🔥 Streaks", value=streak_val, inline=True)
 
         eggs = p.get('eggs', {})
         egg_str = "None"

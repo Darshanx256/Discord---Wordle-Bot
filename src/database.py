@@ -215,6 +215,19 @@ def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = Tru
                     break
             data['tier'] = tier_info
             
+            # --- FETCH STREAK INFO ---
+            try:
+                s_res = bot.supabase_client.table('streaks_v4').select('current_streak, max_streak').eq('user_id', user_id).execute()
+                if s_res.data:
+                    data['current_streak'] = s_res.data[0].get('current_streak', 0)
+                    data['max_streak'] = s_res.data[0].get('max_streak', 0)
+                else:
+                    data['current_streak'] = 0
+                    data['max_streak'] = 0
+            except:
+                data['current_streak'] = 0
+                data['max_streak'] = 0
+            
             # Update Cache
             _PROFILE_CACHE[user_id] = (data, now + CACHE_TTL)
             return data
