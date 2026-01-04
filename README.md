@@ -78,6 +78,19 @@ Discord---Wordle-Bot/
 - **Concurrency**: Async fetching for large leaderboards.
 - **Scalability**: Per-user state optimization, API batching, and TTL caching.
 
+## 📊 Telemetry & Tracking
+
+To gain insights into game activity and player behavior, the bot implements a flexible event tracking system.
+
+- **Storage**: `event_logs_v1` table with a `JSONB` metadata column.
+- **Function**: `log_event_v1(bot, event_type, user_id, guild_id, metadata)` in `src/database.py`.
+- **Flexibility**: New events or additional data points can be tracked without database schema changes.
+- **Fail-Safe**: Tracking logic is designed to fail silently, ensuring game stability is never compromised by telemetry errors.
+
+### Tracked Events
+- `word_rush_checkpoint`: Logs performance at every checkpoint.
+- `word_rush_complete`: Logs final results and session MVPs.
+
 ## 🛡️ Development Standards
 
 To maintain production-grade stability and scalability, all new features MUST follow these standards:

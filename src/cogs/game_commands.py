@@ -247,9 +247,9 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             )
 
         # Add word and dict to valid set temporarily
-        self.bot.valid_set.add(word)
+        self.bot.all_valid_5.add(word)
         if custom_dict:
-            self.bot.valid_set.update(custom_dict)
+            self.bot.all_valid_5.update(custom_dict)
 
         # Create game
         game = WordleGame(word, cid, self.user, 0)

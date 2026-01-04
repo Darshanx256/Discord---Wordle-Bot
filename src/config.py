@@ -12,13 +12,16 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 # --- FILE PATHS ---
-SECRET_FILE = "words.txt" # Simple list (Original Wordle)
-VALID_FILE = "all_words.txt" # Full dictionary (Valid guesses)
-CLASSIC_FILE = "words_hard.txt" # Classic list
-FULL_WORDS = "cleaned_dict.txt" # Full dictionary for Constraint Mode
+DICT_DIR = "data/dictionaries"
+SECRET_FILE = f"{DICT_DIR}/answers_common.txt"   # Simple list (Original Wordle)
+VALID_FILE = f"{DICT_DIR}/guesses_common.txt"    # Full dictionary (Valid guesses)
+CLASSIC_FILE = f"{DICT_DIR}/answers_hard.txt"    # Classic list
+FULL_WORDS = f"{DICT_DIR}/puzzles_rush.txt"      # Full dictionary for Constraint Mode (6+ letters)
+RUSH_WILD_FILE = f"{DICT_DIR}/guesses_rush_wild.txt" # Wild 5-letter words for validation only
+
 BANNED_USERS_FILE = "/etc/secrets/ban.txt" # Secret path for Render/Docker
 if not os.path.exists(BANNED_USERS_FILE):
-    BANNED_USERS_FILE = "banned_users.txt" # Local fallback
+    BANNED_USERS_FILE = f"banned_users.txt" # Local fallback (can stay here or move later)
 
 # --- GAME CONSTANTS ---
 KEYBOARD_LAYOUT = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]

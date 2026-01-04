@@ -7,7 +7,7 @@ from discord.ext import commands
 from discord import app_commands
 from src.mechanics.constraint_logic import ConstraintGenerator
 from src.utils import EMOJIS, get_cached_username, calculate_level
-from src.database import fetch_user_profile_v2, get_daily_wr_gain
+from src.database import fetch_user_profile_v2, get_daily_wr_gain, log_event_v1
 from src.mechanics.rewards import get_tier_multiplier, apply_anti_grind
 from src.config import TIERS
 
@@ -27,6 +27,7 @@ class ConstraintGame:
         self.is_round_active = False
         # Use combined secrets pool (Simple + Classic) for 5-letter puzzle generation
         secrets_pool = set(bot.secrets) | set(bot.hard_secrets)
+        # Generator uses the CLEAN valid_set (proper words only)
         self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, bot.valid_set)
         self.round_task = None
         self.game_msg = None
@@ -37,7 +38,8 @@ class ConstraintGame:
         self.rounds_since_last_bonus = 0
         self.is_bonus_round = False
         self.bonus_collected_words = {}  # For bonus rounds tracking multiple words
-        self.combined_dict = bot.valid_set | bot.full_dict # Pre-calculate for speed
+        # Validation allows EVERYTHING (clean + wild + 6+ letters)
+        self.combined_dict = bot.all_valid_5 | bot.full_dict
 
     def add_score(self, user_id, wr_gain):
         if user_id not in self.scores:
@@ -383,6 +385,20 @@ class ConstraintMode(commands.Cog):
                             value=f"**{m_name}**\n{m_wr} WR earned",
                             inline=False
                         )
+                        
+                        # Log Game Completion
+                        log_event_v1(
+                            bot=self.bot,
+                            event_type="word_rush_complete",
+                            user_id=m_id,
+                            guild_id=channel.guild.id if channel.guild else None,
+                            metadata={
+                                "round_reached": game.round_number,
+                                "mvp_id": m_id,
+                                "mvp_points": m_wr,
+                                "total_participants": len(game.participants)
+                            }
+                        )
 
                     await channel.send(embed=final_embed)
                     game.is_running = False
@@ -553,6 +569,20 @@ class ConstraintMode(commands.Cog):
             medal = medals[i] if i < 3 else "▫️"
             lines.append(f"{medal} **{user_name}** • {rp_total} pts (+{final_wr} WR){level_up_msg}{tier_up_msg}")
 
+            # Log Checkpoint Event
+            log_event_v1(
+                bot=self.bot,
+                event_type="word_rush_checkpoint",
+                user_id=uid,
+                guild_id=channel.guild.id if channel.guild else None,
+                metadata={
+                    "round_number": game.round_number,
+                    "rush_points": rp_total,
+                    "wr_gain": final_wr,
+                    "rank": i + 1
+                }
+            )
+
         checkpoint_embed.description = "\n".join(lines) + "\n\nGet ready, game is about to continue!\n\n\u200b"
         checkpoint_embed.color = discord.Color.green()
         checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
@@ -598,7 +628,7 @@ class ConstraintMode(commands.Cog):
         if is_five_letter_only:
             if len(content) != 5:
                 return
-            valid_dict = self.bot.valid_set
+            valid_dict = self.bot.all_valid_5
         else:
             valid_dict = game.combined_dict
         

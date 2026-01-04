@@ -154,6 +154,9 @@ class WordleBot(commands.Bot):
 
     def load_local_data(self):
         """Load word lists from files."""
+        # Note: Added from config imports for clarity if needed, but they are already global
+        from src.config import SECRET_FILE, VALID_FILE, FULL_WORDS, CLASSIC_FILE, RUSH_WILD_FILE
+
         if os.path.exists(SECRET_FILE):
             with open(SECRET_FILE, "r", encoding="utf-8") as f:
                 # NOTE: secrets MUST be alphabetically sorted in the file for stable bitset bit-mapping
@@ -161,15 +164,24 @@ class WordleBot(commands.Bot):
         else:
             self.secrets = []
 
+        # 1. Standard valid 5-letter words (Clean for generation)
+        self.valid_set = set()
         if os.path.exists(VALID_FILE):
             with open(VALID_FILE, "r", encoding="utf-8") as f:
                 self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
-        else:
-            self.valid_set = set()
+        
+        # 2. 'Wild' 5-letter words (Validation/Guessing Only - Excluded from generation)
+        self.rush_wild_set = set()
+        if os.path.exists(RUSH_WILD_FILE):
+            with open(RUSH_WILD_FILE, "r", encoding="utf-8") as f:
+                self.rush_wild_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
 
+        # Combined 5-letter set for general validation
+        self.all_valid_5 = self.valid_set | self.rush_wild_set
+
+        # 3. Puzzles pool (6+ letters)
         if os.path.exists(FULL_WORDS):
             with open(FULL_WORDS, "r", encoding="utf-8") as f:
-                # Allow 5-letter words and above (requested to expand Word Rush pool)
                 self.full_dict = {w.strip().lower() for w in f if len(w.strip()) >= 5}
         else:
             self.full_dict = set()
@@ -181,8 +193,12 @@ class WordleBot(commands.Bot):
         else:
             self.hard_secrets = []
 
+        # Ensure secrets and hard_secrets are also in the clean valid set
         self.valid_set.update(self.secrets)
         self.valid_set.update(self.hard_secrets)
+        
+        # Ensure they are in the all-inclusive validation set too
+        self.all_valid_5.update(self.valid_set)
     
     def load_banned_users(self):
         """Load banned user IDs from file."""

@@ -89,7 +89,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             # Validation
             if not guess.isalpha():
                 return await interaction.response.send_message("⚠️ Letters only.", ephemeral=True)
-            if guess not in self.bot.valid_set:
+            if guess not in self.bot.all_valid_5:
                 return await interaction.response.send_message(f"⚠️ **{guess.upper()}** not in dictionary.", ephemeral=True)
             if self.game.is_duplicate(guess):
                  return await interaction.response.send_message(f"⚠️ **{guess.upper()}** already guessed.", ephemeral=True)

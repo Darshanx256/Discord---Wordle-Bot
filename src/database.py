@@ -372,3 +372,23 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
     except Exception as e:
         print(f"DB ERROR in record_race_result: {e}")
         return False
+
+def log_event_v1(bot: commands.Bot, event_type: str, user_id: int = None, guild_id: int = None, metadata: dict = None):
+    """
+    Flexible event tracker for Wordle Bot.
+    Uses 'event_logs_v1' table with JSONB metadata.
+    """
+    try:
+        data = {
+            'event_type': event_type,
+            'user_id': user_id,
+            'guild_id': guild_id,
+            'metadata': metadata or {},
+            'created_at': datetime.datetime.utcnow().isoformat()
+        }
+        bot.supabase_client.table('event_logs_v1').insert(data).execute()
+        return True
+    except Exception as e:
+        # Silently fail or log to console - we don't want tracking to crash the game
+        print(f"⚠️ Event Tracking Error ({event_type}): {e}")
+        return False

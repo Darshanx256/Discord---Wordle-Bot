@@ -102,9 +102,9 @@ class GuessHandler(commands.Cog):
                 if game.secret.lower() not in valid_check:
                     valid_check.add(game.secret.lower())
             elif is_custom and game.custom_dict:
-                valid_check = self.bot.valid_set | game.custom_dict
+                valid_check = self.bot.all_valid_5 | game.custom_dict
             else:
-                valid_check = self.bot.valid_set
+                valid_check = self.bot.all_valid_5
             
             if g_word not in valid_check:
                 return await ctx.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
