@@ -7,7 +7,8 @@ class WordleGame:
     __slots__ = ('secret', 'secret_set', 'channel_id', 'started_by', 'max_attempts', 'history', 
                  'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time',
                  'reveal_on_loss', 'difficulty', 'custom_dict', 'time_limit', 'allowed_players', 'show_keyboard',
-                 'blind_mode', 'custom_only', 'discovered_green_positions', 'title', 'monotonic_end_time')
+                 'blind_mode', 'custom_only', 'discovered_green_positions', 'title', 'monotonic_end_time',
+                 'hard_mode', 'hard_constraints')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
@@ -34,6 +35,10 @@ class WordleGame:
         self.custom_only = False     # If True, only custom dictionary words are allowed
         self.discovered_green_positions = set()  # Track which positions have greens discovered
         self.title = None            # Custom title for the game embed
+        
+        # Hard Mode
+        self.hard_mode = False
+        self.hard_constraints = {'greens': [None]*5, 'present': set()}
 
     @property
     def attempts_used(self): return len(self.history)
@@ -111,11 +116,65 @@ class WordleGame:
 
         return "".join(emoji_tags)
 
+    def validate_hard_mode_guess(self, guess: str):
+        """
+        Validates the guess against Hard Mode rules.
+        Returns: (is_valid, error_message)
+        """
+        guess = guess.upper()
+        
+        # 1. Check Green Constraints
+        for i, char in enumerate(self.hard_constraints['greens']):
+            if char and guess[i] != char:
+                return False, f"Hard Mode: Letter **{char}** must be at position {i+1}."
+                
+        # 2. Check Yellow Constraints
+        for char in self.hard_constraints['present']:
+            if char not in guess:
+                return False, f"Hard Mode: Predicted letter **{char}** must be used."
+                
+        return True, ""
+
     def process_turn(self, guess: str, user):
         guess = guess.upper()
         self.last_interaction = datetime.datetime.now()
         
         pat = self.evaluate_guess(guess) 
+        
+        # --- Update Hard Mode Constraints ---
+        # Parse pattern to update knowns
+        # This assumes emojis are standard formatted block_<char>_<color>
+        # But wait, evaluate_guess returns the emoji string.
+        # We need the STATE list to easily update constraints.
+        # Rerunning logic or extracting from evaluate_guess?
+        # modify evaluate_guess to return state? No, avoid breaking changes.
+        # Just re-calculate state locally. It's cheap.
+        
+        if self.hard_mode:
+            secret_upper = self.secret.upper()
+            s_list = list(secret_upper)
+            g_list = list(guess)
+            state_list = ["white"] * 5
+            
+            # Greens
+            for i in range(5):
+                if g_list[i] == s_list[i]:
+                    state_list[i] = "green"
+                    self.hard_constraints['greens'][i] = g_list[i] # Lock green
+                    s_list[i] = None
+                    g_list[i] = None
+                    # Also remove from present set to avoid "must use" error if it's already green?
+                    # Rule 2: "Yellow letter must be used".
+                    # If I guess A (green), it satisfies "used".
+                    # My constraints check 'char in guess'. So it's fine.
+            
+            # Yellows
+            for i in range(5):
+                if state_list[i] == "green": continue
+                if g_list[i] is not None and g_list[i] in s_list:
+                     self.hard_constraints['present'].add(g_list[i])
+                     s_list[s_list.index(g_list[i])] = None # Consume
+        # ------------------------------------
         
         self.history.append({'word': guess, 'pattern': pat, 'user': user})
         self.participants.add(user.id)

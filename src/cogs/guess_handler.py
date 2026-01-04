@@ -92,6 +92,12 @@ class GuessHandler(commands.Cog):
             if g_word not in valid_check:
                 return await ctx.send(f"⚠️ **{g_word.upper()}** not in dictionary.", ephemeral=True)
 
+            # Hard Mode Validation
+            if getattr(game, 'hard_mode', False):
+                is_valid, err_msg = game.validate_hard_mode_guess(g_word)
+                if not is_valid:
+                    return await ctx.send(f"🚫 {err_msg}", ephemeral=True)
+
             pat, win, game_over = game.process_turn(g_word, ctx.author)
             print(f"DEBUG: Turn | Attempts: {game.attempts_used}/{game.max_attempts} | Win: {win} | Over: {game_over}")
 
@@ -231,10 +237,15 @@ class GuessHandler(commands.Cog):
                 else:
                     main_embed.description = f"**Keyboard:**\n{keypad}"
                 
-                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1)) if game.difficulty in [0, 1] else None
+                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False)) if game.difficulty in [0, 1] else None
                 
                 announcements = []
                 if res:
+                    if res.get('streak_msg'):
+                        announcements.append(f"🔥 **STREAK:** {res['streak_msg']}")
+                    if res.get('streak_badge'):
+                        announcements.append(f"💎 **BADGE:** You unlocked the {get_badge_emoji(res['streak_badge'])} Badge!")
+
                     if res.get('level_up'):
                         announcements.append(f"🔼 **LEVEL UP!** {winner_user.mention} is now **Level {res['level_up']}**!")
                     if res.get('tier_up'):
@@ -270,7 +281,7 @@ class GuessHandler(commands.Cog):
                 else:
                     main_embed.description = f"**Keyboard:**\n{keypad}"
 
-                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1)) if game.difficulty in [0, 1] else None
+                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False)) if game.difficulty in [0, 1] else None
 
                 announcements = []
                 for uid, lvl in level_ups:

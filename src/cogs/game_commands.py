@@ -438,6 +438,12 @@ class GameCommands(commands.Cog):
             return # Only allow slash command, ignore prefix like -wordle_classic
         await start_multiplayer_game(self.bot, ctx, is_classic=True)
 
+    @commands.hybrid_command(name="hard_mode", description="Start a new game with OFFICIAL HARD MODE rules.")
+    @commands.guild_only()
+    async def start_hard(self, ctx):
+        if not ctx.interaction: return
+        await start_multiplayer_game(self.bot, ctx, is_classic=True, hard_mode=True)
+
     @commands.hybrid_command(name="solo", description="Play a private game (Ephemeral).")
     async def solo(self, ctx):
         if not ctx.interaction: return

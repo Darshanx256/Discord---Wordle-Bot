@@ -331,11 +331,11 @@ class HelpView(discord.ui.View):
             embed.add_field(name="🎮 Game Commands", value=(
                 "`/wordle` -> Simple Game\n"
                 "`/wordle_classic` -> Hard Game\n"
+                "`/word_rush` -> ⚡ Constraint Mode\n"
                 "`/solo` -> Private Game\n"
                 "`/custom` -> Set Custom Word\n"
                 "`/guess` or `-g` -> Guess\n"
-                "`/guess` or `-g` -> Guess\n"
-                "`/stop_game` -> Cancel Game\n"
+                "`/stop_game` or `/stop_rush` -> Stop\n"
                 "`/race` -> Start Race Mode"
             ), inline=True)
             
@@ -343,10 +343,11 @@ class HelpView(discord.ui.View):
                 "`/profile` -> Your Stats\n"
                 "`/leaderboard` -> Server Ranks\n"
                 "`/leaderboard_global` -> Global\n"
-                "`/leaderboard` -> Server Ranks\n"
-                "`/leaderboard_global` -> Global\n"
                 "`/shop` -> Equip Badges\n"
-                "`/showrace` -> Resume Race"
+                "`/showrace` -> Resume Race\n\n"
+                "🔥 **Streaks**\n"
+                "Play daily to build your streak for\n"
+                "Multipliers & exclusive Badges!"
             ), inline=True)
             
             # Tiers Section
@@ -375,9 +376,8 @@ class HelpView(discord.ui.View):
                 "• Start with vowel-heavy words (AUDIO, RAISE)\n"
                 "• Speed matters -> faster solves = bonus rewards\n"
                 "• Higher tiers receive scaled rewards\n"
-                "• Speed matters -> faster solves = bonus rewards\n"
-                "• Higher tiers receive scaled rewards\n"
-                "• Participate in Multiplayer for extra XP"
+                "• Participate in Multiplayer for extra XP\n"
+                "• Word Rush Checkpoints convert Points to WR!"
             ), inline=False)
 
             # Custom Game Options

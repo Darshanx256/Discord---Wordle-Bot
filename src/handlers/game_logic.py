@@ -241,7 +241,7 @@ async def handle_game_loss(bot, game, interaction, cid):
 
     return embed, participant_rows, level_ups, tier_ups
 
-async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
+async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard_mode: bool = False):
     """
     Shared logic to start a multiplayer game (Simple or Classic).
     Used by commands and 'Play Again' buttons.
@@ -289,9 +289,15 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
         secret = get_next_word_bitset(bot, guild.id, 'classic')
-        title = "⚔️ Wordle Started! (Classic)"
-        color = discord.Color.dark_gold()
-        desc = "**Hard Mode!** 6 attempts."
+        
+        if hard_mode:
+            title = "🛡️ Wordle Started! (HARD MODE)"
+            color = discord.Color.red()
+            desc = "**OFFICIAL HARD RULES:**\n1. Greens must be fixed.\n2. Yellows must be reused.\n6 attempts."
+        else:
+            title = "⚔️ Wordle Started! (Classic)"
+            color = discord.Color.dark_gold()
+            desc = "**Hard Mode!** 6 attempts."
     else:
         if not bot.secrets:
             msg = "❌ Simple word list missing."
@@ -321,24 +327,26 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool):
     # 5. Initialize
     bot.games[cid] = WordleGame(secret, cid, author, msg.id)
     bot.games[cid].difficulty = 1 if is_classic else 0 # 0=Simple, 1=Classic
+    bot.games[cid].hard_mode = hard_mode
     bot.stopped_games.discard(cid)
     # print(f"DEBUG: {'Classic ' if is_classic else ''}Game STARTED in {cid}.")
     return bot.games[cid]
 
 
 class PlayAgainView(discord.ui.View):
-    def __init__(self, bot, is_classic: bool):
+    def __init__(self, bot, is_classic: bool, hard_mode: bool = False):
         super().__init__(timeout=300)
         self.bot = bot
         self.is_classic = is_classic
+        self.hard_mode = hard_mode
 
-    @discord.ui.button(label="Play Again", style=discord.ButtonStyle.primary, emoji="🔄")
+    @discord.ui.button(label="Try Again", style=discord.ButtonStyle.primary, emoji="🔄")
     async def play_again(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Defer immediately to prevent timeout
         await interaction.response.defer()
         
         # Start a new game using the same settings
-        await start_multiplayer_game(self.bot, interaction, self.is_classic)
+        await start_multiplayer_game(self.bot, interaction, self.is_classic, self.hard_mode)
         self.stop()
         
         # Disable the button after use to prevent multiple clicks

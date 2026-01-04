@@ -92,15 +92,15 @@ class ConstraintMode(commands.Cog):
                 "Watch the traffic lights for timing guidance.\n\n"
                 "**🎯 Scoring**\n"
                 "```\n"
-                "1st place  →  5 WR\n"
-                "2nd place  →  4 WR\n"
-                "3rd place  →  3 WR\n"
-                "4th place  →  2 WR\n"
-                "Others     →  1 WR\n"
+                "1st place  →  5 Rush Points\n"
+                "2nd place  →  4 Rush Points\n"
+                "3rd place  →  3 Rush Points\n"
+                "4th place  →  2 Rush Points\n"
+                "Others     →  1 Rush Point\n"
                 "```\n"
                 "**📋 Rules**\n"
                 "• No word reuse in same session\n"
-                "• Rewards every 12 rounds\n"
+                "• **Rush Points** converted to WR at checkpoints\n"
                 "• Game ends after 5 rounds without guesses\n"
                 "• 🎁 Random bonus rounds with 3x rewards!\n\n"
                 "Ready to test your vocabulary? Join below!"
@@ -136,7 +136,7 @@ class ConstraintMode(commands.Cog):
             
             summary_embed = discord.Embed(
                 title="🏆 Rush Complete",
-                description=f"**Session MVP**\n{mvp_name} • {mvp_wr} WR\n\nThanks for playing!",
+                description=f"**Session MVP**\n{mvp_name} • {mvp_wr} Rush Points\n\nThanks for playing!",
                 color=discord.Color.gold()
             )
             await interaction.response.send_message(embed=summary_embed)
@@ -158,7 +158,8 @@ class ConstraintMode(commands.Cog):
             for char in line:
                 char_low = char.lower()
                 if char_low.isalpha():
-                    formatted += EMOJIS.get(f"block_{char_low}_green", "🟩")
+                    # Use custom emoji format: :green_X:
+                    formatted += f":green_{char.upper()}:"
                 elif char == '-':
                     emoji_id = self.signal_urls['unknown'].split('/')[-1].replace('.png', '')
                     formatted += f"<:unknown:{emoji_id}>"
@@ -437,22 +438,49 @@ class ConstraintMode(commands.Cog):
         lines = []
         medals = ["🥇", "🥈", "🥉"]
         
+        # TIER TAX & CONVERSION CONSTANTS
+        # Tax: Reduces RP effectiveness based on daily earnings to prevent massive farming
+        # But user requested "tier based taxing".
+        # Let's simple convert RP -> WR. 1 RP approx 1 WR, but with logic.
+        
         for i, (uid, data) in enumerate(sorted_scores):
             user_name = await get_cached_username(self.bot, uid)
-            wr_total = data['wr']
+            rp_total = data['wr'] # Actually Rush Points
             rounds = data['rounds_won']
             
-            game.total_wr_per_user[uid] = game.total_wr_per_user.get(uid, 0) + wr_total
+            # Store Total RP for MVP
+            game.total_wr_per_user[uid] = game.total_wr_per_user.get(uid, 0) + rp_total
+            
+            # --- CONVERSION LOGIC ---
+            from src.mechanics.rewards import get_tier_multiplier
+            
+            # Fetch user profile for Tier Info
+            profile = fetch_user_profile_v2(self.bot, uid)
+            current_wr = profile.get('multi_wr', 0) if profile else 0
+            
+            # 1. Base Conversion: 1 RP = 1 WR (Subject to reduction)
+            # User said: "subjected to tier based taxing"
+            # Higher tier -> LESS return? Or MORE? usually Higher Tier = Harder to climb.
+            # Let's assume standard behavior: Higher WR = harder to gain.
+            
+            modifier = 1.0
+            if current_wr > 2000: modifier = 0.8
+            if current_wr > 4000: modifier = 0.6
+            if current_wr > 6000: modifier = 0.4
+            
+            final_wr_gain = int(rp_total * modifier)
+            if final_wr_gain < 1 and rp_total > 0: final_wr_gain = 1 # Minimum 1 if you played
+            
+            # XP Calculation
+            xp_gain = 35 + max(0, 30 - (i * 5))
             
             try:
-                xp_gain = 35 + max(0, 30 - (i * 5))
-                
                 self.bot.supabase_client.rpc('record_game_result_v4', {
                     'p_user_id': uid,
                     'p_guild_id': channel.guild.id if channel.guild else None,
                     'p_mode': 'MULTI',
                     'p_xp_gain': xp_gain,
-                    'p_wr_delta': wr_total,
+                    'p_wr_delta': final_wr_gain,
                     'p_is_win': (i == 0),
                     'p_egg_trigger': None
                 }).execute()
@@ -460,7 +488,7 @@ class ConstraintMode(commands.Cog):
                 print(f"Failed to record checkpoint for {uid}: {e}")
             
             medal = medals[i] if i < 3 else "▫️"
-            lines.append(f"{medal} **{user_name}** • {wr_total} WR • {rounds} rounds")
+            lines.append(f"{medal} **{user_name}** • {rp_total} pts ({final_wr_gain} WR) • {rounds} rds")
 
         checkpoint_embed.description = "\n".join(lines) + "\n\nGet ready, game is about to continue!\n\n\u200b"
         checkpoint_embed.color = discord.Color.green()
@@ -556,27 +584,29 @@ class ConstraintMode(commands.Cog):
         rank = len(game.winners_in_round) + 1
         game.winners_in_round.append(message.author.id)
         
-        wr_gain = 1
+        # --- RUSH POINTS LOGIC ---
+        # 1st: 5 pts, 2nd: 4 pts, 3rd: 3 pts, 4th: 2 pts, Others: 1 pt
+        rush_points = 1
         reaction = "✓"
         
         if rank == 1:
-            wr_gain = 5
+            rush_points = 5
             reaction = "🥇"
         elif rank == 2:
-            wr_gain = 4
+            rush_points = 4
             reaction = "🥈"
         elif rank == 3:
-            wr_gain = 3
+            rush_points = 3
             reaction = "🥉"
         elif rank == 4:
-            wr_gain = 2
+            rush_points = 2
             reaction = "⭐"
         
-        # Apply bonus multiplier
+        # Apply bonus multiplier (3x Rush Points)
         if game.is_bonus_round:
-            wr_gain *= 3
+            rush_points *= 3
         
-        game.add_score(message.author.id, wr_gain)
+        game.add_score(message.author.id, rush_points)
         
         try:
             await message.add_reaction(reaction)

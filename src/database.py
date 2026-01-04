@@ -35,8 +35,26 @@ def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
             total = sum(r['wr_delta'] for r in response.data)
             return total
         return 0
+        return 0
     except Exception as e:
         # print(f"⚠️ Could not fetch daily WR stats: {e}")
+        return 0
+
+def get_daily_wins(bot: commands.Bot, user_id: int) -> int:
+    """Calculates number of wins by the user today (UTC)."""
+    try:
+        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        response = bot.supabase_client.table('match_history') \
+            .select('count', count='exact') \
+            .eq('user_id', user_id) \
+            .eq('won', True) \
+            .gte('created_at', today_start.isoformat()) \
+            .execute()
+        
+        if response.count is not None:
+            return response.count
+        return 0
+    except Exception as e:
         return 0
 
 def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str, 
@@ -65,6 +83,29 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
         
         # 3. Calculate Final Rewards
         xp_gain, wr_delta = calculate_final_rewards(mode, outcome, guesses, time_taken, current_wr, daily_gain)
+        
+        # --- STREAK INTEGRATION ---
+        streak_msg = None
+        badge_awarded = None
+        
+        if mode != 'CUSTOM':
+            from src.mechanics.streaks import StreakManager
+            streak_mgr = StreakManager(bot)
+            
+            # Check/Update Streak (Increments if new day, regardless of win/loss)
+            streak_msg, raw_mult, badge_awarded = streak_mgr.check_streak(user_id)
+            
+            # Apply Multiplier if WIN and within limit
+            if outcome == 'win' and raw_mult > 1.0:
+                daily_wins = get_daily_wins(bot, user_id)
+                limit = 0
+                if raw_mult >= 3.0: limit = 4
+                elif raw_mult >= 2.5: limit = 4
+                elif raw_mult >= 2.0: limit = 3
+                
+                if daily_wins < limit:
+                    wr_delta = int(wr_delta * raw_mult)
+        # --------------------------
         
         # "Solves" check for Challenger Tier? 
         # DB tracks wins/games.
@@ -136,7 +177,11 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
             if new_lvl > old_lvl:
                 data['level_up'] = new_lvl
                 
-            return data # {xp, solo_wr, multi_wr, games_today, xp_gain, level_up?, tier_up?}
+            return {
+                'xp': new_xp, 'solo_wr': data.get('solo_wr',0), 'multi_wr': data.get('multi_wr',0),
+                'xp_gain': xp_gain, 'level_up': data.get('level_up'), 'tier_up': data.get('tier_up'),
+                'streak_msg': streak_msg, 'streak_badge': badge_awarded
+            }
         return None
         
     except Exception as e:
