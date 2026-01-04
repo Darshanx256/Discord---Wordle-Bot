@@ -6,8 +6,10 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from src.mechanics.constraint_logic import ConstraintGenerator
-from src.utils import EMOJIS, get_cached_username
-from src.database import fetch_user_profile_v2
+from src.utils import EMOJIS, get_cached_username, calculate_level
+from src.database import fetch_user_profile_v2, get_daily_wr_gain
+from src.mechanics.rewards import get_tier_multiplier, apply_anti_grind
+from src.config import TIERS
 
 class ConstraintGame:
     def __init__(self, bot, channel_id, started_by):
@@ -476,58 +478,80 @@ class ConstraintMode(commands.Cog):
 
         lines = []
         medals = ["🥇", "🥈", "🥉"]
-        
-        # TIER TAX & CONVERSION CONSTANTS
-        # Tax: Reduces RP effectiveness based on daily earnings to prevent massive farming
-        # But user requested "tier based taxing".
-        # Let's simple convert RP -> WR. 1 RP approx 1 WR, but with logic.
-        
+
         for i, (uid, data) in enumerate(sorted_scores):
             user_name = await get_cached_username(self.bot, uid)
-            rp_total = data['wr'] # Actually Rush Points
+            rp_total = data['wr'] # Rush Points
             rounds = data['rounds_won']
             
             # Store Total RP for MVP
             game.total_wr_per_user[uid] = game.total_wr_per_user.get(uid, 0) + rp_total
             
-            # --- CONVERSION LOGIC ---
-            from src.mechanics.rewards import get_tier_multiplier
-            
-            # Fetch user profile for Tier Info
+            # --- CONVERSION & REWARD LOGIC ---
             profile = fetch_user_profile_v2(self.bot, uid)
             current_wr = profile.get('multi_wr', 0) if profile else 0
+            daily_gain = get_daily_wr_gain(self.bot, uid)
             
-            # 1. Base Conversion: 1 RP = 1 WR (Subject to reduction)
-            # User said: "subjected to tier based taxing"
-            # Higher tier -> LESS return? Or MORE? usually Higher Tier = Harder to climb.
-            # Let's assume standard behavior: Higher WR = harder to gain.
+            # 1. Base Multiplier from Tiers
+            t_mult = get_tier_multiplier(current_wr)
             
-            modifier = 1.0
-            if current_wr > 2000: modifier = 0.8
-            if current_wr > 4000: modifier = 0.6
-            if current_wr > 6000: modifier = 0.4
+            # 2. XP Calculation
+            base_xp = 35 + max(0, 30 - (i * 5))
             
-            final_wr_gain = int(rp_total * modifier)
-            if final_wr_gain < 1 and rp_total > 0: final_wr_gain = 1 # Minimum 1 if you played
+            # 3. WR conversion (1 RP = 1 WR base)
+            base_wr = rp_total
             
-            # XP Calculation
-            xp_gain = 35 + max(0, 30 - (i * 5))
+            # 4. Apply Tier Multiplier
+            xp_gain = int(base_xp * t_mult)
+            wr_gain = int(base_wr * t_mult)
+            
+            # 5. Apply Anti-Grind
+            final_xp, final_wr = apply_anti_grind(xp_gain, wr_gain, daily_gain)
+            
+            # Ensure minimums
+            if final_wr < 1 and rp_total > 0: final_wr = 1
+            if final_xp < 5: final_xp = 5
+            
+            level_up_msg = ""
+            tier_up_msg = ""
             
             try:
-                self.bot.supabase_client.rpc('record_game_result_v4', {
+                # Call RPC and capture response
+                response = self.bot.supabase_client.rpc('record_game_result_v4', {
                     'p_user_id': uid,
                     'p_guild_id': channel.guild.id if channel.guild else None,
                     'p_mode': 'MULTI',
-                    'p_xp_gain': xp_gain,
-                    'p_wr_delta': final_wr_gain,
+                    'p_xp_gain': final_xp,
+                    'p_wr_delta': final_wr,
                     'p_is_win': (i == 0),
                     'p_egg_trigger': None
                 }).execute()
+                
+                if response.data:
+                    res_data = response.data
+                    new_xp = res_data.get('xp', 0)
+                    old_xp = new_xp - final_xp
+                    if calculate_level(new_xp) > calculate_level(old_xp):
+                        level_up_msg = f" 🆙 **Lvl {calculate_level(new_xp)}**"
+                        
+                    # Check Tier up
+                    new_wr = res_data.get('multi_wr', 0)
+                    old_wr = new_wr - final_wr
+                    
+                    old_tier = None
+                    new_tier = None
+                    for t in TIERS:
+                        if old_tier is None and old_wr >= t['min_wr']: old_tier = t
+                        if new_tier is None and new_wr >= t['min_wr']: new_tier = t
+                    
+                    if new_tier and old_tier and new_tier['min_wr'] > old_tier['min_wr']:
+                        tier_up_msg = f" 🏆 **{new_tier['name']}!**"
+
             except Exception as e:
                 print(f"Failed to record checkpoint for {uid}: {e}")
             
             medal = medals[i] if i < 3 else "▫️"
-            lines.append(f"{medal} **{user_name}** • {rp_total} pts ({final_wr_gain} WR) • {rounds} rds")
+            lines.append(f"{medal} **{user_name}** • {rp_total} pts (+{final_wr} WR){level_up_msg}{tier_up_msg}")
 
         checkpoint_embed.description = "\n".join(lines) + "\n\nGet ready, game is about to continue!\n\n\u200b"
         checkpoint_embed.color = discord.Color.green()

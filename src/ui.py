@@ -297,7 +297,11 @@ class HelpView(discord.ui.View):
     def create_embed(self):
         if self.page == 1:
             # BASIC PAGE
-            embed = discord.Embed(title="📚 Wordle Bot Guide (Basic)", color=discord.Color.blue())
+            s7 = EMOJIS.get('7_streak', '🔥')
+            s14 = EMOJIS.get('14_streak', '🔥')
+            s28 = EMOJIS.get('28_streak', '🔥')
+            
+            embed = discord.Embed(title=f"{s7} {s14} {s28} 📚 Wordle Bot Guide (Basic)", color=discord.Color.blue())
             embed.description = "A fun and engaging Wordle bot for Discord with various different game modes, level-up system and leaderboards!"
             
             embed.add_field(name="🎮 How to Play", value=(
