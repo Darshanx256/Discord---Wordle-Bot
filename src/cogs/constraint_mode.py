@@ -23,7 +23,9 @@ class ConstraintGame:
         self.user_answers_this_round = {}  # Track answers per user per round
         self.is_running = True
         self.is_round_active = False
-        self.generator = ConstraintGenerator(bot.valid_set, bot.full_dict)
+        # Use combined secrets pool (Simple + Classic) for 5-letter puzzle generation
+        secrets_pool = set(bot.secrets) | set(bot.hard_secrets)
+        self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, bot.valid_set)
         self.round_task = None
         self.game_msg = None
         self.participants = {started_by.id}
@@ -33,6 +35,7 @@ class ConstraintGame:
         self.rounds_since_last_bonus = 0
         self.is_bonus_round = False
         self.bonus_collected_words = {}  # For bonus rounds tracking multiple words
+        self.combined_dict = bot.valid_set | bot.full_dict # Pre-calculate for speed
 
     def add_score(self, user_id, wr_gain):
         if user_id not in self.scores:
@@ -45,10 +48,20 @@ class RushStartView(discord.ui.View):
         super().__init__(timeout=60)
         self.game = game
 
+    async def update_lobby(self, interaction: discord.Interaction):
+        embed = interaction.message.embeds[0]
+        # Update Participants field
+        pts = [f"<@{uid}>" for uid in self.game.participants]
+        embed.set_field_at(0, name="Participants", value=", ".join(pts) if pts else "None yet", inline=False)
+        await interaction.response.edit_message(embed=embed, view=self)
+
     @discord.ui.button(label="Join Rush", style=discord.ButtonStyle.primary, emoji="⚡")
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id in self.game.participants:
+            return await interaction.response.send_message("You're already in the rush!", ephemeral=True)
+        
         self.game.participants.add(interaction.user.id)
-        await interaction.response.send_message(f"You've joined the rush!", ephemeral=True)
+        await self.update_lobby(interaction)
 
     @discord.ui.button(label="Start Game", style=discord.ButtonStyle.success, emoji="▶️")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -57,6 +70,16 @@ class RushStartView(discord.ui.View):
         
         self.game.start_confirmed.set()
         await interaction.response.defer()
+        self.stop()
+
+    @discord.ui.button(label="Dismiss", style=discord.ButtonStyle.danger)
+    async def stop_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.game.started_by.id and not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message("Only the host or an admin can dismiss.", ephemeral=True)
+        
+        self.game.is_running = False
+        self.game.bot.constraint_mode.pop(self.game.channel_id, None)
+        await interaction.response.edit_message(content="🛑 World Rush canceled.", embed=None, view=None)
         self.stop()
 
 class ConstraintMode(commands.Cog):
@@ -102,13 +125,16 @@ class ConstraintMode(commands.Cog):
                 "• No word reuse in same session\n"
                 "• **Rush Points** converted to WR at checkpoints\n"
                 "• Game ends after 5 rounds without guesses\n"
-                "• 🎁 Random bonus rounds with 3x rewards!\n\n"
-                "Ready to test your vocabulary? Join below!"
+                "• 🎁 Random bonus rounds with 3x Rush Points!\n"
             ),
             color=discord.Color.from_rgb(88, 101, 242)
         )
         embed.set_thumbnail(url=self.signal_urls['unlit'])
         embed.set_footer(text=f"🎮 Hosted by {interaction.user.display_name}")
+        
+        # Add initial participant
+        pts = [f"<@{uid}>" for uid in game.participants]
+        embed.add_field(name="Participants", value=", ".join(pts) if pts else "None yet", inline=False)
         
         view = RushStartView(game)
         await interaction.response.send_message(embed=embed, view=view)
@@ -227,10 +253,13 @@ class ConstraintMode(commands.Cog):
                     if not game.is_running:
                         break
                 
-                # Determine if this is a bonus round (random chance after 15+ rounds)
-                game.is_bonus_round = (game.rounds_since_last_bonus >= 15 and 
-                                      random.random() < 0.15 and 
-                                      len(game.participants) > 0)
+                # Guarantee bonus round once before round 20
+                if game.round_number == 19 and game.rounds_since_last_bonus >= 18:
+                    game.is_bonus_round = True
+                else:
+                    game.is_bonus_round = (game.rounds_since_last_bonus >= 14 and 
+                                          random.random() < 0.25 and 
+                                          len(game.participants) > 0)
                 
                 if game.is_bonus_round:
                     game.rounds_since_last_bonus = 0
@@ -260,15 +289,26 @@ class ConstraintMode(commands.Cog):
                 
                 display_text = visual if visual else puzzle_desc
                 
-                # Consistent embed formatting
-                title = f"🎁 BONUS Round {game.round_number} (3x WR!)" if game.is_bonus_round else f"Round {game.round_number}"
+                # Constant spacing to prevent morphing
+                spacing = "\n\u200b" * 3
+                
+                spacing = "\n\u200b" * 4 # Extra spacing to lock height
+                
+                title = f"🎁 BONUS ROUND" if game.is_bonus_round else f"Round {game.round_number}"
                 round_embed = discord.Embed(
                     title=title,
-                    description=f"{display_text}\n\n\u200b\n\u200b",
-                    color=discord.Color.gold() if game.is_bonus_round else discord.Color.green()
+                    description=f"### {display_text}{spacing}",
+                    color=discord.Color.from_rgb(255, 215, 0) if game.is_bonus_round else discord.Color.from_rgb(46, 204, 113)
                 )
                 round_embed.set_thumbnail(url=self.signal_urls['green'])
-                round_embed.set_footer(text="Type your answer now!" if not is_multi_word else "Type all words you can find!")
+                
+                if game.is_bonus_round:
+                    round_embed.set_author(name="SPECIAL BONUS: 3x RUSH POINTS", icon_url="https://cdn.discordapp.com/emojis/1321033281982824479.png")
+                else:
+                    round_embed.set_author(name=f"Word Rush • Round {game.round_number}")
+                
+                footer_text = "Type your answer now!" if not is_multi_word else "Type ALL possible words!"
+                round_embed.set_footer(text=footer_text)
                 
                 msg = await channel.send(embed=round_embed)
                 game.game_msg = msg
@@ -536,7 +576,7 @@ class ConstraintMode(commands.Cog):
                 return
             valid_dict = self.bot.valid_set
         else:
-            valid_dict = self.bot.valid_set | self.bot.full_dict
+            valid_dict = game.combined_dict
         
         if content not in valid_dict:
             return

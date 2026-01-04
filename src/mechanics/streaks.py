@@ -6,22 +6,19 @@ class StreakManager:
     def __init__(self, bot):
         self.bot = bot
         self.messages = {
-            1: "🥚 1 day streak! Play 3 days in a row to get double WR bonus!",
-            2: "🐣 2 days streak! Just one more day for double WR bonus!",
-            3: f"🙀 3 days streak! 2x WR activated{EMOJIS.get('fire','🔥')} Your first 3 wins everyday will give 2x more WR!",
-            # 4-6 handled dynamically
-            7: f"{EMOJIS.get('7_streak', '')} 7 day streak! Congrats on your New Shiny Badge! Keep up with the streak and keep winning!",
-            8: "🐙 8 days streak! Do it a Ten to get improved bonus!",
-            9: "👀 9 days streak! One more day to get improved bonus!",
-            10: f"🙀 10 days streak! 2.5x WR activated{EMOJIS.get('fire','🔥')} Your first 4 wins everyday will give increased WR!",
-            # 11-12 handled dynamically
-            13: f"{EMOJIS.get('fire','🔥')} 13 days streak! Just one day for a super hot surprise!",
-            14: f"{EMOJIS.get('14_streak', '')} 14 day streak! Congrats on your Hot New Badge for the Hot You! Keep up with the streak and keep winning!",
-            # 21 handled dynamically
-            28: f"{EMOJIS.get('28_streak', '')} 28 days streak! You Rock! You have got mythical flame badge!",
-            35: f"🥳 35 days streak! 3x WR activated{EMOJIS.get('fire','🔥')} Your first 4 wins everyday will give increased WR!",
-            40: "😶‍🌫️ 40 days streak! 10 more to get Dragon Badge!",
-            50: f"{EMOJIS.get('dragon', '')} 50 days streak! Congrats on reaching this milestone! You have won the dragon badge!"
+            1: "✨ **Day 1: The Journey Begins!** 🥚\nPlay 3 days in a row to ignite your **Double WR Bonus**!",
+            2: "🔥 **Day 2: Keep the Flame Alive!** 🐣\nJust one more day until you unlock the power of **Double WR**!",
+            3: f"⚡ **Day 3: Supercharged!** 🙀\n**2x WR ACTIVATED** {EMOJIS.get('fire','🔥')}\nYour first 3 wins every day now grant double rewards!",
+            7: f"🛡️ **Day 7: The Guardian's Mark!** {EMOJIS.get('7_streak', '')}\nCongrats on your **Shiny 7-Day Badge**! You're becoming a legend.",
+            8: "🐙 **Day 8: Deep Sea Determination!**\nReach Day 10 to evolve your rewards even further!",
+            9: "👀 **Day 9: On the Horizon!**\nOne more sunrise to reach the next tier of power.",
+            10: f"💠 **Day 10: Elite Status!** 🙀\n**2.5x WR ACTIVATED** {EMOJIS.get('fire','🔥')}\nYour first 4 wins every day are now heavily boosted!",
+            13: f"🌶️ **Day 13: Sizzling Hot!** {EMOJIS.get('fire','🔥')}\nTomorrow brings a masterpiece for your profile.",
+            14: f"🔥 **Day 14: Master of the Flame!** {EMOJIS.get('14_streak', '')}\nCongrats on the **Hot 14-Day Badge**! Absolute fire.",
+            28: f"💎 **Day 28: Mythical Status!** {EMOJIS.get('28_streak', '')}\n**Mythical Flame Badge UNLOCKED!** You are among the elite.",
+            35: f"👑 **Day 35: Absolute Sovereign!** 🥳\n**3x WR ACTIVATED** {EMOJIS.get('fire','🔥')}\nMaximum power achieved. Your first 4 wins are legendary.",
+            40: "😶‍🌫️ **Day 40: Into the Mist!**\n10 more days to claim the ultimate **Dragon Badge**.",
+            50: f"🐲 **Day 50: DRAGON LORD!** {EMOJIS.get('dragon', '')}\n**Dragon Milestone Badge UNLOCKED!** You have conquered Wordle."
         }
         
     def get_streak_message(self, streak_days):
@@ -30,33 +27,60 @@ class StreakManager:
             return self.messages[streak_days]
         
         if 4 <= streak_days <= 6:
-            return f"🪄 {streak_days} days streak! Do a 7 day streak to get a shiny badge {EMOJIS.get('7_streak', '')}"
+            return f"🪄 **{streak_days} Day Streak!**\nKeep it up for the **Shiny 7-Day Badge** {EMOJIS.get('7_streak', '')}"
         if 11 <= streak_days <= 12:
-            return f"🔥 {streak_days} days streak! Make it 14 for a super hot surprise!"
-        if streak_days == 21:
-            return "[3x WR logic active] Keep going!" # Placeholder or add flavor
+            return f"🔥 **{streak_days} Day Streak!**\nMake it to 14 for the **Hot 14-Day Badge**!"
+        if 21 <= streak_days <= 27:
+            return f"🌌 **{streak_days} Day Streak!**\nThe **Mythical 28-Day Badge** is within reach!"
         
         # Rotating messages for 50+
         if streak_days > 50:
             rotating = [
-                "🚀 To the moon! Streak continues!",
-                "💎 Diamond hands! Another day, another win!",
-                "🛑 Unstoppable! The streak lives on.",
-                "👑 Absolute Legend. You're crushing it.",
-                "⚡ Electric! Can you reach 100?"
+                "🚀 **To the moon!** Your momentum is unstoppable.",
+                "💎 **Diamond focus!** Another day of perfection.",
+                "🛑 **Unstoppable!** The streak has a mind of its own now.",
+                "👑 **Absolute Legend.** Future generations will hear of this.",
+                "⚡ **Electric performance!** Can you reach 100?"
             ]
-            return f"✨ {streak_days} days streak! {random.choice(rotating)}"
+            return f"✨ **Day {streak_days}:** {random.choice(rotating)}"
             
-        return f"🔥 {streak_days} days streak! Keep it up!"
+        return f"🔥 **{streak_days} Day Streak!** The fire burns bright!"
+
+    def clear_inventory_bonuses(self, user_id):
+        """Discards only specific streak badges (7, 14, 28) when a streak is broken."""
+        try:
+            # 1. Get current inventory
+            res = self.bot.supabase_client.table('user_stats_v2').select('eggs, active_badge').eq('user_id', user_id).execute()
+            if not res.data: return
+            
+            data = res.data[0]
+            inventory = data.get('eggs') or {}
+            active_badge = data.get('active_badge')
+            
+            # 2. Filter out streak badges
+            streak_badge_ids = ['7_streak', '14_streak', '28_streak']
+            for bid in streak_badge_ids:
+                if bid in inventory:
+                    del inventory[bid]
+            
+            # 3. Handle active badge conflict
+            new_active = active_badge
+            if active_badge in streak_badge_ids:
+                new_active = None
+                
+            # 4. Update
+            self.bot.supabase_client.table('user_stats_v2').update({
+                'eggs': inventory, 
+                'active_badge': new_active
+            }).eq('user_id', user_id).execute()
+        except Exception as e:
+            print(f"Failed to clear streak badges on break: {e}")
 
     def check_streak(self, user_id):
         """
         Checks and updates streak for a user.
         Returns: (streak_message, multiplier, badge_awarded)
         """
-        # This function should be called ONCE per day per user (effectively)
-        # But since we don't want to spam DB, we check date first.
-        
         now = datetime.datetime.utcnow()
         today_date = now.date()
         
@@ -76,11 +100,9 @@ class StreakManager:
             
             data = res.data[0]
             last_date_str = data['last_play_date']
-            # Parse date safely
             try:
                 last_date = datetime.datetime.fromisoformat(last_date_str).date()
             except ValueError:
-                # Handle Z format or other issues if necessary
                 last_date = datetime.datetime.strptime(last_date_str.split('T')[0], "%Y-%m-%d").date()
                 
             delta_days = (today_date - last_date).days
@@ -90,9 +112,6 @@ class StreakManager:
             badge = None
             
             if delta_days == 0:
-                # Already played today. No streak update.
-                # Just return current multiplier status?
-                # or return None to indicate "no new streak event"
                 return None, self.calculate_multiplier(updated_streak), None
                 
             elif delta_days == 1:
@@ -100,12 +119,16 @@ class StreakManager:
                 updated_streak += 1
                 message = self.get_streak_message(updated_streak)
                 # Check Badges
-                badge = self.check_badge_reward(updated_streak)
+                badge = self.check_badge_reward(user_id, updated_streak)
                 
             else:
                 # Missed a day (or more). Reset.
+                # DISCARD BADGES/BONUSES logic
+                if updated_streak >= 1: 
+                    self.clear_inventory_bonuses(user_id)
+                
                 updated_streak = 1
-                message = self.get_streak_message(1)
+                message = f"💔 **Streak Broken!** (Your previous streak was {data['current_streak']} days)\nInventory cleared. New streak starts now: " + self.get_streak_message(1)
             
             # Update DB
             new_max = max(data['max_streak'], updated_streak)
@@ -128,28 +151,23 @@ class StreakManager:
         if streak >= 3: return 2.0
         return 1.0
 
-    def check_badge_reward(self, streak):
+    def check_badge_reward(self, user_id, streak):
         """Checks if a badge should be awarded/unlocked."""
         badge_id = None
         if streak == 7: badge_id = '7_streak'
         elif streak == 14: badge_id = '14_streak'
         elif streak == 28: badge_id = '28_streak'
-        elif streak == 50: badge_id = 'dragon_badge' # Special dragon badge
+        elif streak == 50: badge_id = 'dragon'
         
         if badge_id:
-            # Add to user's 'eggs' inventory in user_stats_v2
-            # We use a raw RPC or logic to append to JSONB would be best, 
-            # but reading -> updating is safer for consistency if no specialized RPC exists.
             try:
                 # 1. Get current inventory
-                res = self.bot.supabase_client.table('user_stats_v2').select('eggs').eq('user_id', self.user_id_context).execute()
+                res = self.bot.supabase_client.table('user_stats_v2').select('eggs').eq('user_id', user_id).execute()
                 if res.data:
                     current_eggs = res.data[0].get('eggs') or {}
-                    # 2. Add badge if not present
                     if badge_id not in current_eggs:
                         current_eggs[badge_id] = 1
-                        # 3. Update
-                        self.bot.supabase_client.table('user_stats_v2').update({'eggs': current_eggs}).eq('user_id', self.user_id_context).execute()
+                        self.bot.supabase_client.table('user_stats_v2').update({'eggs': current_eggs}).eq('user_id', user_id).execute()
                         return badge_id
             except Exception as e:
                 print(f"Failed to award streak badge: {e}")

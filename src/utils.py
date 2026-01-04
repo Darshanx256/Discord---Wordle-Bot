@@ -72,7 +72,7 @@ def get_badge_emoji(badge_type: str) -> str:
         "7_streak": "7_streak",
         "14_streak": "14_streak",
         "28_streak": "28_streak",
-        "dragon_badge": "dragon" # Map the display ID to the 'dragon' emoji
+        "dragon": "dragon" # Map the streak milestone ID directly
     }
     if badge_type in badge_map:
         emoji_key = badge_map[badge_type]
@@ -88,7 +88,7 @@ def get_badge_full_display(badge_type: str) -> str:
         "7_streak": ("7_streak", "Shiny 7-Day"),
         "14_streak": ("14_streak", "Hot 14-Day"),
         "28_streak": ("28_streak", "Mythical 28-Day"),
-        "dragon_badge": ("dragon", "Dragon Milestone")
+        "dragon": ("dragon", "Dragon Milestone")
     }
     if badge_type in badge_map:
         emoji_key, title = badge_map[badge_type]

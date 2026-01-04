@@ -2,14 +2,20 @@ import random
 import re
 
 class ConstraintGenerator:
-    def __init__(self, five_letter_dict, full_dict):
+    def __init__(self, secrets_dict, full_dict, valid_dict):
         """
-        :param five_letter_dict: Set of valid 5-letter words.
-        :param full_dict: Set of all valid words (excluding very short words).
+        :param secrets_dict: Set of common/classic words used for puzzle generation.
+        :param full_dict: Set of all valid words (dictionary).
+        :param valid_dict: Set of valid 5-letter words for validation.
         """
-        self.five_letter_dict = five_letter_dict
+        self.secrets_dict = secrets_dict 
         self.full_dict = full_dict
-        self.combined_dict = five_letter_dict | full_dict
+        self.valid_dict = valid_dict
+        self.combined_dict = valid_dict | full_dict # All allowed guesses
+        
+        # Generation Pool: We only generate 5-letter questions from secrets_dict
+        # and non-5-letter from full_dict (limited to common-ish words if possible)
+        # For simplicity, we stick to secrets for 'five' and full for 'all'
         
         # Precompute for optimization
         self.vowels = frozenset('aeiou')
@@ -107,8 +113,9 @@ class ConstraintGenerator:
             
             description, validator, visual, use_dict = selected_func()
             
-            # Use appropriate dictionary
-            target_dict = self.five_letter_dict if use_dict == 'five' else self.combined_dict
+            # 5-letter puzzles generate solutions only from the secret pool
+            # to ensure they are "real" common words.
+            target_dict = self.secrets_dict if use_dict == 'five' else self.combined_dict
             
             # Efficiently find solutions using validator
             solutions = self._fast_filter(target_dict, validator)
@@ -149,7 +156,7 @@ class ConstraintGenerator:
                 }
             else:  # most_words
                 # Letters anywhere challenge
-                base_word = random.choice(list(self.five_letter_dict))
+                base_word = random.choice(list(self.secrets_dict))
                 letters = random.sample(list(set(base_word)), 3)
                 
                 solutions = [w for w in self.combined_dict if all(l in w for l in letters)]
@@ -184,8 +191,8 @@ class ConstraintGenerator:
     def _fallback_puzzle(self):
         """Fallback puzzle that's guaranteed to work."""
         letter = random.choice('aeiorstn')
-        solutions = set(w for w in self.five_letter_dict if w.endswith(letter))
-        visual = f"⬛⬛⬛⬛🟩**{letter.upper()}**"
+        solutions = set(w for w in self.secrets_dict if w.endswith(letter))
+        visual = f"----{letter}"
         
         return {
             'description': f"Word ending with **{letter.upper()}**\n*(5-letter words only)*",
@@ -199,7 +206,7 @@ class ConstraintGenerator:
 
     def _type_substring(self):
         """3-letter substring - 5-letter words only."""
-        word = random.choice(list(self.five_letter_dict))
+        word = random.choice(list(self.secrets_dict))
         start = random.randint(0, 2)
         sub = word[start:start+3]
         desc = f"Word containing **{sub.upper()}** together\n*(5-letter words only)*"
@@ -207,7 +214,7 @@ class ConstraintGenerator:
 
     def _type_substring_plus_letter(self):
         """2-letter substring + another letter - all words."""
-        word = random.choice(list(self.five_letter_dict))
+        word = random.choice(list(self.secrets_dict))
         sub = word[0:2]
         other_word = random.choice(list(self.combined_dict))
         other_letter = random.choice([c for c in other_word if c not in sub])
@@ -216,7 +223,7 @@ class ConstraintGenerator:
 
     def _type_letters_anywhere(self):
         """3 letters anywhere - all words."""
-        word = random.choice(list(self.five_letter_dict))
+        word = random.choice(list(self.secrets_dict))
         letters = random.sample(list(set(word)), min(3, len(set(word))))
         desc = f"Word containing **{', '.join(l.upper() for l in letters)}** (anywhere)"
         
@@ -226,7 +233,7 @@ class ConstraintGenerator:
 
     def _type_include_exclude(self):
         """Include certain letters, exclude others - all words."""
-        word = random.choice(list(self.five_letter_dict))
+        word = random.choice(list(self.secrets_dict))
         include = random.sample(list(set(word)), min(2, len(set(word))))
         pool = [c for c in 'aeiorsnt' if c not in word]
         exclude = random.sample(pool, min(2, len(pool))) if len(pool) >= 2 else ['z', 'q']
@@ -271,12 +278,12 @@ class ConstraintGenerator:
         """Ends with letter - 5-letter words only."""
         letter = random.choice('aeiorstn')  # Common endings
         desc = f"Word ending with **{letter.upper()}**\n*(5-letter words only)*"
-        visual = f"⬛⬛⬛⬛🟩**{letter.upper()}**"
+        visual = f"----{letter}"
         return desc, lambda w: len(w) == 5 and w.endswith(letter), visual, 'five'
 
     def _type_start_end_same(self):
         """Starts and ends with same letter + another letter - all words."""
-        word = random.choice(list(self.five_letter_dict))
+        word = random.choice(list(self.secrets_dict))
         letter = word[0]
         other_word = random.choice(list(self.combined_dict))
         other_letter = random.choice([c for c in other_word if c != letter])
@@ -286,7 +293,7 @@ class ConstraintGenerator:
 
     def _type_wordle_block(self):
         """Wordle-style pattern - 5-letter words only."""
-        word = random.choice(list(self.five_letter_dict))
+        word = random.choice(list(self.secrets_dict))
         positions = random.sample(range(5), 2)
         pattern = ['-'] * 5
         
@@ -294,13 +301,7 @@ class ConstraintGenerator:
             pattern[p] = word[p]
         
         # Create visual
-        visual_list = []
-        for c in pattern:
-            if c == '-':
-                visual_list.append("⬛")
-            else:
-                visual_list.append(f"🟩**{c.upper()}**")
-        visual = "".join(visual_list)
+        visual = "".join(pattern)
         
         desc = f"Word matching pattern\n*(5-letter words only)*"
         

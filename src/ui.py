@@ -304,6 +304,7 @@ class HelpView(discord.ui.View):
                 "**1. Start a Game**\n"
                 "• `/wordle` -> Simple 5-letter words\n"
                 "• `/wordle_classic` -> Harder, full dictionary\n"
+                "• `/word_rush` -> ⚡ Rapid constraint puzzles\n"
                 "• `/custom` -> Custom word in channel\n"
                 "• `/solo` -> Private Solo Mode\n\n"
                 "**2. Make a Guess**\n"
@@ -331,7 +332,7 @@ class HelpView(discord.ui.View):
             embed.add_field(name="🎮 Game Commands", value=(
                 "`/wordle` -> Simple Game\n"
                 "`/wordle_classic` -> Hard Game\n"
-                "`/word_rush` -> ⚡ Constraint Mode\n"
+                "`/word_rush` -> ⚡ Rush Mode\n"
                 "`/solo` -> Private Game\n"
                 "`/custom` -> Set Custom Word\n"
                 "`/guess` or `-g` -> Guess\n"
@@ -347,7 +348,8 @@ class HelpView(discord.ui.View):
                 "`/showrace` -> Resume Race\n\n"
                 "🔥 **Streaks**\n"
                 "Play daily to build your streak for\n"
-                "Multipliers & exclusive Badges!"
+                "Multipliers & exclusive Badges!\n"
+                "*Streaks reset daily at 00:00 UTC.*"
             ), inline=True)
             
             # Tiers Section

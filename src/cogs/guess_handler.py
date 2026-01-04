@@ -40,6 +40,23 @@ class GuessHandler(commands.Cog):
         embed.set_footer(text=footer)
         return embed
 
+    async def _delayed_ephemeral_streak(self, ctx, user, message, delay=2):
+        """Helper to send delayed, private streak/badge updates."""
+        await asyncio.sleep(delay)
+        if hasattr(ctx, 'interaction') and ctx.interaction:
+            try:
+                # If interaction is already responded to, use followup
+                await ctx.interaction.followup.send(content=message, ephemeral=True)
+                return
+            except:
+                pass
+        
+        # Fallback for prefix commands or failed followup: Private DM
+        try:
+            await user.send(message)
+        except:
+            pass
+
     @commands.hybrid_command(name="guess", aliases=["g"], description="Guess a 5-letter word.")
     async def guess(self, ctx, word: str):
         await ctx.defer()
@@ -241,10 +258,11 @@ class GuessHandler(commands.Cog):
                 
                 announcements = []
                 if res:
+                    # Streak and Badge announcements are now handled separately (ephemeral + delayed)
                     if res.get('streak_msg'):
-                        announcements.append(f"🔥 **STREAK:** {res['streak_msg']}")
+                        asyncio.get_event_loop().create_task(self._delayed_ephemeral_streak(ctx, winner_user, res['streak_msg']))
                     if res.get('streak_badge'):
-                        announcements.append(f"💎 **BADGE:** You unlocked the {get_badge_emoji(res['streak_badge'])} Badge!")
+                        asyncio.get_event_loop().create_task(self._delayed_ephemeral_streak(ctx, winner_user, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(res['streak_badge'])} Badge!", delay=3))
 
                     if res.get('level_up'):
                         announcements.append(f"🔼 **LEVEL UP!** {winner_user.mention} is now **Level {res['level_up']}**!")
@@ -252,6 +270,15 @@ class GuessHandler(commands.Cog):
                         t_icon = EMOJIS.get(res['tier_up']['icon'], res['tier_up']['icon'])
                         announcements.append(f"🎉 **PROMOTION!** {winner_user.mention} reached **{t_icon} {res['tier_up']['name']}** Tier!")
                 
+                for uid, outcome_key, pres in results:
+                    if pres:
+                        p_user = self.bot.get_user(uid)
+                        if p_user:
+                            if pres.get('streak_msg'):
+                                asyncio.get_event_loop().create_task(self._delayed_ephemeral_streak(ctx, p_user, pres['streak_msg']))
+                            if pres.get('streak_badge'):
+                                asyncio.get_event_loop().create_task(self._delayed_ephemeral_streak(ctx, p_user, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(pres['streak_badge'])} Badge!", delay=3))
+
                 for uid, lvl in level_ups:
                     u = self.bot.get_user(uid)
                     if u: announcements.append(f"🔼 **LEVEL UP!** {u.mention} is now **Level {lvl}**!")

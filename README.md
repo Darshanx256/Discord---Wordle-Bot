@@ -10,16 +10,25 @@ The project is organized into a modular architecture:
 Discord---Wordle-Bot/
 ├── wordle_bot.py       # 🚀 ENTRY POINT
 ├── src/                # 🧠 CORE LOGIC
-│   ├── config.py       # ⚙️ Constants (XP Table, Tiers)
-│   ├── bot.py          # 🤖 Main Bot Class & Commands
-│   ├── game.py         # 🎮 Game Engine (Solo & Multiplayer)
-│   ├── database.py     # 🗄️ Supabase Interaction (V2 RPC)
-│   ├── ui.py           # 🎨 Views, Modals, & Embeds
-│   ├── server.py       # 🌐 Flask Web Server
-│   └── utils.py        # 🛠️ Helpers
+│   ├── bot.py          # 🤖 Bot Initialization & Background Tasks
+│   ├── config.py       # ⚙️ Constants & Global Configuration
+│   ├── database.py     # 🗄️ Supabase Client & DB Handlers
+│   ├── game.py         # 🎮 Game Data Models
+│   ├── ui.py           # 🎨 Shared Views, Modals, & Embeds
+│   ├── utils.py        # 🛠️ Helper Functions & Emojis
+│   ├── cogs/           # 🧩 Discord Command Modules (Cogs)
+│   │   ├── game_commands.py   # Main Game Flow
+│   │   ├── guess_handler.py   # Guess & Win/Loss logic
+│   │   ├── constraint_mode.py # Rush Mode (⚡)
+│   │   └── race_commands.py   # Sync Race Logic
+│   ├── mechanics/      # ⚙️ Game Rules & Mechanics
+│   │   ├── streaks.py         # Streak management
+│   │   ├── rewards.py         # XP & Rating formulas
+│   │   └── constraint_logic.py# Rush Mode generation
+│   └── handlers/       # 🏁 Win/Loss Processing
+│       └── game_logic.py      # Reward distribution
+├── static/             # 🌐 Web Assets (Landing Page)
 ├── supabase.txt        # 📜 SQL Schema & Migration Script
-├── static/             # 🌐 Web Assets
-├── .env                # 🔒 Secrets
 └── requirements.txt    # 📦 Dependencies
 ```
 

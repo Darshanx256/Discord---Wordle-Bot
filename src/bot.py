@@ -94,8 +94,48 @@ class WordleBot(commands.Bot):
         self._background_tasks['activity'] = asyncio.create_task(self.activity_loop_task())
         self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
         self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
+        self._background_tasks['streak_reminder'] = asyncio.create_task(self.streak_reminder_task_loop())
         
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
+
+    async def streak_reminder_task_loop(self):
+        """Sends DM reminders to users with 3+ day streaks 4 hours before UTC reset."""
+        await self.wait_until_ready()
+        
+        while not self.is_closed():
+            now = datetime.datetime.utcnow()
+            # 20:00 UTC is 4 hours before 00:00 UTC reset
+            if now.hour == 20:
+                today_str = now.date().isoformat()
+                try:
+                    res = self.supabase_client.table('streaks_v4') \
+                        .select('user_id, current_streak') \
+                        .gte('current_streak', 3) \
+                        .lt('last_play_date', today_str) \
+                        .execute()
+                    
+                    if res.data:
+                        for row in res.data:
+                            uid = row['user_id']
+                            streak = row['current_streak']
+                            user = self.get_user(uid) or await self.fetch_user(uid)
+                            if user:
+                                try:
+                                    milestones = [7, 14, 28, 50]
+                                    next_m = next((m for m in milestones if m > streak), None)
+                                    if next_m:
+                                        msg = f"🔔 **Don't miss out on your streak!** You're on a **{streak}-day streak**. Only **{next_m - streak}** more days until you unlock the **Day {next_m} Badge**! 🏆"
+                                    else:
+                                        msg = f"🔔 **Keep the fire burning!** Your **{streak}-day streak** is at risk. Play a quick game of /wordle or /word_rush now to save it! 🔥"
+                                    await user.send(msg)
+                                    await asyncio.sleep(1) # Safety
+                                except: pass
+                except Exception as e:
+                    print(f"Streak Reminder Task Error: {e}")
+                
+                await asyncio.sleep(3601) # Skip rest of hour
+            else:
+                await asyncio.sleep(1800) # Check every 30 mins
 
     async def load_cogs(self):
         """Load all cogs from src/cogs/ directory."""
