@@ -66,6 +66,7 @@ class ConstraintGame:
         self.scores[user_id]['wr'] += wr_gain
         self.scores[user_id]['rounds_won'] += 1
 
+class RushStartView(discord.ui.View):
     def __init__(self, game):
         super().__init__(timeout=300)
         self.game = game
