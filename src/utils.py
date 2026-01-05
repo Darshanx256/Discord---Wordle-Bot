@@ -1,5 +1,7 @@
 import requests
 import random
+import asyncio
+import discord
 from src.config import TOKEN, APP_ID, TIERS
 
 def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
@@ -180,3 +182,41 @@ async def get_cached_username(bot, user_id: int) -> str:
 def is_user_banned(bot, user_id: int) -> bool:
     """Check if a user is banned."""
     return hasattr(bot, 'banned_users') and user_id in bot.banned_users
+
+async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool = True, transient_duration: int = 15):
+    """
+    Sends a message intelligently:
+    1. Tries interaction followup (ephemeral supported).
+    2. Falls back to channel send (transient via delete_after if ephemeral is desired).
+    """
+    # 1. Try Interaction
+    if hasattr(ctx_or_interaction, 'interaction') and ctx_or_interaction.interaction:
+        try:
+            if not ctx_or_interaction.interaction.response.is_done():
+                await ctx_or_interaction.interaction.response.send_message(content=message, ephemeral=ephemeral)
+            else:
+                await ctx_or_interaction.interaction.followup.send(content=message, ephemeral=ephemeral)
+            return
+        except:
+            pass
+    elif isinstance(ctx_or_interaction, discord.Interaction):
+         try:
+            if not ctx_or_interaction.response.is_done():
+                await ctx_or_interaction.response.send_message(content=message, ephemeral=ephemeral)
+            else:
+                await ctx_or_interaction.followup.send(content=message, ephemeral=ephemeral)
+            return
+         except:
+            pass
+            
+    # 2. Fallback to Channel
+    try:
+        # If strict ephemeral is requested but we have no interaction, we use delete_after
+        kwargs = {}
+        if ephemeral and transient_duration:
+            kwargs['delete_after'] = transient_duration
+            
+        target = ctx_or_interaction.channel if hasattr(ctx_or_interaction, 'channel') else ctx_or_interaction
+        await target.send(content=message, **kwargs)
+    except Exception as e:
+        print(f"Failed to send smart message: {e}")

@@ -51,8 +51,17 @@ class HelpCommands(commands.Cog):
             value=(
                 "• **github.com/dracos** -> For valid word list\n"
                 "• **github.com/cfreshman** -> For wordle answer list\n"
-		"• **Wordler Infinity by gherkin21** -> Inspiration for certain features\n"
-		"• **You** -> For using the bot :D"
+                "• **Wordler Infinity by gherkin21** -> Inspiration for certain features\n"
+                "• **You** -> For using the bot :D"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="📖 Word Rush Dictionary",
+            value=(
+                "• **British National Corpus (BNC)** -> Base word list (100M word collection)\n"
+                "• Source: `github.com/skywind3000/lemma.en`"
             ),
             inline=False
         )

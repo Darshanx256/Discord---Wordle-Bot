@@ -10,6 +10,7 @@ from src.utils import EMOJIS, get_cached_username, calculate_level
 from src.database import fetch_user_profile_v2, get_daily_wr_gain, log_event_v1
 from src.mechanics.rewards import get_tier_multiplier, apply_anti_grind
 from src.config import TIERS
+from src.mechanics.streaks import StreakManager
 
 class ConstraintGame:
     def __init__(self, bot, channel_id, started_by):
@@ -25,10 +26,24 @@ class ConstraintGame:
         self.user_answers_this_round = {}  # Track answers per user per round
         self.is_running = True
         self.is_round_active = False
-        # Use combined secrets pool (Simple + Classic) for 5-letter puzzle generation
+
+        # --- WORD RUSH DICTIONARY RULES ---
+        # 1. Puzzle Generation (5-letters): Only answers_common + answers_hard.
+        # 2. Puzzle Generation (6+ letters): puzzles_rush.txt only.
+        # 3. Validation (5-letters): answers_common + answers_hard + guesses_rush_wild.
+        #    (guesses_common is EXCLUDED as it contains plurals/inflections).
+        # 4. Validation (6+ letters): All of the above + puzzles_rush.txt.
+        
         secrets_pool = set(bot.secrets) | set(bot.hard_secrets)
-        # Generator uses the CLEAN valid_set (proper words only)
-        self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, bot.valid_set)
+        self.validation_base_5 = secrets_pool | bot.rush_wild_set
+        
+        # This is the master list for Word Rush validation (5 and 6+ letters)
+        # It combines the 5-letter base forms with the 6+ letter puzzle pool.
+        self.combined_dict = self.validation_base_5 | bot.full_dict
+
+        # Initialize generator with the refined pools
+        self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, self.combined_dict)
+        
         self.round_task = None
         self.game_msg = None
         self.participants = {started_by.id}
@@ -37,9 +52,13 @@ class ConstraintGame:
         self.puzzle_types_used = set()  # Track which puzzle types have been used
         self.rounds_since_last_bonus = 0
         self.is_bonus_round = False
-        self.bonus_collected_words = {}  # For bonus rounds tracking multiple words
-        # Validation allows EVERYTHING (clean + wild + 6+ letters)
-        self.combined_dict = bot.all_valid_5 | bot.full_dict
+        
+        # Stats Tracking
+        self.streak_updated_users = set()
+        self.fastest_answers = {}  # {uid: min_time_seconds}
+        self.local_streaks = {}    # {uid: current_session_streak}
+        self.best_local_streaks = {} # {uid: max_session_streak}
+        self.round_start_time = 0
 
     def add_score(self, user_id, wr_gain):
         if user_id not in self.scores:
@@ -47,9 +66,8 @@ class ConstraintGame:
         self.scores[user_id]['wr'] += wr_gain
         self.scores[user_id]['rounds_won'] += 1
 
-class RushStartView(discord.ui.View):
     def __init__(self, game):
-        super().__init__(timeout=60)
+        super().__init__(timeout=300)
         self.game = game
 
     async def update_lobby(self, interaction: discord.Interaction):
@@ -126,6 +144,8 @@ class ConstraintMode(commands.Cog):
                 "Others     →  1 Rush Point\n"
                 "```\n"
                 "**📋 Rules**\n"
+                "• **100 Rounds** of fast-paced action!\n"
+                "• **Base Forms Only** (e.g., 'RUN' ✅, 'RUNNING'/'RANS' ❌)\n"
                 "• No word reuse in same session\n"
                 "• **Rush Points** converted to WR at checkpoints\n"
                 "• Game ends after 5 rounds without guesses\n"
@@ -203,7 +223,8 @@ class ConstraintMode(commands.Cog):
             channel = interaction.channel
             
             try:
-                await asyncio.wait_for(game.start_confirmed.wait(), timeout=60)
+                # 5 minute timeout matching the lobby view
+                await asyncio.wait_for(game.start_confirmed.wait(), timeout=300)
             except asyncio.TimeoutError:
                 if len(game.participants) < 1:
                     await channel.send("⏰ Rush cancelled: no participants joined in time.")
@@ -246,6 +267,11 @@ class ConstraintMode(commands.Cog):
             # Main round loop
             while game.is_running:
                 game.round_number += 1
+                
+                # Victory at 100 rounds
+                if game.round_number > 100:
+                    break
+
                 game.winners_in_round = []
                 game.user_answers_this_round = {}
                 game.bonus_collected_words = {}
@@ -309,14 +335,22 @@ class ConstraintMode(commands.Cog):
                 if game.is_bonus_round:
                     round_embed.set_author(name="SPECIAL BONUS: 3x RUSH POINTS", icon_url="https://cdn.discordapp.com/emojis/1321033281982824479.png")
                 else:
-                    round_embed.set_author(name=f"Word Rush • Round {game.round_number}")
+                    round_embed.set_author(name=f"Word Rush • Round {game.round_number} of 100")
                 
-                footer_text = "Type your answer now!" if not is_multi_word else "Type ALL possible words!"
+                # Rotating footer text
+                base_footer = "Type out your guess" if game.round_number % 2 != 0 else "`/stop_rush` to end"
+                
+                footer_text = f"{base_footer}!" if not is_multi_word else "Type ALL possible words!"
+                
+                if not game.active_puzzle.get('five_letter_only', True):
+                    footer_text += " • 5+ letters allowed"
+
                 round_embed.set_footer(text=footer_text)
                 
                 msg = await channel.send(embed=round_embed)
                 game.game_msg = msg
                 game.is_round_active = True
+                game.round_start_time = time.monotonic() # Start stats timer
                 
                 try:
                     if has_pattern or is_multi_word:
@@ -364,11 +398,45 @@ class ConstraintMode(commands.Cog):
                     
                     await msg.edit(embed=round_embed)
                 
+                # Update Local Streaks for non-winners
+                current_winners = set(game.winners_in_round)
+                for part_id in game.participants:
+                    if part_id not in current_winners:
+                        game.local_streaks[part_id] = 0
+
                 if not game.winners_in_round:
                     game.rounds_without_guess += 1
                 else:
                     game.rounds_without_guess = 0
                 
+                # Check Victory Condition first
+                if game.round_number >= 100:
+                     final_embed = discord.Embed(
+                        title="🏆 Rush Victory!",
+                        description="You conquered all 100 rounds!\n\n\u200b",
+                        color=discord.Color.gold()
+                    )
+                     if game.total_wr_per_user:
+                        sorted_mvp = sorted(game.total_wr_per_user.items(), key=lambda x: x[1], reverse=True)
+                        m_id, m_wr = sorted_mvp[0]
+                        m_name = await get_cached_username(self.bot, m_id)
+                        final_embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/1456199435682975827.png") # Green signal
+                        final_embed.add_field(
+                            name="👑 Rush Champion",
+                            value=f"**{m_name}**\n{m_wr} WR earned",
+                            inline=False
+                        )
+                        # Add Ranks
+                        ranks_txt = ""
+                        for i, (rid, rpts) in enumerate(sorted_mvp[:5]):
+                            rname = await get_cached_username(self.bot, rid)
+                            ranks_txt += f"`#{i+1}` **{rname}** - {rpts} pts\n"
+                        final_embed.add_field(name="Leaderboard", value=ranks_txt, inline=False)
+
+                     await channel.send(embed=final_embed)
+                     game.is_running = False
+                     break
+
                 if game.rounds_without_guess >= 5:
                     final_embed = discord.Embed(
                         title="💀 Game Over",
@@ -403,6 +471,10 @@ class ConstraintMode(commands.Cog):
                     await channel.send(embed=final_embed)
                     game.is_running = False
                     break
+                
+                # Clear used words periodically to save memory (every 50 rounds) - DISABLED as per user request
+                # if game.round_number % 50 == 0:
+                #    game.used_words.clear()
                 
                 await asyncio.sleep(2)
 
@@ -583,6 +655,55 @@ class ConstraintMode(commands.Cog):
                 }
             )
 
+            # --- STREAK CHECK (Once per session per user) ---
+            if uid not in game.streak_updated_users and rp_total > 0:
+                try:
+                    streak_mgr = StreakManager(self.bot)
+                    s_msg, _, s_badge = streak_mgr.check_streak(uid)
+                    game.streak_updated_users.add(uid)
+                    
+                    if s_msg:
+                        from src.utils import send_smart_message
+                        # Send transient message in channel using centralized utility
+                        await send_smart_message(channel, f"<@{uid}> {s_msg}", ephemeral=True, transient_duration=15)
+                    
+                    if s_badge:
+                        from src.utils import get_badge_emoji, send_smart_message
+                        b_emoji = get_badge_emoji(s_badge)
+                        await send_smart_message(channel, f"<@{uid}> 💎 **BADGE UNLOCKED:** {b_emoji}!", ephemeral=True, transient_duration=15)
+                except Exception as e:
+                    print(f"Streak check error: {e}")
+
+        # Basic Stats Summary
+        is_solo = len(game.participants) == 1
+        stats_text = ""
+        
+        if is_solo:
+            # Personal Best / Streak for Solo
+            uid = list(game.participants)[0]
+            f_time = game.fastest_answers.get(uid)
+            if f_time:
+                stats_text += f"⚡ **Personal Best:** {f_time:.2f}s\n"
+            
+            s_cnt = game.best_local_streaks.get(uid, 0)
+            if s_cnt >= 2:
+                stats_text += f"🔥 **Best Streak:** {s_cnt} in a row\n"
+        else:
+            # Rankings / MVP for Multiplayer
+            if game.fastest_answers:
+                 f_uid, f_time = min(game.fastest_answers.items(), key=lambda x: x[1])
+                 f_name = await get_cached_username(self.bot, f_uid)
+                 stats_text += f"⚡ **Fastest Reflex:** {f_name} ({f_time:.2f}s)\n"
+            
+            if game.best_local_streaks:
+                 s_uid, s_cnt = max(game.best_local_streaks.items(), key=lambda x: x[1])
+                 if s_cnt >= 3:
+                     s_name = await get_cached_username(self.bot, s_uid)
+                     stats_text += f"🔥 **On Fire:** {s_name} ({s_cnt} in a row!)\n"
+        
+        if stats_text:
+            checkpoint_embed.add_field(name="📊 Quick Stats", value=stats_text, inline=False)
+
         checkpoint_embed.description = "\n".join(lines) + "\n\nGet ready, game is about to continue!\n\n\u200b"
         checkpoint_embed.color = discord.Color.green()
         checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
@@ -628,8 +749,10 @@ class ConstraintMode(commands.Cog):
         if is_five_letter_only:
             if len(content) != 5:
                 return
-            valid_dict = self.bot.all_valid_5
+            # Use strict 5-letter base dictionary (excludes guesses_common inflections)
+            valid_dict = game.validation_base_5
         else:
+            # Use combined pool (base 5s + 6+ letter puzzles)
             valid_dict = game.combined_dict
         
         if content not in valid_dict:
@@ -677,6 +800,17 @@ class ConstraintMode(commands.Cog):
         rank = len(game.winners_in_round) + 1
         game.winners_in_round.append(message.author.id)
         
+        # --- STATS UPDATE ---
+        elapsed = time.monotonic() - game.round_start_time
+        if elapsed < game.fastest_answers.get(message.author.id, 9999):
+             game.fastest_answers[message.author.id] = elapsed
+        
+        # Streak
+        game.local_streaks[message.author.id] = game.local_streaks.get(message.author.id, 0) + 1
+        current_streak = game.local_streaks[message.author.id]
+        if current_streak > game.best_local_streaks.get(message.author.id, 0):
+            game.best_local_streaks[message.author.id] = current_streak
+
         # --- RUSH POINTS LOGIC ---
         # 1st: 5 pts, 2nd: 4 pts, 3rd: 3 pts, 4th: 2 pts, Others: 1 pt
         rush_points = 1

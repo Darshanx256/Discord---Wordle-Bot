@@ -41,21 +41,10 @@ class GuessHandler(commands.Cog):
         return embed
 
     async def _delayed_ephemeral_streak(self, ctx, user, message, delay=2):
-        """Helper to send delayed, private streak/badge updates."""
+        """Helper to send delayed, private streak/badge updates in server (not DMs)."""
+        from src.utils import send_smart_message
         await asyncio.sleep(delay)
-        if hasattr(ctx, 'interaction') and ctx.interaction:
-            try:
-                # If interaction is already responded to, use followup
-                await ctx.interaction.followup.send(content=message, ephemeral=True)
-                return
-            except:
-                pass
-        
-        # Fallback for prefix commands or failed followup: Private DM
-        try:
-            await user.send(message)
-        except:
-            pass
+        await send_smart_message(ctx, message, ephemeral=True, transient_duration=15)
 
     @commands.hybrid_command(name="guess", aliases=["g"], description="Guess a 5-letter word.")
     async def guess(self, ctx, word: str):
@@ -241,7 +230,7 @@ class GuessHandler(commands.Cog):
                 if winner_user is None:
                     winner_user = ctx.author
 
-                main_embed, breakdown_embed, _, res, level_ups, tier_ups = await handle_game_win(
+                main_embed, breakdown_embed, _, res, level_ups, tier_ups, results = await handle_game_win(
                     self.bot, game, ctx, winner_user, cid
                 )
 

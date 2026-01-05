@@ -13,11 +13,11 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     """
     Handle a game win: award winner + participants, send breakdown embed.
     
-    Returns: (embed, breakdown_embed, winner_user, res_dict, level_ups, tier_ups)
+    Returns: (embed, breakdown_embed, winner_user, res_dict, level_ups, tier_ups, participant_results)
     """
     if cid in bot.stopped_games:
         bot.stopped_games.discard(cid)
-        return None, None, None, None, None, None  # Game was stopped, no reward
+        return None, None, None, None, None, None, []  # Game was stopped, no reward
 
     time_taken = (datetime.datetime.now() - game.start_time).total_seconds()
     flavor = get_win_flavor(game.attempts_used)
@@ -160,7 +160,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     # Only return breakdown if there are participants to show
     breakdown_to_send = breakdown if participant_rows else None
 
-    return embed, breakdown_to_send, winner_user, res, level_ups, tier_ups
+    return embed, breakdown_to_send, winner_user, res, level_ups, tier_ups, results
 
 
 async def handle_game_loss(bot, game, interaction, cid):
