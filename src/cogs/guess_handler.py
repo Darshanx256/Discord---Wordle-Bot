@@ -41,10 +41,10 @@ class GuessHandler(commands.Cog):
         return embed
 
     async def _delayed_ephemeral_streak(self, ctx, user, message, delay=2):
-        """Helper to send delayed, private streak/badge updates in server (not DMs)."""
+        """Helper to send delayed, private streak/badge updates (DMs prioritized)."""
         from src.utils import send_smart_message
         await asyncio.sleep(delay)
-        await send_smart_message(ctx, message, ephemeral=True, transient_duration=15)
+        await send_smart_message(ctx, message, ephemeral=True, transient_duration=15, user=user)
 
     @commands.hybrid_command(name="guess", aliases=["g"], description="Guess a 5-letter word.")
     async def guess(self, ctx, word: str):
@@ -289,7 +289,7 @@ class GuessHandler(commands.Cog):
                 await asyncio.gather(*tasks)
 
             elif game_over:
-                main_embed, participant_rows, level_ups, tier_ups = await handle_game_loss(self.bot, game, ctx, cid)
+                main_embed, participant_rows, level_ups, tier_ups, results = await handle_game_loss(self.bot, game, ctx, cid)
 
                 # Inject keyboard into main embed
                 if main_embed.description:
@@ -308,6 +308,15 @@ class GuessHandler(commands.Cog):
                     if u:
                         t_icon = EMOJIS.get(t_info['icon'], t_info['icon'])
                         announcements.append(f"🎉 **PROMOTION!** {u.mention} reached **{t_icon} {t_info['name']}** Tier!")
+
+                for uid, outcome_key, pres in results:
+                    if pres:
+                        p_user = self.bot.get_user(uid)
+                        if p_user:
+                            if pres.get('streak_msg'):
+                                asyncio.get_event_loop().create_task(self._delayed_ephemeral_streak(ctx, p_user, pres['streak_msg']))
+                            if pres.get('streak_badge'):
+                                asyncio.get_event_loop().create_task(self._delayed_ephemeral_streak(ctx, p_user, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(pres['streak_badge'])} Badge!", delay=3))
 
                 self.bot.games.pop(cid, None)
                 

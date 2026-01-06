@@ -13,7 +13,7 @@ from src.config import TIERS
 from src.mechanics.streaks import StreakManager
 
 class ConstraintGame:
-    def __init__(self, bot, channel_id, started_by):
+    def __init__(self, bot, channel_id, started_by, generator, validation_base_5, combined_dict):
         self.bot = bot
         self.channel_id = channel_id
         self.started_by = started_by
@@ -27,22 +27,9 @@ class ConstraintGame:
         self.is_running = True
         self.is_round_active = False
 
-        # --- WORD RUSH DICTIONARY RULES ---
-        # 1. Puzzle Generation (5-letters): Only answers_common + answers_hard.
-        # 2. Puzzle Generation (6+ letters): puzzles_rush.txt only.
-        # 3. Validation (5-letters): answers_common + answers_hard + guesses_rush_wild.
-        #    (guesses_common is EXCLUDED as it contains plurals/inflections).
-        # 4. Validation (6+ letters): All of the above + puzzles_rush.txt.
-        
-        secrets_pool = set(bot.secrets) | set(bot.hard_secrets)
-        self.validation_base_5 = secrets_pool | bot.rush_wild_set
-        
-        # This is the master list for Word Rush validation (5 and 6+ letters)
-        # It combines the 5-letter base forms with the 6+ letter puzzle pool.
-        self.combined_dict = self.validation_base_5 | bot.full_dict
-
-        # Initialize generator with the refined pools
-        self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, self.combined_dict)
+        self.validation_base_5 = validation_base_5
+        self.combined_dict = combined_dict
+        self.generator = generator
         
         self.round_task = None
         self.game_msg = None
@@ -83,13 +70,16 @@ class RushStartView(discord.ui.View):
         if interaction.user.id in self.game.participants:
             return await interaction.response.send_message("You're already in the rush!", ephemeral=True)
         
+        if len(self.game.participants) >= 10:
+            return await interaction.response.send_message("⚠️ The lobby is full! (Max 10 players)", ephemeral=True)
+
         self.game.participants.add(interaction.user.id)
         await self.update_lobby(interaction)
 
     @discord.ui.button(label="Start Game", style=discord.ButtonStyle.success, emoji="▶️")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.game.started_by.id and not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message("Only the host or an admin can start the game.", ephemeral=True)
+        if interaction.user.id != self.game.started_by.id:
+            return await interaction.response.send_message("Only the host can start the game.", ephemeral=True)
         
         self.game.start_confirmed.set()
         await interaction.response.defer()
@@ -117,6 +107,12 @@ class ConstraintMode(commands.Cog):
             'unknown': "https://cdn.discordapp.com/emojis/1456488648923938846.png",
             'bonus': "https://cdn.discordapp.com/emojis/1456488648923938846.png"  # Can use custom bonus emoji
         }
+        
+        # Initialize Shared Generator once
+        secrets_pool = set(bot.secrets) | set(bot.hard_secrets)
+        self.validation_base_5 = secrets_pool | bot.rush_wild_set
+        self.combined_dict = self.validation_base_5 | bot.full_dict
+        self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, self.combined_dict)
 
     @app_commands.command(name="word_rush", description="Fast-paced word hunt with linguistic constraints")
     @app_commands.guild_only()
@@ -128,7 +124,7 @@ class ConstraintMode(commands.Cog):
         if cid in self.bot.games or cid in self.bot.custom_games:
              return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
 
-        game = ConstraintGame(self.bot, cid, interaction.user)
+        game = ConstraintGame(self.bot, cid, interaction.user, self.generator, self.validation_base_5, self.combined_dict)
         self.bot.constraint_mode[cid] = game
         
         embed = discord.Embed(
@@ -150,7 +146,8 @@ class ConstraintMode(commands.Cog):
                 "• No word reuse in same session\n"
                 "• **Rush Points** converted to WR at checkpoints\n"
                 "• Game ends after 5 rounds without guesses\n"
-                "• 🎁 Random bonus rounds with 3x Rush Points!\n"
+                "• 🎁 Random bonus rounds with 3x Rush Points!\n\n"
+                "*New to Rush? Type `/help word_rush` to learn how to score!*"
             ),
             color=discord.Color.from_rgb(88, 101, 242)
         )
@@ -227,10 +224,9 @@ class ConstraintMode(commands.Cog):
                 # 5 minute timeout matching the lobby view
                 await asyncio.wait_for(game.start_confirmed.wait(), timeout=300)
             except asyncio.TimeoutError:
-                if len(game.participants) < 1:
-                    await channel.send("⏰ Rush cancelled: no participants joined in time.")
-                    self.bot.constraint_mode.pop(game.channel_id, None)
-                    return
+                await channel.send("⏰ Rush cancelled: lobby timed out. (Manual start required)")
+                self.bot.constraint_mode.pop(game.channel_id, None)
+                return
             
             # Countdown sequence with consistent formatting
             countdown_embed = discord.Embed(
@@ -662,13 +658,15 @@ class ConstraintMode(commands.Cog):
                     
                     if s_msg:
                         from src.utils import send_smart_message
-                        # Send transient message in channel using centralized utility
-                        await send_smart_message(channel, f"<@{uid}> {s_msg}", ephemeral=True, transient_duration=15)
+                        # Use bot's cache or fetch member to ensure we have a User/Member object for send_smart_message
+                        p_user = self.bot.get_user(uid)
+                        await send_smart_message(channel, s_msg, ephemeral=True, transient_duration=15, user=p_user)
                     
                     if s_badge:
                         from src.utils import get_badge_emoji, send_smart_message
                         b_emoji = get_badge_emoji(s_badge)
-                        await send_smart_message(channel, f"<@{uid}> 💎 **BADGE UNLOCKED:** {b_emoji}!", ephemeral=True, transient_duration=15)
+                        p_user = self.bot.get_user(uid)
+                        await send_smart_message(channel, f"💎 **BADGE UNLOCKED:** {b_emoji}!", ephemeral=True, transient_duration=15, user=p_user)
                 except Exception as e:
                     print(f"Streak check error: {e}")
 
@@ -722,7 +720,8 @@ class ConstraintMode(commands.Cog):
         game = self.bot.constraint_mode[cid]
         if game.game_msg and reaction.message.id == game.game_msg.id:
             if not game.start_confirmed.is_set():
-                game.participants.add(user.id)
+                if len(game.participants) < 10:
+                    game.participants.add(user.id)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -734,6 +733,10 @@ class ConstraintMode(commands.Cog):
         
         game = self.bot.constraint_mode[cid]
         if not game.is_round_active or not game.active_puzzle:
+            return
+        
+        # Only process messages from participants
+        if message.author.id not in game.participants:
             return
         
         content = message.content.strip().lower()
@@ -780,7 +783,9 @@ class ConstraintMode(commands.Cog):
         # Standard rounds
         if content in game.used_words:
             return
-        if content not in puzzle['solutions']:
+        
+        # Optimize: Use the validator function from the puzzle
+        if not puzzle['validator'](content):
             return
         
         # Check if user already answered this round

@@ -12,8 +12,16 @@ class HelpCommands(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="help", description="How to play and command guide.")
-    async def help_cmd(self, interaction: discord.Interaction):
-        view = HelpView(interaction.user)
+    @app_commands.choices(feature=[
+        app_commands.Choice(name="Wordle (Classic/Simple)", value="wordle"),
+        app_commands.Choice(name="Word Rush (Lightning)", value="word_rush"),
+        app_commands.Choice(name="Race Mode", value="race"),
+        app_commands.Choice(name="Solo Mode", value="solo"),
+        app_commands.Choice(name="Custom Games", value="custom"),
+        app_commands.Choice(name="Progression & Tiers", value="progression")
+    ])
+    async def help_cmd(self, interaction: discord.Interaction, feature: str = None):
+        view = HelpView(interaction.user, initial_feature=feature)
         await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=True)
 
     # ============================================================
@@ -24,7 +32,7 @@ class HelpCommands(commands.Cog):
         embed = discord.Embed(
             title="🎬 Credits & Acknowledgements",
             description=(
-                "We would like to express our gratitude to the contributors and resources "
+                "I would like to express my gratitude to the contributors and resources "
                 "that have made Wordle Bot possible. This project is dedicated to providing "
                 "a high-quality gaming experience to the Discord community."
             ),
@@ -54,8 +62,8 @@ class HelpCommands(commands.Cog):
             name="🙏 Data Sources & Inspiration",
             value=(
                 "• **Word Lists** — Contributors at `github.com/dracos` and `github.com/cfreshman`\n"
-                "• **Inspiration** — Wordler Infinity by gherkin21\n"
-                "• **Community** — Our sincere thanks to all players for your continued support"
+                "• **Inspirations** — Wordler Infinity by gherkin21, Mudae tea game\n"
+                "• **Community** — My sincere thanks to all players for your continued support"
             ),
             inline=False
         )
@@ -73,13 +81,12 @@ class HelpCommands(commands.Cog):
             value=(
                 "• **discord.py** — API Integration\n"
                 "• **Supabase** — Database Management\n"
-                "• **UptimeRobot** — Service Monitoring\n"
                 "• **Assisted Development** — Utilized for code optimization and grammatical refinement"
             ),
             inline=False
         )
         
-        embed.set_footer(text="Feature requests are welcomed via the /message command.")
+        embed.set_footer(text="Wordle Game Bot - v4.0 • Feature requests are welcomed via the /message command.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):
