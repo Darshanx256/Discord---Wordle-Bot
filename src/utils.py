@@ -183,13 +183,22 @@ def is_user_banned(bot, user_id: int) -> bool:
     """Check if a user is banned."""
     return hasattr(bot, 'banned_users') and user_id in bot.banned_users
 
-async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool = True, transient_duration: int = 15):
+async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool = True, transient_duration: int = 30):
     """
     Sends a message intelligently:
     1. Tries interaction followup (ephemeral supported).
-    2. Falls back to channel send (transient via delete_after if ephemeral is desired).
+    2. If ephemeral is requested but no interaction, tries to DM the user.
+    3. Falls back to channel send (transient via delete_after if ephemeral is desired).
     """
     # 1. Try Interaction
+    target_user = None
+    if hasattr(ctx_or_interaction, 'user'):
+        target_user = ctx_or_interaction.user
+    elif hasattr(ctx_or_interaction, 'author'):
+        target_user = ctx_or_interaction.author
+    elif hasattr(ctx_or_interaction, 'interaction') and ctx_or_interaction.interaction:
+        target_user = ctx_or_interaction.interaction.user
+
     if hasattr(ctx_or_interaction, 'interaction') and ctx_or_interaction.interaction:
         try:
             if not ctx_or_interaction.interaction.response.is_done():
@@ -200,6 +209,7 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
         except:
             pass
     elif isinstance(ctx_or_interaction, discord.Interaction):
+         target_user = ctx_or_interaction.user
          try:
             if not ctx_or_interaction.response.is_done():
                 await ctx_or_interaction.response.send_message(content=message, ephemeral=ephemeral)
@@ -209,14 +219,37 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
          except:
             pass
             
-    # 2. Fallback to Channel
+    # 2. Try DM Fallback for Ephemeral
+    if ephemeral and target_user:
+        try:
+            # Format nicely for DM
+            dm_embed = discord.Embed(
+                title="🔥 Streak Update",
+                description=message,
+                color=discord.Color.gold(),
+                timestamp=discord.utils.utcnow()
+            )
+            dm_embed.set_footer(text="Wordle Bot • Personalized Notification")
+            await target_user.send(embed=dm_embed)
+            return
+        except:
+            # If DMs are closed, proceed to channel fallback
+            pass
+
+    # 3. Fallback to Channel
     try:
-        # If strict ephemeral is requested but we have no interaction, we use delete_after
+        # If strict ephemeral is requested but we have no interaction/DM, we use delete_after
         kwargs = {}
         if ephemeral and transient_duration:
             kwargs['delete_after'] = transient_duration
             
         target = ctx_or_interaction.channel if hasattr(ctx_or_interaction, 'channel') else ctx_or_interaction
-        await target.send(content=message, **kwargs)
+        
+        # If we failed DM, we send it in channel but maybe mention them if it's a transient message
+        final_content = message
+        if ephemeral and target_user:
+            final_content = f"{target_user.mention} {message}"
+            
+        await target.send(content=final_content, **kwargs)
     except Exception as e:
         print(f"Failed to send smart message: {e}")

@@ -23,71 +23,63 @@ class HelpCommands(commands.Cog):
     async def credits_cmd(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="🎬 Credits & Acknowledgements",
+            description=(
+                "We would like to express our gratitude to the contributors and resources "
+                "that have made Wordle Bot possible. This project is dedicated to providing "
+                "a high-quality gaming experience to the Discord community."
+            ),
             color=discord.Color.gold()
         )
-        embed.description = "Happy New Year! Here's all the resource I used to make this bot possible."
         
         embed.add_field(
-            name="👨‍💻 Contact Developer",
+            name="👨‍💻 Development & Maintenance",
             value=(
-                "• **Oretsu** ->  Creator & Maintainer\n"
-                "• Contact me via /message or email at - `Ortsx256@proton.me`"
+                "• **Oretsu** — Lead Developer & Maintainer\n"
+                "• Inquiries may be directed via `/message` or to `Ortsx256@proton.me`."
             ),
             inline=False
         )
 
         embed.add_field(
-            name="🎨 Assets & Icons",
+            name="🎨 Visual Assets",
             value=(
-                "• **[Icon Credit]** -> Octopus Icon by Whitevector - Flaticons\n"
-                "• **[Easter Egg Icons Credit]** -> Iconduck, badges made with photoshop\n"
-		"• **[Letter Icons Credit]** -> Made with Python PIL library with Unix based fonts"
+                "• **Icons** — Octopus Icon by Whitevector (Flaticon)\n"
+                "• **Easter Egg Assets** — Iconduck; custom badges created via Adobe Photoshop\n"
+                "• **Typography** — Letter icons generated with Python PIL using standardized Unix fonts"
             ),
             inline=False
         )
         
         embed.add_field(
-            name="🙏 Special Thanks",
+            name="🙏 Data Sources & Inspiration",
             value=(
-                "• **github.com/dracos** -> For valid word list\n"
-                "• **github.com/cfreshman** -> For wordle answer list\n"
-                "• **Wordler Infinity by gherkin21** -> Inspiration for certain features\n"
-                "• **You** -> For using the bot :D"
+                "• **Word Lists** — Contributors at `github.com/dracos` and `github.com/cfreshman`\n"
+                "• **Inspiration** — Wordler Infinity by gherkin21\n"
+                "• **Community** — Our sincere thanks to all players for your continued support"
             ),
             inline=False
         )
 
         embed.add_field(
-            name="📖 Word Rush Dictionary",
+            name="📖 Linguistic Data",
             value=(
-                "• **British National Corpus (BNC)** -> Base word list (100M word collection)\n"
-                "• Source: `github.com/skywind3000/lemma.en`"
+                "• **British National Corpus (BNC)** — Comprehensive lemma collection provided by `github.com/skywind3000/lemma.en`"
             ),
             inline=False
         )
 
         embed.add_field(
-            name="🤖 AI Usage Disclosure",
+            name="🛠️ Infrastructure & Technologies",
             value=(
-                "• **Grammar Check** -> Because I make alot errors :(\n"
-                "• **Code Refactoring** -> To properly sort my messy code\n"
-		"• **Train On Your Data** -> Just Kidding"
-            ),
-            inline=False
-        )
-
-        
-        embed.add_field(
-            name="📚 Libraries/Tools",
-            value=(
-                "• **discord.py** -> Discord API Wrapper\n"
-		"• **Uptime Robo** -> To keep bot alive :'(\n"
-                "• **Supabase** -> Database"
+                "• **discord.py** — API Integration\n"
+                "• **Supabase** — Database Management\n"
+                "• **UptimeRobot** — Service Monitoring\n"
+                "• **Assisted Development** — Utilized for code optimization and grammatical refinement"
             ),
             inline=False
         )
         
-        embed.set_footer(text="Thank You! btw, I take feature requests via /message :)")
+        embed.set_footer(text="Feature requests are welcomed via the /message command.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):

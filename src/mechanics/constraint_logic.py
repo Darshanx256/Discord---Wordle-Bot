@@ -218,14 +218,14 @@ class ConstraintGenerator:
         sub = word[0:2]
         other_word = random.choice(list(self.combined_dict))
         other_letter = random.choice([c for c in other_word if c not in sub])
-        desc = f"Word containing **{sub.upper()}** with **{other_letter.upper()}** anywhere"
+        desc = f"Word containing **{sub.upper()}** with **{other_letter.upper()}** anywhere\n*(5 or MORE letter words)*"
         return desc, lambda w: sub in w and other_letter in w, None, 'all'
 
     def _type_letters_anywhere(self):
         """3 letters anywhere - all words."""
         word = random.choice(list(self.secrets_dict))
         letters = random.sample(list(set(word)), min(3, len(set(word))))
-        desc = f"Word containing **{', '.join(l.upper() for l in letters)}** (anywhere)"
+        desc = f"Word containing **{', '.join(l.upper() for l in letters)}** (anywhere)\n*(5 or MORE letter words)*"
         
         # Optimized validator using set operations
         letters_set = frozenset(letters)
@@ -238,7 +238,7 @@ class ConstraintGenerator:
         pool = [c for c in 'aeiorsnt' if c not in word]
         exclude = random.sample(pool, min(2, len(pool))) if len(pool) >= 2 else ['z', 'q']
         
-        desc = f"Word with **{include[0].upper()}, {include[1].upper()}** but NO **{exclude[0].upper()}, {exclude[1].upper()}**"
+        desc = f"Word with **{include[0].upper()}, {include[1].upper()}** but NO **{exclude[0].upper()}, {exclude[1].upper()}**\n*(5 or MORE letter words)*"
         
         include_set = frozenset(include)
         exclude_set = frozenset(exclude)
@@ -258,7 +258,7 @@ class ConstraintGenerator:
                         break
         
         double = random.choice(list(self._double_letter_cache.keys()))
-        desc = f"Word containing double **{double.upper()[0]}**"
+        desc = f"Word containing double **{double.upper()[0]}**\n*(5 or MORE letter words)*"
         return desc, lambda w: double in w, None, 'all'
 
     def _type_double_plus_letter(self):
@@ -271,7 +271,7 @@ class ConstraintGenerator:
         other_word = random.choice(list(self.combined_dict))
         other_letter = random.choice([c for c in other_word if c not in double])
         
-        desc = f"Word with double **{double[0].upper()}** and **{other_letter.upper()}** anywhere"
+        desc = f"Word with double **{double[0].upper()}** and **{other_letter.upper()}** anywhere\n*(5 or MORE letter words)*"
         return desc, lambda w: double in w and other_letter in w, None, 'all'
 
     def _type_ends_with(self):
@@ -288,7 +288,7 @@ class ConstraintGenerator:
         other_word = random.choice(list(self.combined_dict))
         other_letter = random.choice([c for c in other_word if c != letter])
         
-        desc = f"Word starting and ending with **{letter.upper()}**, with **{other_letter.upper()}**"
+        desc = f"Word starting and ending with **{letter.upper()}**, with **{other_letter.upper()}**\n*(5 or MORE letter words)*"
         return desc, lambda w: w[0] == letter and w[-1] == letter and other_letter in w, None, 'all'
 
     def _type_wordle_block(self):

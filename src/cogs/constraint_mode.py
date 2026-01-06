@@ -343,9 +343,6 @@ class ConstraintMode(commands.Cog):
                 
                 footer_text = f"{base_footer}!" if not is_multi_word else "Type ALL possible words!"
                 
-                if not game.active_puzzle.get('five_letter_only', True):
-                    footer_text += " • 5+ letters allowed"
-
                 round_embed.set_footer(text=footer_text)
                 
                 msg = await channel.send(embed=round_embed)
