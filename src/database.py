@@ -236,6 +236,61 @@ def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = Tru
         print(f"DB ERROR in fetch_user_profile_v2: {e}")
         return None
 
+def update_user_stats_manual(bot: commands.Bot, user_id: int, xp_gain: int, wr_delta: int, mode: str = 'MULTI'):
+    """
+    Manually updates user stats (XP, WR) without incrementing games_played.
+    Used for Word Rush checkpoints to persist progress safely.
+    """
+    try:
+        # 1. Fetch current stats
+        # We can't use fetch_user_profile_v2 because we need the raw row for atomic update or just simple update
+        # Actually standard update is fine.
+        
+        response = bot.supabase_client.table('user_stats_v2').select('*').eq('user_id', user_id).execute()
+        
+        if not response.data:
+            # Create profile if not exists (Shouldn't happen in mid-game usually)
+            data = {
+                'user_id': user_id,
+                'xp': xp_gain,
+                'multi_wr': wr_delta if mode == 'MULTI' else 0,
+                'solo_wr': wr_delta if mode == 'SOLO' else 0,
+                'games_played': 0,
+                'games_won': 0,
+                'win_rate': 0.0,
+                'average_guesses': 0.0,
+                'streak_protection': 0
+            }
+            bot.supabase_client.table('user_stats_v2').insert(data).execute()
+            new_xp = xp_gain
+            new_wr = wr_delta
+        else:
+            row = response.data[0]
+            current_xp = row.get('xp', 0)
+            current_wr = row.get('multi_wr', 0) if mode == 'MULTI' else row.get('solo_wr', 0)
+            
+            new_xp = current_xp + xp_gain
+            new_wr = current_wr + wr_delta
+            
+            update_data = {'xp': new_xp}
+            if mode == 'MULTI':
+                update_data['multi_wr'] = new_wr
+            else:
+                update_data['solo_wr'] = new_wr
+                
+            bot.supabase_client.table('user_stats_v2').update(update_data).eq('user_id', user_id).execute()
+            
+        # Update Cache
+        if user_id in _PROFILE_CACHE:
+            # We can either invalidate or update. Invalidate is safer.
+            del _PROFILE_CACHE[user_id]
+            
+        return {'xp': new_xp, 'wr': new_wr}
+            
+    except Exception as e:
+        print(f"DB ERROR in update_user_stats_manual: {e}")
+        return None
+
 def fetch_user_profiles_batched(bot: commands.Bot, user_ids: list):
     """
     Industry-grade optimization: Fetch multiple profiles in ONE API call.

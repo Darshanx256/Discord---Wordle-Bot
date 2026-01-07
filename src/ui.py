@@ -503,7 +503,7 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "A rapid-fire multiplayer game against the clock and other players!\n\n"
                 "**How It Works:**\n"
-                "• Each round presents a linguistic constraint (e.g., word pattern `EMOJIS.get('block_s_green', 'S')EMOJIS.get('unknown', '-')EMOJIS.get('unknown', '-')EMOJIS.get('unknown', '-')EMOJIS.get('block_t_green', 'T')` or \"contains double L\").\n"
+                f"• Each round presents a linguistic constraint (e.g., word pattern `{EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')}` or \"contains double L\").\n"
                 "• Type valid words matching the constraint as fast as possible.\n"
                 "• Watch the **traffic lights** 🟢🟡🔴 for timing guidance.\n"
                 "• **Base forms only** (e.g., `APPLE` ✅, `APPLES` ❌).\n"

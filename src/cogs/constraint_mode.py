@@ -7,7 +7,7 @@ from discord.ext import commands
 from discord import app_commands
 from src.mechanics.constraint_logic import ConstraintGenerator
 from src.utils import EMOJIS, get_cached_username, calculate_level
-from src.database import fetch_user_profile_v2, get_daily_wr_gain, log_event_v1
+from src.database import fetch_user_profile_v2, get_daily_wr_gain, log_event_v1, update_user_stats_manual
 from src.mechanics.rewards import get_tier_multiplier, apply_anti_grind
 from src.config import TIERS
 from src.mechanics.streaks import StreakManager
@@ -177,6 +177,9 @@ class ConstraintMode(commands.Cog):
         if game.round_task:
             game.round_task.cancel()
         
+        # --- FINAL REWARDS & GAME COUNT ---
+        await self.finalize_game_session(game, interaction.channel)
+        
         if game.total_wr_per_user:
             sorted_mvp = sorted(game.total_wr_per_user.items(), key=lambda x: x[1], reverse=True)
             mvp_id, mvp_wr = sorted_mvp[0]
@@ -215,6 +218,45 @@ class ConstraintMode(commands.Cog):
             formatted_lines.append(formatted)
         
         return '\n'.join(formatted_lines)
+
+    async def finalize_game_session(self, game, channel):
+        """
+        Increments 'games_played' for all participants with >0 WR at the end of the session.
+        This ensures we count the game strictly ONCE per session.
+        """
+        if not game.total_wr_per_user:
+            return
+            
+        try:
+            # Identify users who actually played/scored
+            # User requirement: "atleast some wr (rush points) earned"
+            valid_participants = [uid for uid, wr in game.total_wr_per_user.items() if wr > 0]
+            
+            for uid in valid_participants:
+                try:
+                    # Call RPC with 0 gains just to trigger the game count increment & win/loss update
+                    # We treat it as 'loss' generally unless they won 100 rounds? 
+                    # Actually for Rush, 'winning' is vague unless they survive 100 rounds.
+                    # Let's say if they survive 100 rounds (game.round_number >= 100), it's a WIN.
+                    # Otherwise it's a loss/dnf.
+                    
+                    is_victory = (game.round_number >= 100)
+                    
+                    self.bot.supabase_client.rpc('record_game_result_v4', {
+                        'p_user_id': uid,
+                        'p_guild_id': channel.guild.id if channel.guild else None,
+                        'p_mode': 'MULTI',
+                        'p_xp_gain': 0,     # Already awarded
+                        'p_wr_delta': 0,    # Already awarded
+                        'p_is_win': is_victory,
+                        'p_egg_trigger': None
+                    }).execute()
+                    
+                except Exception as e:
+                    print(f"Error finalizing stats for {uid}: {e}")
+                    
+        except Exception as e:
+            print(f"Error in finalize_game_session: {e}")
 
     async def run_game_loop(self, interaction, game):
         try:
@@ -428,6 +470,7 @@ class ConstraintMode(commands.Cog):
                         final_embed.add_field(name="Leaderboard", value=ranks_txt, inline=False)
 
                      await channel.send(embed=final_embed)
+                     await self.finalize_game_session(game, channel)
                      game.is_running = False
                      break
 
@@ -463,6 +506,7 @@ class ConstraintMode(commands.Cog):
                         )
 
                     await channel.send(embed=final_embed)
+                    await self.finalize_game_session(game, channel)
                     game.is_running = False
                     break
                 
@@ -598,26 +642,19 @@ class ConstraintMode(commands.Cog):
             tier_up_msg = ""
             
             try:
-                # Call RPC and capture response
-                response = self.bot.supabase_client.rpc('record_game_result_v4', {
-                    'p_user_id': uid,
-                    'p_guild_id': channel.guild.id if channel.guild else None,
-                    'p_mode': 'MULTI',
-                    'p_xp_gain': final_xp,
-                    'p_wr_delta': final_wr,
-                    'p_is_win': (i == 0),
-                    'p_egg_trigger': None
-                }).execute()
+                # Use MANUAL UPDATE to avoid incrementing games_played at checkpoints
+                # We only want to save the XP/WR gained so far.
                 
-                if response.data:
-                    res_data = response.data
-                    new_xp = res_data.get('xp', 0)
+                res = update_user_stats_manual(self.bot, uid, final_xp, final_wr, mode='MULTI')
+                
+                if res:
+                    new_xp = res.get('xp', 0)
                     old_xp = new_xp - final_xp
                     if calculate_level(new_xp) > calculate_level(old_xp):
                         level_up_msg = f" 🆙 **Lvl {calculate_level(new_xp)}**"
                         
                     # Check Tier up
-                    new_wr = res_data.get('multi_wr', 0)
+                    new_wr = res.get('wr', 0)
                     old_wr = new_wr - final_wr
                     
                     old_tier = None

@@ -67,8 +67,8 @@ TIERS = [
     {"name": "Challenger",  "icon": "🛡️", "min_wr": 0,    "multiplier": 0.80, "req": "15 Solves"}
 ]
 # ANTI-GRIND SYSTEM
-DAILY_CAP_1 = 500  # -50% Reward if > 500 Daily WR
-DAILY_CAP_2 = 700  # -50% Additional (Total 75% drop) if > 700 Daily WR
+DAILY_CAP_1 = 300  # -50% Reward if > 500 Daily WR
+DAILY_CAP_2 = 500  # -50% Additional (Total 75% drop) if > 700 Daily WR
 
 
 
