@@ -442,19 +442,32 @@ class HelpView(discord.ui.View):
         if feature == "wordle":
             embed = discord.Embed(title="🟩 Wordle: Classic & Simple", color=discord.Color.green())
             
-            # Build color guide with actual emoji rendering
-            green_block = EMOJIS.get('block_a_green', '🟩')
-            yellow_block = EMOJIS.get('block_a_yellow', '🟡')
-            gray_block = EMOJIS.get('block_a_white', '⬜')
+            # Build color guide with dynamic emoji rendering
+            def block(letter, color, default='⬜'):
+                return EMOJIS.get(f'block_{letter.lower()}_{color.lower()}', default)
+
+            green_block  = lambda letter: block(letter, 'green')
+            yellow_block = lambda letter: block(letter, 'yellow')
+            gray_block   = lambda letter: block(letter, 'white')
             
             # Build example game blocks
-            round1 = f"{gray_block}{yellow_block}{gray_block}{green_block}{gray_block}"  # CRATE (R yellow, T green)
-            round2 = f"{yellow_block}{gray_block}{yellow_block}{green_block}{gray_block}"  # SHIRK (S yellow, I yellow, T green)
-            round3 = f"{gray_block}{yellow_block}{gray_block}{green_block}{yellow_block}"  # MISTS (I yellow, T green, S yellow)
-            round4 = f"{green_block}{gray_block}{yellow_block}{green_block}{gray_block}"  # SPITE (S green, I yellow, T green)
-            round5 = f"{green_block}{yellow_block}{gray_block}{green_block}{green_block}"  # SHIFT (S green, H yellow, T green, correct positions)
-            round6 = f"{green_block}{green_block}{green_block}{green_block}{green_block}"  # STING (All correct!)
-            
+            round1 = f"{gray_block('c')}{gray_block('r')}{gray_block('a')}{yellow_block('t')}{gray_block('e')}"  
+            # CRATE → only T is present, wrong position
+
+            round2 = f"{green_block('s')}{gray_block('h')}{green_block('i')}{gray_block('r')}{gray_block('k')}"  
+            # SHIRK → S, I correct positions
+
+            round3 = f"{gray_block('m')}{yellow_block('i')}{yellow_block('s')}{yellow_block('t')}{gray_block('s')}"  
+            # MISTS → I, S, T present but misplaced (second S invalid)
+
+            round4 = f"{green_block('s')}{gray_block('p')}{green_block('i')}{yellow_block('t')}{gray_block('e')}"  
+            # SPITE → S, I correct; T misplaced
+
+            round5 = f"{green_block('s')}{gray_block('h')}{green_block('i')}{gray_block('f')}{yellow_block('t')}"  
+            # SHIFT → S, I correct; T misplaced
+
+            round6 = f"{green_block('s')}{green_block('t')}{green_block('i')}{green_block('n')}{green_block('g')}"  
+            # STING → All correct       
             embed.description = (
                 "The classic game of deduction. Guess the hidden 5-letter word in 6 tries.\n\n"
                 "**How to Play:**\n"
@@ -464,18 +477,20 @@ class HelpView(discord.ui.View):
                 f"• {yellow_block} = Correct letter in wrong position\n"
                 f"• {gray_block} = Letter not in word\n\n"
                 "**Example Game:** (Secret word: **STING**)\n"
+                f"```\n"
                 f"1. CRATE {round1}\n"
-                f"   → R is in word (wrong spot), T is correct!\n\n"
+                f"   → T is in the word (wrong spot).\n\n"
                 f"2. SHIRK {round2}\n"
-                f"   → S is in word, I is in word, T still correct!\n\n"
+                f"   → S and I are correct!\n\n"
                 f"3. MISTS {round3}\n"
-                f"   → Getting closer! S and I need to move.\n\n"
+                f"   → I, S, and T are in the word but misplaced.\n\n"
                 f"4. SPITE {round4}\n"
-                f"   → S in right spot! I still wrong position.\n\n"
+                f"   → S and I locked in! T still misplaced.\n\n"
                 f"5. SHIFT {round5}\n"
-                f"   → S, T positions locked! Missing one letter.\n\n"
+                f"   → S and I correct; T still needs to move.\n\n"
                 f"6. STING {round6}\n"
-                f"   → 🎉 SUCCESS! Solved in 6/6 tries!\n\n"
+                f"   → 🎉 SUCCESS! Solved in 6/6 tries!\n"
+                f"```\n\n"
                 "**Game Modes:**\n"
                 "• `/wordle` - Curated 'common' words (~2.3k). Easier for beginners.\n"
                 "• `/wordle_classic` - Full dictionary (~14k words). The true test.\n"
@@ -501,10 +516,10 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "A rapid-fire multiplayer game against the clock and other players!\n\n"
                 "**How It Works:**\n"
-                f"• Each round presents a linguistic constraint (e.g., word pattern {EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')} or \"contains double L\").\n"
+                f"• Each round presents a linguistic constraint (e.g., word pattern `{EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')}` or \"contains double L\").\n"
                 "• Type valid words matching the constraint as fast as possible.\n"
                 "• Watch the **traffic lights** 🟢🟡🔴 for timing guidance.\n"
-                "• **Base forms only** (e.g., `APPLE` ✅, `APPLES` ❌).\n"
+                "• **Base forms only** (e.g., `APPLE` ✓, `APPLES` ✗).\n"
                 "• No word reuse within the same session.\n\n"
                 "**Scoring System:**\n"
                 "• **1st place:** 5 Rush Points\n"
@@ -513,10 +528,10 @@ class HelpView(discord.ui.View):
                 "• **4th place:** 2 Rush Points\n"
                 "• **Others:** 1 Rush Point\n\n"
                 "**Special Features:**\n"
-                "• 🎁 **Bonus Rounds:** Random rounds with **3x Rush Points** (e.g., longest word, most words)!\n"
-                "• 🏁 **Checkpoints:** Every 12 rounds, Rush Points convert to permanent **WR** with streak multipliers applied.\n"
-                "• 🔥 **Streaks:** Consecutive correct answers tracked for session stats.\n"
-                "• 📊 **Stats:** Fastest reflexes and best streaks displayed at checkpoints.\n\n"
+                "• **Bonus Rounds:** Random rounds with **3x Rush Points** (e.g., longest word, most words)!\n"
+                "• **Checkpoints:** Every 12 rounds, Rush Points convert to permanent **WR** with streak multipliers applied.\n"
+                "• **Streaks:** Consecutive correct answers tracked for session stats.\n"
+                "• **Stats:** Fastest reflexes and best streaks displayed at checkpoints.\n\n"
                 "**Finally:**\n"
                 "• Complete all **100 rounds** to become Rush Champion!\n"
                 "• Game ends if 5 consecutive rounds pass without correct guesses.\n\n"
@@ -586,13 +601,13 @@ class HelpView(discord.ui.View):
                 "• Only **you** can see your game board and progress.\n"
                 "• Use **\"End Game\"** button to forfeit early.\n\n"
                 "**Key Features:**\n"
-                "• 🔒 **Completely Private:** Game board, guesses, and keyboard only visible to you\n"
-                "• 💾 **Persistent:** Leave and return anytime with `/show_solo`\n"
-                "• 📊 **Full Progression:** Earn XP, WR, and maintain daily streaks\n"
-                "• ⏱️ **Speed Tracking:** Faster solves earn speed bonuses\n"
-                "• 🔥 **Streak Notifications:** Get ephemeral alerts for streak milestones\n"
-                "• 💎 **Badge Unlocks:** Unlock badges just like server games\n"
-                "• ⌨️ **Live Keyboard:** See which letters you've used with color coding:\n"
+                "• **Completely Private:** Game board, guesses, and keyboard only visible to you\n"
+                "• **Persistent:** Leave and return anytime with `/show_solo`\n"
+                "• **Full Progression:** Earn XP, WR, and maintain daily streaks\n"
+                "• **Speed Tracking:** Faster solves earn speed bonuses\n"
+                "• **Streak Notifications:** Get ephemeral alerts for streak milestones\n"
+                "• **Badge Unlocks:** Unlock badges just like server games\n"
+                "• **Live Keyboard:** See which letters you've used with color coding:\n"
                 f"  {green_block} Correct position | {yellow_block} Wrong position | {gray_block} Not in word\n\n"
                 "**Game Interface:**\n"
                 "• **Progress Bar:** `[●●●○○○]` shows attempts used vs remaining\n"

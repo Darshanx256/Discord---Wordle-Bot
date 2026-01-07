@@ -652,18 +652,18 @@ async def shop(interaction: discord.Interaction):
 
     # Buttons
     # 1. Duck Lord
-    b_duck = discord.ui.Button(label="Duck Lord (3 🦆)", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('duck_lord_badge', '🦆'))
+    b_duck = discord.ui.Button(label=f"Duck Lord (3 {EMOJIS.get('duck', '🦆')})", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('duck_lord_badge', '🦆'))
     b_duck.callback = lambda i: equip_callback(i, 'duck_lord_badge', 'duck', 3)
     view.add_item(b_duck)
 
     # 2. Dragon Slayer
-    b_dragon = discord.ui.Button(label="Dragon Slayer (2 🐲)", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('dragon_slayer_badge', '🗡️'))
+    b_dragon = discord.ui.Button(label=f"Dragon Slayer (2 {EMOJIS.get('dragon', '🐲')})", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('dragon_slayer_badge', '🗡️'))
     b_dragon.callback = lambda i: equip_callback(i, 'dragon_slayer_badge', 'dragon', 2)
     view.add_item(b_dragon)
     
-    # 3. Candy Wrapper
-    b_candy = discord.ui.Button(label="Candy Wrapper (5 🍬)", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('candy_wrapper_badge', '🍬'))
-    b_candy.callback = lambda i: equip_callback(i, 'candy_wrapper_badge', 'candy', 5)
+    # 3. Sugar Rush
+    b_candy = discord.ui.Button(label=f"Sugar Rush (5 {EMOJIS.get('candy', '🍬')})", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('candy_rush_badge', '🍬'))
+    b_candy.callback = lambda i: equip_callback(i, 'candy_rush_badge', 'candy', 5)
     view.add_item(b_candy)
     
     # Streak Buttons (Visible only if owned!)
@@ -683,8 +683,8 @@ async def shop(interaction: discord.Interaction):
         view.add_item(b_28)
 
     if has_dragon_badge:
-        b_dr = discord.ui.Button(label="Equip Dragon Badge", style=discord.ButtonStyle.danger, emoji=get_badge_emoji('dragon_badge'))
-        b_dr.callback = lambda i: equip_callback(i, 'dragon_badge', 'dragon_badge', 0)
+        b_dr = discord.ui.Button(label="Equip Dragon Badge", style=discord.ButtonStyle.danger, emoji=get_badge_emoji('dragon')) # Fix: 'dragon' is the ID in logic
+        b_dr.callback = lambda i: equip_callback(i, 'dragon', 'dragon', 0)
         view.add_item(b_dr)
 
     await interaction.followup.send(embed=embed, view=view, ephemeral=True)
