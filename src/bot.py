@@ -296,6 +296,40 @@ class WordleBot(commands.Bot):
                         solo_remove.append(uid)
                 for uid in solo_remove:
                     self.solo_games.pop(uid, None)
+
+                # Clean up Race Sessions
+                race_remove = []
+                for cid, session in self.race_sessions.items():
+                    # Check inactivity based on start_time or last interaction
+                    delta = now_dt - session.start_time
+                    if delta.total_seconds() > 3600: # 1 hour max for a race lobby/game (Race is 10 mins usually)
+                        race_remove.append(cid)
+                for cid in race_remove:
+                    self.race_sessions.pop(cid, None)
+
+                # Clean up Word Rush (Constraint Mode)
+                rush_remove = []
+                for cid, game in self.constraint_mode.items():
+                    # Use round_start_time if active, else lobby start time?
+                    # We can track 'last_interaction' on game object conceptually or just use start time safety net
+                    # Rush can be long (100 rounds), give it generous 2 hours timeout if idle
+                    delta = time.monotonic() - (game.round_start_time if game.round_start_time else 0)
+                    
+                    # If game hasn't started (round 0) and it's been > 30 mins (lobby stuck?)
+                    is_stuck_lobby = (game.round_number == 0 and delta > 1800)
+                    
+                    # If game is running but no activity for > 30 mins
+                    is_stuck_game = (game.round_number > 0 and delta > 1800)
+
+                    # Simple Fallback: Just clear if very old? 
+                    # We accept that run_game_loop SHOULD handle it. This is just garbage collection.
+                    # Let's say 2 hours absolute max?
+                    
+                    if is_stuck_lobby or is_stuck_game:
+                         rush_remove.append(cid)
+                
+                for cid in rush_remove:
+                    self.constraint_mode.pop(cid, None)
                 
                 next_run = time.monotonic() + INTERVAL
             

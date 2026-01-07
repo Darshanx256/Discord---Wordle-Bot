@@ -94,18 +94,31 @@ class RushStartView(discord.ui.View):
         self.game.bot.constraint_mode.pop(self.game.channel_id, None)
         await interaction.response.edit_message(content="🛑 World Rush canceled.", embed=None, view=None)
         self.stop()
+    
+    async def on_timeout(self):
+        """Cleanup if lobby times out."""
+        if not self.game.start_confirmed.is_set():
+            # If game hasn't started, remove from bot dict
+            if self.game.channel_id in self.game.bot.constraint_mode:
+                self.game.bot.constraint_mode.pop(self.game.channel_id, None)
+            
+            # Try to update message
+            try:
+                if self.game.game_msg:
+                    await self.game.game_msg.edit(content="⏰ Rush lobby timed out.", view=None)
+            except:
+                pass
 
 class ConstraintMode(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.signal_urls = {
-            'green': "https://cdn.discordapp.com/emojis/1456199435682975827.png",
-            'yellow': "https://cdn.discordapp.com/emojis/1456199439277494418.png",
-            'red': "https://cdn.discordapp.com/emojis/1456199431803244624.png",
-            'unlit': "https://cdn.discordapp.com/emojis/1456199350693789696.png",
-            'checkpoint': "https://cdn.discordapp.com/emojis/1456313204597588101.png",
-            'unknown': "https://cdn.discordapp.com/emojis/1456488648923938846.png",
-            'bonus': "https://cdn.discordapp.com/emojis/1456488648923938846.png"  # Can use custom bonus emoji
+            'green': "https://cdn.discordapp.com/emojis/1458452365169528996.png",
+            'yellow': "https://cdn.discordapp.com/emojis/1458452285804773490.png",
+            'red': "https://cdn.discordapp.com/emojis/1458452196483010691.png",
+            'unlit': "https://cdn.discordapp.com/emojis/1458452089494704265.png",
+            'checkpoint': "https://cdn.discordapp.com/emojis/1458452466998706196.png",
+            'bonus': "https://cdn.discordapp.com/emojis/1458455107631841402.png" 
         }
         
         # Initialize Shared Generator once
@@ -142,11 +155,11 @@ class ConstraintMode(commands.Cog):
                 "```\n"
                 "**📋 Rules**\n"
                 "• **100 Rounds** of fast-paced action!\n"
-                "• **Base Forms Only** (e.g., 'RUN' ✅, 'RUNNING'/'RANS' ❌)\n"
+                "• **Base Forms Only** (e.g., 'APPLE' ✓, 'APPLES' ✗)\n"
                 "• No word reuse in same session\n"
                 "• **Rush Points** converted to WR at checkpoints\n"
                 "• Game ends after 5 rounds without guesses\n"
-                "• 🎁 Random bonus rounds with 3x Rush Points!\n\n"
+                "• Random bonus rounds with 3x Rush Points!\n\n"
                 "*New to Rush? Type `/help word_rush` to learn how to score!*"
             ),
             color=discord.Color.from_rgb(88, 101, 242)
