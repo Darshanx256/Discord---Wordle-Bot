@@ -239,7 +239,7 @@ async def handle_game_loss(bot, game, interaction, cid):
             tier_ups.append((uid, pres['tier_up']))
         participant_rows.append((uid, outcome_key, display_xp, display_wr))
 
-    return embed, participant_rows, level_ups, tier_ups
+    return embed, participant_rows, level_ups, tier_ups, results
 
 async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard_mode: bool = False):
     """
@@ -293,11 +293,11 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
         if hard_mode:
             title = "🛡️ Wordle Started! (HARD MODE)"
             color = discord.Color.red()
-            desc = "**OFFICIAL HARD RULES:**\n1. Greens must be fixed.\n2. Yellows must be reused.\n6 attempts."
+            desc = "**OFFICIAL HARD RULES:**\n1. Greens must be fixed.\n2. Yellows must be reused.\n6 attempts.\n\n*Tip: Use `/help wordle` for detailed rules!*"
         else:
             title = "⚔️ Wordle Started! (Classic)"
             color = discord.Color.dark_gold()
-            desc = "**Hard Mode!** 6 attempts."
+            desc = "**Hard Mode!** 6 attempts.\n\n*Tip: Use `/help wordle` for detailed rules!*"
     else:
         if not bot.secrets:
             msg = "❌ Simple word list missing."
@@ -307,7 +307,7 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
         secret = get_next_word_bitset(bot, guild.id, 'simple')
         title = "✨ Wordle Started! (Simple)"
         color = discord.Color.blue()
-        desc = "A simple **5-letter word** has been chosen. **6 attempts** total."
+        desc = "A simple **5-letter word** has been chosen. **6 attempts** total.\n\n*Tip: Use `/help wordle` for detailed rules!*"
 
     # 4. Announcement - Add participation line
     embed = discord.Embed(title=title, color=color, description=desc)

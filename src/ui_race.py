@@ -206,7 +206,8 @@ class RaceLobbyView(ui.View):
             value="• Click **Join Race** to participate\n"
                   "• At least **2 players** needed\n"
                   "• Starter clicks **Start** when ready\n"
-                  "• Everyone races to solve the same word!",
+                  "• Everyone races to solve the same word!\n"
+                  "*Tip: Use `/help race` to understand delayed rewards!*",
             inline=False
         )
         
@@ -321,6 +322,19 @@ async def send_race_summary(bot, channel_id, race_session):
         embed.add_field(name="Leaderboard", value=leaderboard_text or "No one completed the race.", inline=False)
         
         await channel.send(embed=embed)
+
+        # 4. Personal Notifications (Streaks/Badges)
+        from src.utils import send_smart_message, get_badge_emoji
+        import asyncio
+        for res in results:
+            rew = res.get('rewards', {})
+            streak_info = rew.get('streak_info', {})
+            if streak_info:
+                p_user = res['user']
+                if streak_info.get('streak_msg'):
+                    asyncio.create_task(send_smart_message(channel, streak_info['streak_msg'], ephemeral=True, user=p_user))
+                if streak_info.get('streak_badge'):
+                    asyncio.create_task(send_smart_message(channel, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(streak_info['streak_badge'])} Badge!", ephemeral=True, transient_duration=15, user=p_user))
         # print("✅ Summary sent successfully.")
         
     except Exception as e:

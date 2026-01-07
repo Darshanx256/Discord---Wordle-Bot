@@ -254,48 +254,41 @@ a:hover {
     box-shadow: var(--shadow-glow), var(--shadow-lg);
 }
 
-.btn-github {
-    background: #24292e;
-    color: #ffffff;
-}
-
-.btn-github:hover {
-    background: #2b3137;
-    transform: translateY(-2px);
-    box-shadow: 0 0 20px rgba(36, 41, 46, 0.4), var(--shadow-lg);
-}
-
-.btn-topgg {
-    background: #ff3366;
-    color: #ffffff;
-}
-
-.btn-topgg:hover {
-    background: #ff4d79;
-    transform: translateY(-2px);
-    box-shadow: 0 0 20px rgba(255, 51, 102, 0.4), var(--shadow-lg);
-}
-
-.btn-primary:active,
-.btn-github:active,
-.btn-topgg:active {
+.btn-primary:active {
     transform: translateY(0);
 }
 
-.hero-btns {
-    display: flex;
-    justify-content: center;
-    gap: var(--space-md);
-    flex-wrap: wrap;
-    animation: fadeInUp 0.8s ease 0.4s backwards;
+.btn-github {
+    background: linear-gradient(135deg, #24292e 0%, #1a1d21 100%);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-md);
 }
 
-.btn i,
-.btn svg {
+.btn-github:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 20px rgba(36, 41, 46, 0.6), var(--shadow-lg);
+}
+
+.btn-topgg {
+    background: linear-gradient(135deg, #FF3860 0%, #e02f51 100%);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-topgg:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 20px rgba(255, 56, 96, 0.6), var(--shadow-lg);
+}
+
+.hero-buttons {
+    display: flex;
+    gap: var(--space-md);
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn i {
     font-size: 1.5rem;
-    width: 1.5rem;
-    height: 1.5rem;
-    flex-shrink: 0;
 }
 
 /* ==================== FEATURE GRID ==================== */

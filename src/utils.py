@@ -183,7 +183,7 @@ def is_user_banned(bot, user_id: int) -> bool:
     """Check if a user is banned."""
     return hasattr(bot, 'banned_users') and user_id in bot.banned_users
 
-async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool = True, transient_duration: int = 30):
+async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool = True, transient_duration: int = 30, user: discord.abc.User = None):
     """
     Sends a message intelligently:
     1. Tries interaction followup (ephemeral supported).
@@ -191,13 +191,16 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
     3. Falls back to channel send (transient via delete_after if ephemeral is desired).
     """
     # 1. Try Interaction
-    target_user = None
-    if hasattr(ctx_or_interaction, 'user'):
-        target_user = ctx_or_interaction.user
-    elif hasattr(ctx_or_interaction, 'author'):
-        target_user = ctx_or_interaction.author
-    elif hasattr(ctx_or_interaction, 'interaction') and ctx_or_interaction.interaction:
-        target_user = ctx_or_interaction.interaction.user
+    target_user = user
+    if not target_user:
+        if hasattr(ctx_or_interaction, 'user'):
+            target_user = ctx_or_interaction.user
+        elif hasattr(ctx_or_interaction, 'author'):
+            target_user = ctx_or_interaction.author
+        elif hasattr(ctx_or_interaction, 'interaction') and ctx_or_interaction.interaction:
+            target_user = ctx_or_interaction.interaction.user
+        elif isinstance(ctx_or_interaction, (discord.User, discord.Member)):
+            target_user = ctx_or_interaction
 
     if hasattr(ctx_or_interaction, 'interaction') and ctx_or_interaction.interaction:
         try:
@@ -209,7 +212,7 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
         except:
             pass
     elif isinstance(ctx_or_interaction, discord.Interaction):
-         target_user = ctx_or_interaction.user
+         target_user = target_user or ctx_or_interaction.user
          try:
             if not ctx_or_interaction.response.is_done():
                 await ctx_or_interaction.response.send_message(content=message, ephemeral=ephemeral)
@@ -248,7 +251,9 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
         # If we failed DM, we send it in channel but maybe mention them if it's a transient message
         final_content = message
         if ephemeral and target_user:
-            final_content = f"{target_user.mention} {message}"
+            # If message already starts with mention, don't double it
+            if not message.startswith('<@'):
+                final_content = f"{target_user.mention} {message}"
             
         await target.send(content=final_content, **kwargs)
     except Exception as e:

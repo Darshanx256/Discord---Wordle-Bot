@@ -3,7 +3,7 @@ import random
 import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
-from src.utils import EMOJIS, get_win_flavor, get_badge_emoji # Added utils
+from src.utils import EMOJIS, get_win_flavor, get_badge_emoji, send_smart_message
 
 def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, blind_mode=False) -> str:
     #egg start
@@ -129,17 +129,30 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 self.bot.solo_games.pop(interaction.user.id, None)
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
+                # Streak notifications (Delayed & Ephemeral)
+                if res:
+                    import asyncio
+                    if res.get('streak_msg'):
+                        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
+                    if res.get('streak_badge'):
+                        asyncio.create_task(send_smart_message(interaction, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(res['streak_badge'])} Badge!", ephemeral=True))
+
             elif game_over:
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)
                 embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
                 embed.description = f"The word was **{self.game.secret.upper()}**.\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 
-                from src.database import record_game_v2
-                record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999)
-                
                 self.view_ref.disable_all()
                 self.bot.solo_games.pop(interaction.user.id, None)
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
+
+                # Streak notifications for Loss (Delayed & Ephemeral)
+                try:
+                    res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999)
+                    if res and res.get('streak_msg'):
+                        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
+                except:
+                    pass
 
             else:
                 # Ongoing game - board + keyboard in embed description
@@ -276,14 +289,20 @@ class LeaderboardView(discord.ui.View):
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
 class HelpView(discord.ui.View):
-    def __init__(self, interaction_user):
+    def __init__(self, interaction_user, initial_feature=None):
         super().__init__(timeout=120)
         self.user = interaction_user
-        self.page = 1 # 1=Basic, 2=Advanced
+        self.page = 0 if initial_feature else 1 # 0=Feature, 1=Basic, 2=Advanced
+        self.feature = initial_feature
         self.update_buttons()
 
     def update_buttons(self):
-        if self.page == 1:
+        if self.page == 0:
+            self.btn_basic.disabled = False
+            self.btn_basic.style = discord.ButtonStyle.primary
+            self.btn_advanced.disabled = False
+            self.btn_advanced.style = discord.ButtonStyle.primary
+        elif self.page == 1:
             self.btn_basic.disabled = True
             self.btn_basic.style = discord.ButtonStyle.secondary
             self.btn_advanced.disabled = False
@@ -295,6 +314,8 @@ class HelpView(discord.ui.View):
             self.btn_advanced.style = discord.ButtonStyle.secondary
             
     def create_embed(self):
+        if self.page == 0:
+            return self.get_feature_help_embed(self.feature)
         if self.page == 1:
             # BASIC PAGE
             s7 = EMOJIS.get('7_streak', '🔥')
@@ -419,3 +440,86 @@ class HelpView(discord.ui.View):
         self.page = 2
         self.update_buttons()
         await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    def get_feature_help_embed(self, feature: str):
+        """Generates deep-dive help for specific features."""
+        if feature == "wordle":
+            embed = discord.Embed(title="🟩 Wordle: Classic & Simple", color=discord.Color.green())
+            embed.description = (
+                "The classic game of deduction. Guess the hidden 5-letter word in 6 tries.\n\n"
+                "**Modes:**\n"
+                "• `/wordle` - Curated 'common' words. Easier for beginners.\n"
+                "• `/wordle_classic` - Full dictionary (~14k words). The true test.\n"
+                "• `/hard_mode` - Forces you to use revealed hints in next guesses.\n\n"
+                "**Rewards:**\n"
+                "• **XP** is awarded for every game based on performance.\n"
+                "• **WR** (Bot Rating) increases with wins and decreases with losses.\n"
+                "• Faster solves = Speed Bonus! ⚡"
+            )
+        
+        elif feature == "word_rush":
+            embed = discord.Embed(title="⚡ Word Rush (Lightning Mode)", color=discord.Color.brand_red())
+            embed.description = (
+                "A rapid-fire multiplayer race against the clock and other players!\n\n"
+                "**Rules:**\n"
+                "• Solve the linguistic constraint (e.g., `S---T`) as fast as possible.\n"
+                "• **Ranking:** 1st place gets 5 pts, 2nd gets 4 pts... down to 1 pt.\n"
+                "• **Bonus Rounds:** All points are **TRIPLED**! 🙀\n\n"
+                "**Checkpoints:**\n"
+                "• Every few rounds, the game pauses to convert your points into permanent **WR** score.\n"
+                "• Streaks are tracked *within* the session for extra bragging rights."
+            )
+        
+        elif feature == "race":
+            embed = discord.Embed(title="🏁 Race Match", color=discord.Color.gold())
+            embed.description = (
+                "Compete directly against others on the same exact word.\n\n"
+                "**How it works:**\n"
+                "• Everyone starts together and has 6 tries.\n"
+                "• The first person to solve it wins the Gold 🥇.\n"
+                "• **Delayed Rewards:** XP and WR are calculated once the race *ends* (when everyone finishes or time runs out).\n"
+                "• **Multipliers:** 1st place gets a 10% bonus, while lower ranks receive reduced payouts."
+            )
+        
+        elif feature == "solo":
+            embed = discord.Embed(title="👤 Solo Mode (Private)", color=discord.Color.blurple())
+            embed.description = (
+                "Want to practice in peace? Solo Mode is perfect for you.\n\n"
+                "**Features:**\n"
+                "• **Invisible:** Your game board and typing are only visible to YOU.\n"
+                "• **Persistence:** You can leave the chat and come back later with `/show_solo`.\n"
+                "• **Full Progression:** You still earn XP, WR, and daily streaks just like in server matches."
+            )
+        
+        elif feature == "custom":
+            embed = discord.Embed(title="🧂 Custom Games", color=discord.Color.teal())
+            embed.description = (
+                "Challenge your friends with your own secret words!\n\n"
+                "**Advanced Setup (`Extra options`):**\n"
+                "• `dict:apple,grape` - Adds your own words to the game.\n"
+                "• `strict_dict:yes` - ONLY allows guesses from your list.\n"
+                "• `time:0.5` - Sets a countdown (e.g., 30 seconds).\n"
+                "• `player:@user` - Restrict the game to specific people.\n"
+                "• `blind:yes` - Hide the board feedback! 🙈\n"
+                "• `start:crane` - Start the game with pre-filled guesses."
+            )
+        
+        elif feature == "progression":
+            embed = discord.Embed(title="📈 Progression & Tiers", color=discord.Color.purple())
+            embed.description = (
+                "Climb from a Bronze beginner to a Mythical legend.\n\n"
+                "**The Math:**\n"
+                "• **XP** -> Levels you up. Higher levels unlock badge slots.\n"
+                "• **WR** -> Determines your Tier. Losing a game reduces WR.\n\n"
+                "**Daily Streaks:**\n"
+                "• Play every day to build a streak.\n"
+                "• **3 Day Streak:** 2x WR Rewards ⚡\n"
+                "• **10 Day Streak:** 2.5x WR Rewards 🔥\n"
+                "• **35 Day Streak:** 3x WR Rewards 👑\n"
+                "*Streaks can be maintained even on a loss!*"
+            )
+        else:
+            embed = discord.Embed(title="❓ Unknown Feature", description="Feature not found.", color=discord.Color.red())
+
+        embed.set_footer(text="Use 'Basic' or 'Show More' to navigate back.")
+        return embed

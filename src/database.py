@@ -341,9 +341,25 @@ def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str = 'sim
         return random.choice(pool) if pool else "PANIC"
 
 def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, guesses: int, time_taken: float, xp: int, wr: int, rank: int):
-    """Record race mode result in database."""
+    """Record race mode result in database with streak integration."""
     try:
-        # Record in match history (optional - for tracking purposes)
+        # --- STREAK INTEGRATION ---
+        from src.mechanics.streaks import StreakManager
+        streak_mgr = StreakManager(bot)
+        streak_msg, raw_mult, badge_awarded = streak_mgr.check_streak(user_id)
+        
+        # Apply Multiplier if WIN and within limit (Races are MULTI)
+        if won and raw_mult > 1.0:
+            daily_wins = get_daily_wins(bot, user_id)
+            limit = 0
+            if raw_mult >= 3.0: limit = 4
+            elif raw_mult >= 2.5: limit = 4
+            elif raw_mult >= 2.0: limit = 3
+            
+            if daily_wins < limit:
+                wr = int(wr * raw_mult)
+
+        # Record in match history
         bot.supabase_client.table('match_history').insert({
             'user_id': user_id,
             'mode': 'RACE',
@@ -360,18 +376,18 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
         # Update user stats
         bot.supabase_client.rpc('record_game_result_v4', {
             'p_user_id': user_id,
-            'p_guild_id': None,  # Race is cross-server
-            'p_mode': 'MULTI',  # Treat as multiplayer for WR purposes
+            'p_guild_id': None,
+            'p_mode': 'MULTI',
             'p_xp_gain': xp,
             'p_wr_delta': wr,
             'p_is_win': won,
             'p_egg_trigger': None
         }).execute()
         
-        return True
+        return {'streak_msg': streak_msg, 'streak_badge': badge_awarded}
     except Exception as e:
         print(f"DB ERROR in record_race_result: {e}")
-        return False
+        return {}
 
 def log_event_v1(bot: commands.Bot, event_type: str, user_id: int = None, guild_id: int = None, metadata: dict = None):
     """

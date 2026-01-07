@@ -567,7 +567,8 @@ class GameCommands(commands.Cog):
             name="How it works?",
             value="• Click **Set Up** button below and enter a 5-letter word\n"
                   "• A wordle match would start, others can use `/guess` or `-g` to make a guess\n"
-                  "• This mode gives **no XP** or **WR** score",
+                  "• This mode gives **no XP** or **WR** score\n\n"
+                  "*Tip: Use `/help custom` to see all extra options!*",
             inline=False
         )
         embed.set_footer(text="You'll be prompted to enter a word and choose if the answer reveals on loss")
