@@ -571,7 +571,7 @@ class HelpView(discord.ui.View):
                 "*Start a race with `/race_mode` and invite friends for maximum competition!*"
             )
         
-	    elif feature == "solo":
+        elif feature == "solo":
             embed = discord.Embed(title="👤 Solo Mode: (Private)", color=discord.Color.blurple())
             
             # Build color guide with actual emoji rendering
@@ -697,7 +697,7 @@ class HelpView(discord.ui.View):
                 "*Custom Mode lets you craft unique Wordle experiences for any occasion!*"
             )
         
-	    elif feature == "progression":
+        elif feature == "progression":
             embed = discord.Embed(title="📈 Progression & Tiers", color=discord.Color.purple())
             
             # Build streak badge emojis properly

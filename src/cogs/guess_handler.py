@@ -46,7 +46,7 @@ class GuessHandler(commands.Cog):
         await asyncio.sleep(delay)
         await send_smart_message(ctx, message, ephemeral=True, transient_duration=15, user=user)
 
-    @commands.hybrid_command(name="guess", aliases=["g"], description="Guess a 5-letter word.")
+    @commands.hybrid_command(name="guess", aliases=["g", "G"], description="Guess a 5-letter word.")
     async def guess(self, ctx, word: str):
         await ctx.defer()
         if not ctx.guild:
