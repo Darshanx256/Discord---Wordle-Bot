@@ -56,9 +56,11 @@ Discord---Wordle-Bot/
 - `/help` - Visual guide.
 - `/wordle` - Start public simple game.
 - `/wordle_classic` - Start public hard game.
-- `/solo` - **NEW!** Play privately.
+- `/solo` - Play privately.
 - `/race` - **NEW!** Start competitive race lobby.
 - `/showrace` - **NEW!** Recover your race game.
+- `/word_rush` - **NEW!** Fast paced, constraint based word game.
+- `/hard_mode` - **NEW!** Wordle with Official Hard-Mode rules
 - `/custom` - Start custom game with extensive options.
 - `/guess [word]` - Submit a guess.
 - `/leaderboard` - Server Rankings.
