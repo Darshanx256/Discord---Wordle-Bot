@@ -59,14 +59,11 @@ class GuessHandler(commands.Cog):
             custom_game = self.bot.custom_games.get(cid)
             g_word = word.strip().lower()
 
-            print(f"DEBUG: Guess '{g_word}' | Channel {cid} | Active: {len(self.bot.games)} | Custom: {len(self.bot.custom_games)}")
-
             # Check which game type is active
             is_custom = False
             if custom_game:
                 game = custom_game
                 is_custom = True
-                print(f"DEBUG: Custom Game | Max Attempts: {game.max_attempts}")
             elif not game:
                 return await ctx.send("⚠️ No active game.", ephemeral=True)
             
@@ -105,7 +102,6 @@ class GuessHandler(commands.Cog):
                     return await ctx.send(f"🚫 {err_msg}", ephemeral=True)
 
             pat, win, game_over = game.process_turn(g_word, ctx.author)
-            print(f"DEBUG: Turn | Attempts: {game.attempts_used}/{game.max_attempts} | Win: {win} | Over: {game_over}")
 
             # Easter Egg trigger (rate-limited)
             try:

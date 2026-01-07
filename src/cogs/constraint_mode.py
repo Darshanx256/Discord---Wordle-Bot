@@ -224,6 +224,11 @@ class ConstraintMode(commands.Cog):
         Increments 'games_played' for all participants with >0 WR at the end of the session.
         This ensures we count the game strictly ONCE per session.
         """
+        # Distribute any pending rewards from the final partial/checkpoint
+        if game.scores:
+             await self.distribute_rewards(channel, game)
+             game.scores = {}
+
         if not game.total_wr_per_user:
             return
             
@@ -583,58 +588,37 @@ class ConstraintMode(commands.Cog):
                 )
                 await channel.send(embed=result_embed)
 
-    async def show_checkpoint(self, channel, game):
-        """Display checkpoint with scores and distribute rewards."""
-        checkpoint_embed = discord.Embed(
-            title="🏁 Checkpoint",
-            description="Calculating scores and distributing rewards...\n\n\u200b\n\u200b\n\u200b",
-            color=discord.Color.blue()
-        )
-        checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
-        msg = await channel.send(embed=checkpoint_embed)
-        
-        sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
-        
-        if not sorted_scores:
-            checkpoint_embed.description = "No scores to report this checkpoint.\n\nGet ready, game is about to continue!\n\n\u200b\n\u200b"
-            checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
-            await msg.edit(embed=checkpoint_embed)
-            await asyncio.sleep(5)
-            return
+    async def distribute_rewards(self, channel, game):
+        """Distributes rewards for the current accumulated scores in game.scores."""
+        if not game.scores:
+            return []
 
+        sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
         lines = []
         medals = ["🥇", "🥈", "🥉"]
 
         for i, (uid, data) in enumerate(sorted_scores):
             user_name = await get_cached_username(self.bot, uid)
-            rp_total = data['wr'] # Rush Points
-            rounds = data['rounds_won']
+            rp_total = data['wr']
             
-            # Store Total RP for MVP
+            # Store Total RP for MVP if not already accounted for
+            # Note: We update total_wr_per_user here for the session MVP tracking
             game.total_wr_per_user[uid] = game.total_wr_per_user.get(uid, 0) + rp_total
             
-            # --- CONVERSION & REWARD LOGIC ---
+            # Conversion & Rewards
             profile = fetch_user_profile_v2(self.bot, uid)
             current_wr = profile.get('multi_wr', 0) if profile else 0
             daily_gain = get_daily_wr_gain(self.bot, uid)
             
-            # 1. Base Multiplier from Tiers
             t_mult = get_tier_multiplier(current_wr)
-            
-            # 2. XP Calculation
             base_xp = 35 + max(0, 30 - (i * 5))
-            
-            # 3. WR conversion (1 RP = 1 WR base)
             base_wr = rp_total
             
-            # 4. Apply Tier Multiplier
             xp_gain = int(base_xp * t_mult)
             wr_gain = int(base_wr * t_mult)
             
-            # 5. Apply Anti-Grind
             final_xp, final_wr = apply_anti_grind(xp_gain, wr_gain, daily_gain)
             
-            # Ensure minimums
             if final_wr < 1 and rp_total > 0: final_wr = 1
             if final_xp < 5: final_xp = 5
             
@@ -642,18 +626,14 @@ class ConstraintMode(commands.Cog):
             tier_up_msg = ""
             
             try:
-                # Use MANUAL UPDATE to avoid incrementing games_played at checkpoints
-                # We only want to save the XP/WR gained so far.
-                
+                # Use MANUAL UPDATE to avoid incrementing games_played
                 res = update_user_stats_manual(self.bot, uid, final_xp, final_wr, mode='MULTI')
-                
                 if res:
                     new_xp = res.get('xp', 0)
                     old_xp = new_xp - final_xp
                     if calculate_level(new_xp) > calculate_level(old_xp):
                         level_up_msg = f" 🆙 **Lvl {calculate_level(new_xp)}**"
-                        
-                    # Check Tier up
+                    
                     new_wr = res.get('wr', 0)
                     old_wr = new_wr - final_wr
                     
@@ -667,7 +647,7 @@ class ConstraintMode(commands.Cog):
                         tier_up_msg = f" 🏆 **{new_tier['name']}!**"
 
             except Exception as e:
-                print(f"Failed to record checkpoint for {uid}: {e}")
+                print(f"Failed to record rewards for {uid}: {e}")
             
             medal = medals[i] if i < 3 else "▫️"
             lines.append(f"{medal} **{user_name}** • {rp_total} pts (+{final_wr} WR){level_up_msg}{tier_up_msg}")
@@ -686,16 +666,14 @@ class ConstraintMode(commands.Cog):
                 }
             )
 
-            # --- STREAK CHECK (Once per session per user) ---
+            # Streak Check (Once per session per user)
             if uid not in game.streak_updated_users and rp_total > 0:
                 try:
-                    streak_mgr = StreakManager(self.bot)
-                    s_msg, _, s_badge = streak_mgr.check_streak(uid)
+                    s_msg, _, s_badge = self.bot.streak_manager.check_streak(uid) if hasattr(self.bot, 'streak_manager') else StreakManager(self.bot).check_streak(uid)
                     game.streak_updated_users.add(uid)
                     
                     if s_msg:
                         from src.utils import send_smart_message
-                        # Use bot's cache or fetch member to ensure we have a User/Member object for send_smart_message
                         p_user = self.bot.get_user(uid)
                         await send_smart_message(channel, s_msg, ephemeral=True, transient_duration=15, user=p_user)
                     
@@ -706,6 +684,28 @@ class ConstraintMode(commands.Cog):
                         await send_smart_message(channel, f"💎 **BADGE UNLOCKED:** {b_emoji}!", ephemeral=True, transient_duration=15, user=p_user)
                 except Exception as e:
                     print(f"Streak check error: {e}")
+
+        return lines
+
+    async def show_checkpoint(self, channel, game):
+        """Display checkpoint with scores and distribute rewards."""
+        checkpoint_embed = discord.Embed(
+            title="🏁 Checkpoint",
+            description="Calculating scores and distributing rewards...\n\n\u200b\n\u200b\n\u200b",
+            color=discord.Color.blue()
+        )
+        checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
+        msg = await channel.send(embed=checkpoint_embed)
+        
+        lines = await self.distribute_rewards(channel, game)
+        game.scores = {}
+
+        if not lines:
+            checkpoint_embed.description = "No scores to report this checkpoint.\n\nGet ready, game is about to continue!\n\n\u200b\n\u200b"
+            checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
+            await msg.edit(embed=checkpoint_embed)
+            await asyncio.sleep(5)
+            return
 
         # Basic Stats Summary
         is_solo = len(game.participants) == 1
@@ -741,8 +741,6 @@ class ConstraintMode(commands.Cog):
         checkpoint_embed.color = discord.Color.green()
         checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
         await msg.edit(embed=checkpoint_embed)
-        
-        game.scores = {}
         
         await asyncio.sleep(8)
 
