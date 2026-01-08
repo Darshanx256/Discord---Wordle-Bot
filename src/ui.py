@@ -446,9 +446,14 @@ class HelpView(discord.ui.View):
             def block(letter, color, default='⬜'):
                 return EMOJIS.get(f'block_{letter.lower()}_{color.lower()}', default)
 
-            green_block  = lambda letter: block(letter, 'green')
-            yellow_block = lambda letter: block(letter, 'yellow')
-            gray_block   = lambda letter: block(letter, 'white')
+            def green_block(letter):
+                return block(letter, 'green')
+
+            def yellow_block(letter):
+                return block(letter, 'yellow')
+
+            def gray_block(letter):   
+                return block(letter, 'white')
             
             # Build example game blocks
             round1 = f"{gray_block('c')}{gray_block('r')}{gray_block('a')}{yellow_block('t')}{gray_block('e')}"  
@@ -477,7 +482,7 @@ class HelpView(discord.ui.View):
                 f"• {yellow_block} = Correct letter in wrong position\n"
                 f"• {gray_block} = Letter not in word\n\n"
                 "**Example Game:** (Secret word: **STING**)\n"
-                f"```\n"
+                f"\n"
                 f"1. CRATE {round1}\n"
                 f"   → T is in the word (wrong spot).\n\n"
                 f"2. SHIRK {round2}\n"
@@ -490,7 +495,7 @@ class HelpView(discord.ui.View):
                 f"   → S and I correct; T still needs to move.\n\n"
                 f"6. STING {round6}\n"
                 f"   → 🎉 SUCCESS! Solved in 6/6 tries!\n"
-                f"```\n\n"
+                f"\n\n"
                 "**Game Modes:**\n"
                 "• `/wordle` - Curated 'common' words (~2.3k). Easier for beginners.\n"
                 "• `/wordle_classic` - Full dictionary (~14k words). The true test.\n"
@@ -516,7 +521,7 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "A rapid-fire multiplayer game against the clock and other players!\n\n"
                 "**How It Works:**\n"
-                f"• Each round presents a linguistic constraint (e.g., word pattern `{EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')}` or \"contains double L\").\n"
+                f"• Each round presents a linguistic constraint (e.g., word pattern {EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')} or \"contains double L\").\n"
                 "• Type valid words matching the constraint as fast as possible.\n"
                 "• Watch the **traffic lights** 🟢🟡🔴 for timing guidance.\n"
                 "• **Base forms only** (e.g., `APPLE` ✓, `APPLES` ✗).\n"
