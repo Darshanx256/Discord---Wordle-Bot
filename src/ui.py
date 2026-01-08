@@ -480,9 +480,9 @@ class HelpView(discord.ui.View):
                 "**How to Play:**\n"
                 "• Use `/guess word:xxxxx` or `-g xxxxx` to submit guesses.\n"
                 "• Use `/stop_game` to end the game early.\n"
-                f"• {green_block} = Correct letter in correct position\n"
-                f"• {yellow_block} = Correct letter in wrong position\n"
-                f"• {gray_block} = Letter not in word\n\n"
+                f"• {green_block('A')} = Correct letter in correct position\n"
+                f"• {yellow_block('A')} = Correct letter in wrong position\n"
+                f"• {gray_block('A')} = Letter not in word\n\n"
                 "**Example Game:** (Secret word: **STING**)\n"
                 f"\n"
                 f"1. CRATE {round1}\n"
@@ -499,8 +499,8 @@ class HelpView(discord.ui.View):
                 f"   → 🎉 SUCCESS! Solved in 6/6 tries!\n"
                 f"\n\n"
                 "**Game Modes:**\n"
-                "• `/wordle` - Curated 'common' words (~2.3k). Easier for beginners.\n"
-                "• `/wordle_classic` - Full dictionary (~14k words). The true test.\n"
+                "• `/wordle` - Curated 'common' words. Easier for beginners.\n"
+                "• `/wordle_classic` - Uses official Wordle solution list. The true test.\n"
                 "• `/hard_mode` - Forces you to use revealed hints in next guesses.\n\n"
                 "**Rewards:**\n"
                 "• **XP** is awarded for every game based on performance.\n"
@@ -561,7 +561,7 @@ class HelpView(discord.ui.View):
                 "• Everyone gets the **same word** and **6 attempts** to solve it.\n"
                 "• Click **\"Enter Guess\"** button to open a popup modal.\n"
                 "• Type your 5-letter guess and submit.\n"
-                "• Race timer: **10 minutes** (configurable by host).\n"
+                "• Race timer: **10 minutes**.\n"
                 "• Use `End Game` button to forfeit your individual game.\n\n"
                 "**Ranking System:**\n"
                 "**Winners (Solved the word):**\n"
@@ -574,9 +574,8 @@ class HelpView(discord.ui.View):
                 "• Still earn XP/WR, just reduced amounts\n\n"
                 "**Rewards Distribution:**\n"
                 "• **Delayed Calculation:** Rewards calculated after race ends (all finish or time expires)\n"
-                "• **Top ranks** get multiplier bonuses\n"
-                "• **Lower ranks** receive reduced payouts but still gain progress\n"
-                "• **Tier multipliers** still apply to all rewards\n"
+                "• **Higher Streaks** get multiplier bonuses\n"
+                "• **Rewards** are Tier based, higher Tiers may receive lower rewards\n"
                 "• **Speed bonus** for fast solves\n\n"
                 "**Game Interface:**\n"
                 "• **Progress Bar:** `[●●●○○○]` shows attempts used vs remaining\n"
@@ -783,10 +782,14 @@ class HelpView(discord.ui.View):
             
             # Tiers Section
             tier_text = "\n".join([
-                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** - WR ≥ {t['min_wr']} (×{t['multiplier']} rewards)" 
+                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** - WR ≥ {t['min_wr']}" 
                 for t in TIERS
             ])
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
+
+            tier_text = "\n\n".join([
+                f"Global WR is subject to drop every month on 1st based on Tiers, this is to keep the leaderboard fresh and competitive\n"
+            ])
         else:
             embed = discord.Embed(title="❓ Unknown Feature", description="Feature not found.", color=discord.Color.red())
 
