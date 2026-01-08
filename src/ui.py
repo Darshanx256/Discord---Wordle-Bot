@@ -4,6 +4,8 @@ import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
 from src.utils import EMOJIS, get_win_flavor, get_badge_emoji, send_smart_message
+from datetime import datetime, timedelta, timezone
+
 
 def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, blind_mode=False) -> str:
     #egg start
@@ -722,6 +724,13 @@ class HelpView(discord.ui.View):
             spark_badge = EMOJIS.get('7_streak', '✨')
             ember_badge = EMOJIS.get('14_streak', '🔥')
             mythic_badge = EMOJIS.get('28_streak', '🔵')
+
+            def get_next_utc_midnight():
+                now = datetime.now(timezone.utc)
+                return (now + timedelta(days=1)).replace( hour=0, minute=0, second=0, microsecond=0)
+
+            reset = get_next_utc_midnight()
+            timestamp = int(reset.timestamp())
             
             embed.description = (
                 "Climb the ranks from Challenger beginner to Legendary Master!\n\n"
@@ -751,6 +760,7 @@ class HelpView(discord.ui.View):
                 "• Streak breaks if you miss a full day (24-hour window)\n"
                 "• Multipliers stack with tier bonuses for massive rewards\n"
                 "• Badges display on your profile permanently\n\n"
+                f"**Next Reset:** <t:{timestamp}:R>\n\n"
                 "**Leveling System:**\n"
                 "• XP required increases per level (scaling formula)\n"
                 "• Higher levels unlock bragging rights and prestige\n"
