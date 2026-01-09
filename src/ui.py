@@ -254,7 +254,7 @@ class LeaderboardView(discord.ui.View):
                 
                 medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"`#{rank}`")
                 
-                description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}** | Wins: {wins}")
+                description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}**")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {self.total_count} | Name changes take up to 48 hours to reflect")
