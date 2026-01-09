@@ -3,7 +3,7 @@ import random
 import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
-from src.utils import EMOJIS, get_win_flavor, get_badge_emoji, send_smart_message
+from src.utils import EMOJIS, get_win_flavor, get_badge_emoji#, send_smart_message
 from datetime import datetime, timedelta, timezone
 
 
@@ -132,12 +132,12 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
                 # Streak notifications (Delayed & Ephemeral)
-                if res:
-                    import asyncio
-                    if res.get('streak_msg'):
-                        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
-                    if res.get('streak_badge'):
-                        asyncio.create_task(send_smart_message(interaction, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(res['streak_badge'])} Badge!", ephemeral=True))
+                #if res:
+                #    import asyncio
+                #    if res.get('streak_msg'):
+                #        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
+                #    if res.get('streak_badge'):
+                #        asyncio.create_task(send_smart_message(interaction, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(res['streak_badge'])} Badge!", ephemeral=True))
 
             elif game_over:
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)
@@ -149,12 +149,12 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
                 # Streak notifications for Loss (Delayed & Ephemeral)
-                try:
-                    res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999)
-                    if res and res.get('streak_msg'):
-                        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
-                except:
-                    pass
+                #try:
+                #    res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999)
+                #    if res and res.get('streak_msg'):
+                #        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
+                #except:
+                #    pass
 
             else:
                 # Ongoing game - board + keyboard in embed description
@@ -327,7 +327,7 @@ class HelpView(discord.ui.View):
                 "**1. Start a Game**\n"
                 "• `/wordle` -> Simple 5-letter words\n"
                 "• `/wordle_classic` -> Harder, full dictionary\n"
-                "• `/word_rush` -> ⚡ Rapid constraint puzzles\n"
+                "• `/word_rush` -> Rapid constraint puzzles\n"
                 "• `/custom` -> Custom word in channel\n"
                 "• `/solo` -> Private Solo Mode\n\n"
                 "**2. Make a Guess**\n"
@@ -337,6 +337,13 @@ class HelpView(discord.ui.View):
                 "🟨 Correct letter, wrong spot\n"
                 "⬜ Letter not in word"
             ), inline=False)
+
+            embed.add_field(name= f"Whats New?", value=(
+                "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
+                "• **Hard Mode**: Try `/hard_mode` for a greater challenge!\n"
+                "• **Advanced Help Menu**: Type /help and select among features for detailed guides.\n"
+                "• **New -G support**: -g also in -G now, helpful against unwanted autocapitalization or those who prefer caps 🧢.\n"
+            ))
             
             # Build example with custom emojis
             apple_example = "Guess: **APPLE**\n"
@@ -344,7 +351,7 @@ class HelpView(discord.ui.View):
             apple_example += "**A** is correct! **P** is in word but wrong spot."
             
             embed.add_field(name="❓ Example", value=apple_example, inline=False)
-            embed.set_footer(text="Page 1/2 • Click 'Show More' for Advanced info & Easter Eggs")
+            embed.set_footer(text="Page 1/2 • type /help and select feature for detailed guides!")
             
         else:
             # ADVANCED PAGE - Improved Layout
@@ -355,7 +362,7 @@ class HelpView(discord.ui.View):
             embed.add_field(name="🎮 Game Commands", value=(
                 "`/wordle` -> Simple Game\n"
                 "`/wordle_classic` -> Hard Game\n"
-                "`/word_rush` -> ⚡ Rush Mode\n"
+                "`/word_rush` -> Rush Mode\n"
                 "`/solo` -> Private Game\n"
                 "`/custom` -> Set Custom Word\n"
                 "`/guess` or `-g` -> Guess\n"
@@ -369,10 +376,10 @@ class HelpView(discord.ui.View):
                 "`/leaderboard_global` -> Global\n"
                 "`/shop` -> Equip Badges\n"
                 "`/showrace` -> Resume Race\n\n"
-                "🔥 **Streaks**\n"
-                "Play daily to build your streak for\n"
-                "Multipliers & exclusive Badges!\n"
-                "*Streaks reset daily at 00:00 UTC.*"
+                #"🔥 **Streaks**\n"
+                #"Play daily to build your streak for\n"
+                #"Multipliers & exclusive Badges!\n"
+                #"*Streaks reset daily at 00:00 UTC.*"
             ), inline=True)
             
             # Tiers Section
@@ -417,7 +424,7 @@ class HelpView(discord.ui.View):
                 "`title:My Text` -> Set custom title"
             ), inline=False)
             
-            embed.set_footer(text="Page 2/2 • Climb the global leaderboard!")
+            embed.set_footer(text="Page 2/2 • type /help and select feature for detailed guides!")
 
         return embed
 
@@ -442,7 +449,7 @@ class HelpView(discord.ui.View):
     def get_feature_help_embed(self, feature: str):
         """Generates deep-dive help for specific features."""
         if feature == "wordle":
-            embed = discord.Embed(title="🟩 Wordle: Classic & Simple", color=discord.Color.green())
+            embed = discord.Embed(title="Wordle: Classic & Simple", color=discord.Color.green())
             
             # Build color guide with dynamic emoji rendering
             def block(letter, color, default='⬜'):
@@ -505,9 +512,9 @@ class HelpView(discord.ui.View):
                 "**Rewards:**\n"
                 "• **XP** is awarded for every game based on performance.\n"
                 "• **WR** (Wordle Rating) increases with wins and decreases with losses.\n"
-                "• Faster solves = Speed Bonus! ⚡\n"
-                "• Tier multipliers boost rewards as you climb ranks.\n\n"
-                "**Game Interface:**\n"
+                "• Faster solves = Speed Bonus!\n"
+                #"• Tier multipliers boost rewards as you climb ranks.\n\n"
+                "**\n\nGame Interface:**\n"
                 "• **Progress Bar:** `[●●●○○○]` shows attempts used vs remaining\n"
                 "• **Board Display:** See all your previous guesses with color feedback\n"
                 "• **Keyboard Status:** Visual guide of used letters (updates each guess)\n"
@@ -519,14 +526,14 @@ class HelpView(discord.ui.View):
             )
         
         elif feature == "word_rush":
-            embed = discord.Embed(title="⚡ Word Rush (Fast-Paced Mode)", color=discord.Color.brand_red())
+            embed = discord.Embed(title="Word Rush (Fast-Paced Mode)", color=discord.Color.brand_red())
             embed.description = (
                 "A rapid-fire multiplayer game against the clock and other players!\n\n"
                 "**How It Works:**\n"
-                f"• Each round presents a linguistic constraint (e.g., word pattern {EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')} or \"contains double L\").\n"
+                f"• Each round presents a linguistic constraint \n(e.g., word pattern {EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')} or \"contains double L\").\n"
                 "• Type valid words matching the constraint as fast as possible.\n"
                 "• Watch the **traffic lights** 🟢🟡🔴 for timing guidance.\n"
-                "• **Base forms only** (e.g., `APPLE` ✓, `APPLES` ✗).\n"
+                "• **Base forms only** \n(e.g., `APPLE` ✓, `APPLES` ✗).\n"
                 "• No word reuse within the same session.\n\n"
                 "**Scoring System:**\n"
                 "• **1st place:** 5 Rush Points\n"
@@ -546,7 +553,7 @@ class HelpView(discord.ui.View):
             )
         
         elif feature == "race":
-            embed = discord.Embed(title="🏁 Race Mode: Competitive Challenge", color=discord.Color.gold())
+            embed = discord.Embed(title="Race Mode: Competitive Challenge", color=discord.Color.gold())
             
             # Build color guide with actual emoji rendering
             green_block = EMOJIS.get('block_a_green', '🟩')
@@ -591,7 +598,7 @@ class HelpView(discord.ui.View):
             )
         
         elif feature == "solo":
-            embed = discord.Embed(title="👤 Solo Mode: (Private)", color=discord.Color.blurple())
+            embed = discord.Embed(title="Solo Mode: (Private)", color=discord.Color.blurple())
             
             # Build color guide with actual emoji rendering
             green_block = EMOJIS.get('block_a_green', '🟩')
@@ -609,9 +616,8 @@ class HelpView(discord.ui.View):
                 "**Key Features:**\n"
                 "• **Completely Private:** Game board, guesses, and keyboard only visible to you\n"
                 "• **Persistent:** Leave and return anytime with `/show_solo`\n"
-                "• **Full Progression:** Earn XP, WR, and maintain daily streaks\n"
+                "• **Full Progression:** Earn XP, WR, and all future rewards will be applied\n"
                 "• **Speed Tracking:** Faster solves earn speed bonuses\n"
-                "• **Streak Notifications:** Get ephemeral alerts for streak milestones\n"
                 "• **Badge Unlocks:** Unlock badges just like server games\n"
                 "• **Live Keyboard:** See which letters you've used with color coding:\n"
                 f"  {green_block} Correct position | {yellow_block} Wrong position | {gray_block} Not in word\n\n"
@@ -624,7 +630,6 @@ class HelpView(discord.ui.View):
                 "• **Win:** Solve within 6 tries → Earn XP/WR based on attempts & speed\n"
                 "• **Loss:** Run out of tries → Word revealed, streaks may break\n"
                 "• **Rewards:** Calculated instantly with tier multipliers applied\n"
-                "• **Flavor Text:** Get unique victory messages based on solve speed!\n\n"
                 "**Commands:**\n"
                 "• `/solo_mode` - Start a new private game\n"
                 "• `/show_solo` - Resume your active game if you navigated away\n"
@@ -632,14 +637,13 @@ class HelpView(discord.ui.View):
                 "• **End Game** button - Forfeit current game\n\n"
                 "**Why Solo Mode?**\n"
                 "• Perfect for practicing without pressure\n"
-                "• Great for maintaining streaks during quiet hours\n"
-                "• Ideal for testing strategies before competitive modes\n"
+                "• Ideal for testing out the game\n"
                 "• No chat spam - keeps server channels clean\n\n"
                 "*Solo Mode offers the full Wordle experience in a private, distraction-free environment!*"
             )
         
         elif feature == "custom":
-            embed = discord.Embed(title="🧂 Custom Mode: Create Your Own Challenge", color=discord.Color.teal())
+            embed = discord.Embed(title="Custom Mode: Create Your Own Challenge", color=discord.Color.teal())
             
             embed.description = (
                 "Design personalized Wordle games with complete control over rules and settings!\n\n"
@@ -717,19 +721,19 @@ class HelpView(discord.ui.View):
             )
         
         elif feature == "progression":
-            embed = discord.Embed(title="📈 Progression & Tiers", color=discord.Color.purple())
+            embed = discord.Embed(title="Progression & Tiers", color=discord.Color.purple())
             
             # Build streak badge emojis properly
-            spark_badge = EMOJIS.get('7_streak', '✨')
-            ember_badge = EMOJIS.get('14_streak', '🔥')
-            mythic_badge = EMOJIS.get('28_streak', '🔵')
+            # spark_badge = EMOJIS.get('7_streak', '✨')
+            # ember_badge = EMOJIS.get('14_streak', '🔥')
+            # mythic_badge = EMOJIS.get('28_streak', '🔵')
 
-            def get_next_utc_midnight():
-                now = datetime.now(timezone.utc)
-                return (now + timedelta(days=1)).replace( hour=0, minute=0, second=0, microsecond=0)
+            # def get_next_utc_midnight():
+            #    now = datetime.now(timezone.utc)
+            #    return (now + timedelta(days=1)).replace( hour=0, minute=0, second=0, microsecond=0)
 
-            reset = get_next_utc_midnight()
-            timestamp = int(reset.timestamp())
+            #reset = get_next_utc_midnight()
+            #timestamp = int(reset.timestamp())
             
             embed.description = (
                 "Climb the ranks from Challenger beginner to Legendary Master!\n\n"
@@ -744,25 +748,23 @@ class HelpView(discord.ui.View):
                 "• **Speed Bonus** for fast solves (under 60 seconds)\n"
                 "• **Anti-Grind Protection** reduces gains after many daily games (resets daily)\n"
                 "• **Attempt Bonus** - Solving in fewer tries earns more rewards\n\n"
-                "**Daily Streaks System:**\n"
-                "Play at least one game every day to build your streak!\n\n"
-                "**Streak Milestones:**\n"
-                f"• **3 Days:** 2x WR Multiplier ⚡\n"
-                f"• **7 Days:** {spark_badge} **'First Spark'** Badge Unlocked\n"
-                f"• **10 Days:** 2.5x WR Multiplier 🔥\n"
-                f"• **14 Days:** {ember_badge} **'Ember'** Badge Unlocked\n"
-                f"• **28 Days:** {mythic_badge} **'Mythic'** Badge Unlocked\n"
-                f"• **35 Days:** 3x WR Multiplier 👑\n\n"
-                "**Streak Rules:**\n"
-                "• Maintained by playing **any mode** (Solo, Wordle, Race, Rush)\n"
-                "• **Wins AND Losses count** - just play daily!\n"
-                "• Streak breaks if you miss a full day (24-hour window)\n"
-                "• Multipliers stack with tier bonuses for massive rewards\n"
-                "• Badges display on your profile permanently\n\n"
-                f"**Next Reset:** <t:{timestamp}:R>\n\n"
+                #"**Daily Streaks System:**\n"
+                #"Play at least one game every day to build your streak!\n\n"
+                #"**Streak Milestones:**\n"
+                #f"• **3 Days:** 2x WR Multiplier ⚡\n"
+                #f"• **7 Days:** {spark_badge} **'First Spark'** Badge Unlocked\n"
+                #f"• **10 Days:** 2.5x WR Multiplier 🔥\n"
+                #f"• **14 Days:** {ember_badge} **'Ember'** Badge Unlocked\n"
+                #f"• **28 Days:** {mythic_badge} **'Mythic'** Badge Unlocked\n"
+                #f"• **35 Days:** 3x WR Multiplier 👑\n\n"
+                #"**Streak Rules:**\n"
+                #"• Maintained by playing **any mode** (Solo, Wordle, Race, Rush)\n"
+                #"• **Wins AND Losses count** - just play daily!\n"
+                #"• Streak breaks if you miss a full day (24-hour window)\n"
+                #"• Multipliers stack with tier bonuses for massive rewards\n"
+                #f"**Next Reset:** <t:{timestamp}:R>\n\n"
                 "**Leveling System:**\n"
                 "• XP required increases per level (scaling formula)\n"
-                "• Higher levels unlock bragging rights and prestige\n"
                 "• No level cap - climb as high as you can!\n"
                 "• Check your progress with `/profile`\n\n"
                 "**WR Rating System:**\n"
@@ -772,11 +774,10 @@ class HelpView(discord.ui.View):
                 "• **Rush Mode:** Points converted at checkpoints with multipliers\n"
                 "• Solo and Multi WR tracked separately\n\n"
                 "**Tips for Fast Progression:**\n"
-                "• Maintain daily streaks for multiplier bonuses\n"
+                #"• Maintain daily streaks for multiplier bonuses\n"
                 "• Solve quickly for speed bonuses (under 60s)\n"
                 "• Win consistently to climb tiers faster\n"
-                "• Higher tiers give better multipliers on all rewards\n"
-                "• Race Mode offers competitive high-reward opportunities\n\n"
+                "• Rush Mode offers competitive high-reward opportunities\n\n"
                 "*Use `/profile` to track your stats, `/leaderboard` to see rankings!*"
             )
             

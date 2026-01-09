@@ -14,7 +14,7 @@ class HelpCommands(commands.Cog):
     @app_commands.command(name="help", description="How to play and command guide.")
     @app_commands.choices(feature=[
         app_commands.Choice(name="Wordle (Classic/Simple)", value="wordle"),
-        app_commands.Choice(name="Word Rush (Lightning)", value="word_rush"),
+        app_commands.Choice(name="Word Rush (Fast-Paced Mode)", value="word_rush"),
         app_commands.Choice(name="Race Mode", value="race"),
         app_commands.Choice(name="Solo Mode", value="solo"),
         app_commands.Choice(name="Custom Games", value="custom"),

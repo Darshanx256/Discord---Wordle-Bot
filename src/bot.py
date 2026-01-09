@@ -517,9 +517,6 @@ async def shop(interaction: discord.Interaction):
     dragon_count = int(eggs.get('dragon', 0))
     candy_count = int(eggs.get('candy', 0))
     
-    # Simple logic: Toggle Badge if requirements met
-    # Prompt: "purchase requires ... duck - 4x ... shows up next to name".
-    
     view = discord.ui.View()
     
     async def buy_duck(inter: discord.Interaction):
@@ -529,162 +526,49 @@ async def shop(interaction: discord.Interaction):
         else:
             await inter.response.send_message(f"❌ Need 4 Ducks. You have {duck_count}.", ephemeral=True)
 
-    # Fetch inventory
-    user_id = interaction.user.id
-    
-    try:
-        res = bot.supabase_client.table('user_stats_v2').select('eggs, active_badge').eq('user_id', user_id).execute()
-    except:
-        return await interaction.response.send_message("❌ Database error.", ephemeral=True)
-        
-    inventory = res.data[0]['eggs'] if res.data and res.data[0]['eggs'] else {}
-    active_badge = res.data[0]['active_badge'] if res.data else None
-    
-    duck_count = inventory.get('duck', 0)
-    dragon_count = inventory.get('dragon', 0)
-    candy_count = inventory.get('candy', 0)
-    
-    # Streak Badges ownership check
-    has_7_streak = inventory.get('7_streak', 0) > 0
-    has_14_streak = inventory.get('14_streak', 0) > 0
-    has_28_streak = inventory.get('28_streak', 0) > 0
-    has_dragon_badge = inventory.get('dragon_badge', 0) > 0
+    async def buy_dragon(inter: discord.Interaction):
+        if dragon_count >= 2:
+            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'dragon_slayer_badge'}).eq('user_id', interaction.user.id).execute()
+            await inter.response.send_message("✅ Equipped Dragon Slayer Badge!", ephemeral=True)
+        else:
+            await inter.response.send_message(f"❌ Need 2 Dragons. You have {dragon_count}.", ephemeral=True)
 
+    async def buy_candy(inter: discord.Interaction):
+        if candy_count >= 3:
+            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'candy_rush_badge'}).eq('user_id', interaction.user.id).execute()
+            await inter.response.send_message("✅ Equipped Sugar Rush Badge!", ephemeral=True)
+        else:
+            await inter.response.send_message(f"❌ Need 3 Candies. You have {candy_count}.", ephemeral=True)
+
+    async def unequip(inter: discord.Interaction):
+        current_badge = p.get('active_badge')
+        if not current_badge:
+            await inter.response.send_message("⚠️ No badge equipped.", ephemeral=True)
+        else:
+            bot.supabase_client.table('user_stats_v2').update({'active_badge': None}).eq('user_id', interaction.user.id).execute()
+            await inter.response.send_message("✅ Badge unequipped.", ephemeral=True)
+               
+    b1 = discord.ui.Button(label="Duck Lord Badge (4 Ducks)", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('duck_lord_badge', '🦆'), disabled=(duck_count < 4))
+    b1.callback = buy_duck
+    
+    b2 = discord.ui.Button(label="Dragon Slayer Badge (2 Dragons)", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('dragon_slayer_badge', '🐲'), disabled=(dragon_count < 2))
+    b2.callback = buy_dragon
+    
+    b3 = discord.ui.Button(label="Sugar Rush Badge (3 Candies)", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('candy_rush_badge', '🍬'), disabled=(candy_count < 3))
+    b3.callback = buy_candy
+
+    b4 = discord.ui.Button(label="Unequip Badge", style=discord.ButtonStyle.secondary)
+    b4.callback = unequip
+    
+    view.add_item(b1)
+    view.add_item(b2)
+    view.add_item(b3)
+    view.add_item(b4)
+    
     embed = discord.Embed(title="🛒 Collection Shop", description="Equip badges based on your findings!", color=discord.Color.gold())
     duck_emoji = EMOJIS.get("duck", "🦆")
     dragon_emoji = EMOJIS.get("dragon", "🐲")
     candy_emoji = EMOJIS.get("candy", "🍬")
-    
-    inventory_text = f"{duck_emoji} Ducks: {duck_count}\n{dragon_emoji} Dragons: {dragon_count}\n{candy_emoji} Candies: {candy_count}"
-    if has_7_streak: inventory_text += f"\n{get_badge_emoji('7_streak')} 7-Streak Badge"
-    if has_14_streak: inventory_text += f"\n{get_badge_emoji('14_streak')} 14-Streak Badge"
-    if has_28_streak: inventory_text += f"\n{get_badge_emoji('28_streak')} 28-Streak Badge"
-    if has_dragon_badge: inventory_text += f"\n{get_badge_emoji('dragon_badge')} Dragon Badge"
-    
-    embed.add_field(name="Your Inventory", value=inventory_text, inline=False)
-    
-    if active_badge:
-        embed.add_field(name="Equipped", value=f"{get_badge_emoji(active_badge)}", inline=False)
-
-    view = discord.ui.View()
-    
-    async def equip_callback(interaction: discord.Interaction, badge_id: str, cost_type: str = None, cost_amount: int = 0):
-        # Check ownership interaction.user.id again to be safe
-        # Determine if we need to BUY or just EQUIP
-        # If cost > 0, we check if we OWN it first?
-        # Shop Logic: usually "Buy to Equip". If already own, just equip?
-        # Existing logic was simple "Pay to Equip".
-        # We need to support "Equip if owned".
-        
-        nonlocal inventory # ref to outer scope 
-        
-        # Re-fetch to prevent race cond? minimal needed for this scale
-        # We will trust the button Logic context
-        
-        # Logic: If cost_type provided, check balance.
-        # However, prompt says "Streak badges... visible to those who win".
-        # Streak badges are in inventory (set by streaks.py for free).
-        # So for streak badges, cost is 0.
-        
-        can_equip = False
-        msg = ""
-        
-        if cost_type:
-            current_qty = inventory.get(cost_type, 0)
-            if current_qty >= cost_amount:
-                 # DEDUCT COST? "Exchange collected items".
-                 # If it's an exchange, we lose items?
-                 # Existing logic implied "Exchange".
-                 # "Exchange 3 ducks for Duck Lord".
-                 # Assuming "Exchange" = Deduct.
-                 
-                 # But if I already bought it?
-                 # "Make /shop UI good ... not like one applies duck_lord ... and loses on 28 streak badge".
-                 # This implies badges should be PERMANENT UNLOCKS usually?
-                 # But the current DB schema 'eggs' is just counts of items.
-                 # There isn't an 'unlocked_badges' list.
-                 # So "Buying" Duck Lord effectively "consumes" ducks to set Active Badge.
-                 # If I switch to Streak Badge, do I lose Duck Lord?
-                 # If I don't store "Unlocked Duck Lord" state, then YES, I lose it.
-                 # To fix "Conflict Resolution", I need to store "Unlocked Badges".
-                 # OR, I just don't deduct cost if already unlocked?
-                 # But I don't know if unlocked.
-                 
-                 # User Request Breakdown: "conflict resolution... prevent losing a streak badge by equipping an Easter egg badge".
-                 # Streak badges are permanent (in inventory).
-                 # Easter egg badges (Duck Lord) are currently configured as "Consumables" (Exchange X ducks).
-                 # If I equip Duck Lord, I spend Ducks.
-                 # If I equip Streak, I spend nothing (just check inventory).
-                 # If I go BACK to Duck Lord, I have to spend Ducks AGAIN?
-                 # The user likely wants to SWITCH without penalty if possible, OR just accept that Consumables are Consumables.
-                 # "streak ... should only be visible to those who win them" -> Stored in inventory.
-                 
-                 # Implementation Decision:
-                 # 1. Stroke Badges: Equip if in inventory.
-                 # 2. Shop Badges: Consumable exchange (Legacy behavior, unless I add 'unlocked_badges' column).
-                 # Given constraints, I will keep Shop Badges as Exchange (Consumable), but make sure equipping Streak doesn't DELETE the streak badge from inventory.
-                 # Streaks are in 'eggs', keys: '7_streak', etc. Value: 1.
-                 # We should NOT deduct streak badges when equipping.
-                 
-                 if cost_type in ['7_streak', '14_streak', '28_streak', 'dragon_badge']:
-                     # Just check existence, don't deduct
-                     can_equip = True
-                     msg = f"Equipped {get_badge_emoji(badge_id)}!"
-                 else:
-                     # Deduct consumable
-                     inventory[cost_type] -= cost_amount
-                     # Update DB inventory
-                     bot.supabase_client.table('user_stats_v2').update({'eggs': inventory}).eq('user_id', user_id).execute()
-                     can_equip = True
-                     msg = f"Exchanged {cost_amount} {EMOJIS.get(cost_type, cost_type)} for {get_badge_emoji(badge_id)}!"
-            else:
-                msg = f"Not enough {EMOJIS.get(cost_type, cost_type)}!"
-        else:
-             # Free equip?
-             can_equip = True
-             msg = f"Equipped {get_badge_emoji(badge_id)}!"
-
-        if can_equip:
-             bot.supabase_client.table('user_stats_v2').update({'active_badge': badge_id}).eq('user_id', user_id).execute()
-             await interaction.response.send_message(msg, ephemeral=True)
-        else:
-             await interaction.response.send_message(msg, ephemeral=True)
-
-    # Buttons
-    # 1. Duck Lord
-    b_duck = discord.ui.Button(label=f"Duck Lord (3 {EMOJIS.get('duck', '🦆')})", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('duck_lord_badge', '🦆'))
-    b_duck.callback = lambda i: equip_callback(i, 'duck_lord_badge', 'duck', 3)
-    view.add_item(b_duck)
-
-    # 2. Dragon Slayer
-    b_dragon = discord.ui.Button(label=f"Dragon Slayer (2 {EMOJIS.get('dragon', '🐲')})", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('dragon_slayer_badge', '🗡️'))
-    b_dragon.callback = lambda i: equip_callback(i, 'dragon_slayer_badge', 'dragon', 2)
-    view.add_item(b_dragon)
-    
-    # 3. Sugar Rush
-    b_candy = discord.ui.Button(label=f"Sugar Rush (5 {EMOJIS.get('candy', '🍬')})", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('candy_rush_badge', '🍬'))
-    b_candy.callback = lambda i: equip_callback(i, 'candy_rush_badge', 'candy', 5)
-    view.add_item(b_candy)
-    
-    # Streak Buttons (Visible only if owned!)
-    if has_7_streak:
-        b_7 = discord.ui.Button(label="Equip 7-Streak", style=discord.ButtonStyle.success, emoji=get_badge_emoji('7_streak'))
-        b_7.callback = lambda i: equip_callback(i, '7_streak', '7_streak', 0) # Cost type check checks existence, 0 cost
-        view.add_item(b_7)
-        
-    if has_14_streak:
-        b_14 = discord.ui.Button(label="Equip 14-Streak", style=discord.ButtonStyle.success, emoji=get_badge_emoji('14_streak'))
-        b_14.callback = lambda i: equip_callback(i, '14_streak', '14_streak', 0)
-        view.add_item(b_14)
-        
-    if has_28_streak:
-        b_28 = discord.ui.Button(label="Equip 28-Streak", style=discord.ButtonStyle.success, emoji=get_badge_emoji('28_streak'))
-        b_28.callback = lambda i: equip_callback(i, '28_streak', '28_streak', 0)
-        view.add_item(b_28)
-
-    if has_dragon_badge:
-        b_dr = discord.ui.Button(label="Equip Dragon Badge", style=discord.ButtonStyle.danger, emoji=get_badge_emoji('dragon')) # Fix: 'dragon' is the ID in logic
-        b_dr.callback = lambda i: equip_callback(i, 'dragon', 'dragon', 0)
-        view.add_item(b_dr)
+    embed.add_field(name="Your Inventory", value=f"{duck_emoji} Ducks: {duck_count}\n{dragon_emoji} Dragons: {dragon_count}\n{candy_emoji} Candies: {candy_count}", inline=False)
 
     await interaction.followup.send(embed=embed, view=view, ephemeral=True)
