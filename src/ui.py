@@ -375,8 +375,6 @@ class HelpView(discord.ui.View):
                 "• Start with vowel-heavy words (AUDIO, RAISE)\n"
                 "• Speed matters -> faster solves = bonus rewards\n"
                 "• Higher tiers receive scaled rewards\n"
-                "• Speed matters -> faster solves = bonus rewards\n"
-                "• Higher tiers receive scaled rewards\n"
                 "• Participate in Multiplayer for extra XP"
             ), inline=False)
 
