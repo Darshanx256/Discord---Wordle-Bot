@@ -549,7 +549,7 @@ class HelpView(discord.ui.View):
                 "• **Stats:** Fastest reflexes and best streaks displayed at checkpoints.\n\n"
                 "**Finally:**\n"
                 "• Complete all **100 rounds** to become Rush Champion!\n"
-                "• Game ends if 5 consecutive rounds pass without correct guesses.\n\n"
+                "• Game ends if 4 consecutive rounds pass without correct guesses.\n\n"
                 "*Use `/word_rush` to start a session and `/stop_rush` to end early.*"
             )
         

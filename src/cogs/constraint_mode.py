@@ -143,7 +143,7 @@ class ConstraintMode(commands.Cog):
         embed = discord.Embed(
             title="⚡ Word Rush",
             description=(
-                "Find words matching each linguistic constraint!\n"
+                "**READ RULES BEFORE THE GAME STARTS**\nFind words matching each linguistic constraint!\n"
                 "Watch the traffic lights for timing guidance.\n\n"
                 "**🎯 Scoring**\n"
                 "```\n"
@@ -158,7 +158,7 @@ class ConstraintMode(commands.Cog):
                 "• **Base Forms Only** (e.g., 'APPLE' ✓, 'APPLES' ✗)\n"
                 "• No word reuse in same session\n"
                 "• **Rush Points** converted to WR at checkpoints\n"
-                "• Game ends after 5 rounds without guesses\n"
+                "• Game ends after 4 rounds without guesses\n"
                 "• Random bonus rounds with 3x Rush Points!\n\n"
                 "*New to Rush? Type `/help word_rush` to learn how to score!*"
             ),
@@ -486,10 +486,10 @@ class ConstraintMode(commands.Cog):
                      game.is_running = False
                      break
 
-                if game.rounds_without_guess >= 5:
+                if game.rounds_without_guess >= 4:
                     final_embed = discord.Embed(
                         title="💀 Game Over",
-                        description="Five consecutive rounds without correct guesses.\n\n\u200b\n\u200b",
+                        description="Four consecutive rounds without correct guesses.\n\n\u200b\n\u200b",
                         color=discord.Color.dark_red()
                     )
                     
