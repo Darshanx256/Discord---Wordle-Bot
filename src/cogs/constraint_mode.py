@@ -7,13 +7,13 @@ from discord.ext import commands
 from discord import app_commands
 from src.mechanics.constraint_logic import ConstraintGenerator
 from src.utils import EMOJIS, get_cached_username, calculate_level
-from src.database import fetch_user_profile_v2, get_daily_wr_gain, log_event_v1
+from src.database import fetch_user_profile_v2, get_daily_wr_gain, log_event_v1, update_user_stats_manual
 from src.mechanics.rewards import get_tier_multiplier, apply_anti_grind
 from src.config import TIERS
-from src.mechanics.streaks import StreakManager
+#from src.mechanics.streaks import StreakManager
 
 class ConstraintGame:
-    def __init__(self, bot, channel_id, started_by):
+    def __init__(self, bot, channel_id, started_by, generator, validation_base_5, combined_dict):
         self.bot = bot
         self.channel_id = channel_id
         self.started_by = started_by
@@ -27,22 +27,9 @@ class ConstraintGame:
         self.is_running = True
         self.is_round_active = False
 
-        # --- WORD RUSH DICTIONARY RULES ---
-        # 1. Puzzle Generation (5-letters): Only answers_common + answers_hard.
-        # 2. Puzzle Generation (6+ letters): puzzles_rush.txt only.
-        # 3. Validation (5-letters): answers_common + answers_hard + guesses_rush_wild.
-        #    (guesses_common is EXCLUDED as it contains plurals/inflections).
-        # 4. Validation (6+ letters): All of the above + puzzles_rush.txt.
-        
-        secrets_pool = set(bot.secrets) | set(bot.hard_secrets)
-        self.validation_base_5 = secrets_pool | bot.rush_wild_set
-        
-        # This is the master list for Word Rush validation (5 and 6+ letters)
-        # It combines the 5-letter base forms with the 6+ letter puzzle pool.
-        self.combined_dict = self.validation_base_5 | bot.full_dict
-
-        # Initialize generator with the refined pools
-        self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, self.combined_dict)
+        self.validation_base_5 = validation_base_5
+        self.combined_dict = combined_dict
+        self.generator = generator
         
         self.round_task = None
         self.game_msg = None
@@ -83,13 +70,16 @@ class RushStartView(discord.ui.View):
         if interaction.user.id in self.game.participants:
             return await interaction.response.send_message("You're already in the rush!", ephemeral=True)
         
+        if len(self.game.participants) >= 10:
+            return await interaction.response.send_message("⚠️ The lobby is full! (Max 10 players)", ephemeral=True)
+
         self.game.participants.add(interaction.user.id)
         await self.update_lobby(interaction)
 
     @discord.ui.button(label="Start Game", style=discord.ButtonStyle.success, emoji="▶️")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.game.started_by.id and not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message("Only the host or an admin can start the game.", ephemeral=True)
+        if interaction.user.id != self.game.started_by.id:
+            return await interaction.response.send_message("Only the host can start the game.", ephemeral=True)
         
         self.game.start_confirmed.set()
         await interaction.response.defer()
@@ -104,21 +94,39 @@ class RushStartView(discord.ui.View):
         self.game.bot.constraint_mode.pop(self.game.channel_id, None)
         await interaction.response.edit_message(content="🛑 World Rush canceled.", embed=None, view=None)
         self.stop()
+    
+    async def on_timeout(self):
+        """Cleanup if lobby times out."""
+        if not self.game.start_confirmed.is_set():
+            # If game hasn't started, remove from bot dict
+            if self.game.channel_id in self.game.bot.constraint_mode:
+                self.game.bot.constraint_mode.pop(self.game.channel_id, None)
+            
+            # Try to update message
+            try:
+                if self.game.game_msg:
+                    await self.game.game_msg.edit(content="⏰ Rush lobby timed out.", view=None)
+            except:
+                pass
 
 class ConstraintMode(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.signal_urls = {
-            'green': "https://cdn.discordapp.com/emojis/1456199435682975827.png",
-            'yellow': "https://cdn.discordapp.com/emojis/1456199439277494418.png",
-            'red': "https://cdn.discordapp.com/emojis/1456199431803244624.png",
-            'unlit': "https://cdn.discordapp.com/emojis/1456199350693789696.png",
-            'checkpoint': "https://cdn.discordapp.com/emojis/1456313204597588101.png",
-            'unknown': "https://cdn.discordapp.com/emojis/1456488648923938846.png",
-            'bonus': "https://cdn.discordapp.com/emojis/1456488648923938846.png"  # Can use custom bonus emoji
+            'green': "https://cdn.discordapp.com/emojis/1458452365169528996.png",
+            'yellow': "https://cdn.discordapp.com/emojis/1458452285804773490.png",
+            'red': "https://cdn.discordapp.com/emojis/1458452196483010691.png",
+            'unlit': "https://cdn.discordapp.com/emojis/1458452089494704265.png",
+            'checkpoint': "https://cdn.discordapp.com/emojis/1458452466998706196.png",
+            'bonus': "https://cdn.discordapp.com/emojis/1458455107631841402.png" 
         }
-    # Only 10 players can join the rush at a time
-    # Autostart disabled
+        
+        # Initialize Shared Generator once
+        secrets_pool = set(bot.secrets) | set(bot.hard_secrets)
+        self.validation_base_5 = secrets_pool | bot.rush_wild_set
+        self.combined_dict = self.validation_base_5 | bot.full_dict
+        self.generator = ConstraintGenerator(secrets_pool, bot.full_dict, self.combined_dict)
+
     @app_commands.command(name="word_rush", description="Fast-paced word hunt with linguistic constraints")
     @app_commands.guild_only()
     async def word_rush(self, interaction: discord.Interaction):
@@ -129,7 +137,7 @@ class ConstraintMode(commands.Cog):
         if cid in self.bot.games or cid in self.bot.custom_games:
              return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
 
-        game = ConstraintGame(self.bot, cid, interaction.user)
+        game = ConstraintGame(self.bot, cid, interaction.user, self.generator, self.validation_base_5, self.combined_dict)
         self.bot.constraint_mode[cid] = game
         
         embed = discord.Embed(
@@ -147,11 +155,12 @@ class ConstraintMode(commands.Cog):
                 "```\n"
                 "**📋 Rules**\n"
                 "• **100 Rounds** of fast-paced action!\n"
-                "• **Base Forms Only** (e.g., 'RUN' ✅, 'RUNNING'/'RANS' ❌)\n"
+                "• **Base Forms Only** (e.g., 'APPLE' ✓, 'APPLES' ✗)\n"
                 "• No word reuse in same session\n"
                 "• **Rush Points** converted to WR at checkpoints\n"
                 "• Game ends after 5 rounds without guesses\n"
-                "• 🎁 Random bonus rounds with 3x Rush Points!\n"
+                "• Random bonus rounds with 3x Rush Points!\n\n"
+                "*New to Rush? Type `/help word_rush` to learn how to score!*"
             ),
             color=discord.Color.from_rgb(88, 101, 242)
         )
@@ -180,6 +189,9 @@ class ConstraintMode(commands.Cog):
         game.is_running = False
         if game.round_task:
             game.round_task.cancel()
+        
+        # --- FINAL REWARDS & GAME COUNT ---
+        await self.finalize_game_session(game, interaction.channel)
         
         if game.total_wr_per_user:
             sorted_mvp = sorted(game.total_wr_per_user.items(), key=lambda x: x[1], reverse=True)
@@ -220,6 +232,44 @@ class ConstraintMode(commands.Cog):
         
         return '\n'.join(formatted_lines)
 
+    async def finalize_game_session(self, game, channel):
+        """
+        Increments 'games_played' for all participants with >0 WR at the end of the session.
+        This ensures we count the game strictly ONCE per session.
+        """
+        # Distribute any pending rewards from the final partial/checkpoint
+        if game.scores:
+             await self.distribute_rewards(channel, game)
+             game.scores = {}
+
+        if not game.total_wr_per_user:
+            return
+            
+        try:
+            # Identify users who actually played/scored
+            # User requirement: "atleast some wr (rush points) earned"
+            valid_participants = [uid for uid, wr in game.total_wr_per_user.items() if wr > 0]
+            
+            for uid in valid_participants:
+                try:
+                    is_victory = (game.round_number >= 100)
+                    
+                    self.bot.supabase_client.rpc('record_game_result_v4', {
+                        'p_user_id': uid,
+                        'p_guild_id': channel.guild.id if channel.guild else None,
+                        'p_mode': 'MULTI',
+                        'p_xp_gain': 0,     # Already awarded
+                        'p_wr_delta': 0,    # Already awarded
+                        'p_is_win': is_victory,
+                        'p_egg_trigger': None
+                    }).execute()
+                    
+                except Exception as e:
+                    print(f"Error finalizing stats for {uid}: {e}")
+                    
+        except Exception as e:
+            print(f"Error in finalize_game_session: {e}")
+
     async def run_game_loop(self, interaction, game):
         try:
             channel = interaction.channel
@@ -228,10 +278,9 @@ class ConstraintMode(commands.Cog):
                 # 5 minute timeout matching the lobby view
                 await asyncio.wait_for(game.start_confirmed.wait(), timeout=300)
             except asyncio.TimeoutError:
-                if len(game.participants) < 1:
-                    await channel.send("⏰ Rush cancelled: no participants joined in time.")
-                    self.bot.constraint_mode.pop(game.channel_id, None)
-                    return
+                await channel.send("⏰ Rush cancelled: lobby timed out. (Manual start required)")
+                self.bot.constraint_mode.pop(game.channel_id, None)
+                return
             
             # Countdown sequence with consistent formatting
             countdown_embed = discord.Embed(
@@ -433,6 +482,7 @@ class ConstraintMode(commands.Cog):
                         final_embed.add_field(name="Leaderboard", value=ranks_txt, inline=False)
 
                      await channel.send(embed=final_embed)
+                     await self.finalize_game_session(game, channel)
                      game.is_running = False
                      break
 
@@ -468,6 +518,7 @@ class ConstraintMode(commands.Cog):
                         )
 
                     await channel.send(embed=final_embed)
+                    await self.finalize_game_session(game, channel)
                     game.is_running = False
                     break
                 
@@ -544,58 +595,37 @@ class ConstraintMode(commands.Cog):
                 )
                 await channel.send(embed=result_embed)
 
-    async def show_checkpoint(self, channel, game):
-        """Display checkpoint with scores and distribute rewards."""
-        checkpoint_embed = discord.Embed(
-            title="🏁 Checkpoint",
-            description="Calculating scores and distributing rewards...\n\n\u200b\n\u200b\n\u200b",
-            color=discord.Color.blue()
-        )
-        checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
-        msg = await channel.send(embed=checkpoint_embed)
-        
-        sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
-        
-        if not sorted_scores:
-            checkpoint_embed.description = "No scores to report this checkpoint.\n\nGet ready, game is about to continue!\n\n\u200b\n\u200b"
-            checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
-            await msg.edit(embed=checkpoint_embed)
-            await asyncio.sleep(5)
-            return
+    async def distribute_rewards(self, channel, game):
+        """Distributes rewards for the current accumulated scores in game.scores."""
+        if not game.scores:
+            return []
 
+        sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
         lines = []
         medals = ["🥇", "🥈", "🥉"]
 
         for i, (uid, data) in enumerate(sorted_scores):
             user_name = await get_cached_username(self.bot, uid)
-            rp_total = data['wr'] # Rush Points
-            rounds = data['rounds_won']
+            rp_total = data['wr']
             
-            # Store Total RP for MVP
+            # Store Total RP for MVP if not already accounted for
+            # Note: We update total_wr_per_user here for the session MVP tracking
             game.total_wr_per_user[uid] = game.total_wr_per_user.get(uid, 0) + rp_total
             
-            # --- CONVERSION & REWARD LOGIC ---
+            # Conversion & Rewards
             profile = fetch_user_profile_v2(self.bot, uid)
             current_wr = profile.get('multi_wr', 0) if profile else 0
             daily_gain = get_daily_wr_gain(self.bot, uid)
             
-            # 1. Base Multiplier from Tiers
             t_mult = get_tier_multiplier(current_wr)
-            
-            # 2. XP Calculation
             base_xp = 35 + max(0, 30 - (i * 5))
-            
-            # 3. WR conversion (1 RP = 1 WR base)
             base_wr = rp_total
             
-            # 4. Apply Tier Multiplier
             xp_gain = int(base_xp * t_mult)
             wr_gain = int(base_wr * t_mult)
             
-            # 5. Apply Anti-Grind
             final_xp, final_wr = apply_anti_grind(xp_gain, wr_gain, daily_gain)
             
-            # Ensure minimums
             if final_wr < 1 and rp_total > 0: final_wr = 1
             if final_xp < 5: final_xp = 5
             
@@ -603,26 +633,15 @@ class ConstraintMode(commands.Cog):
             tier_up_msg = ""
             
             try:
-                # Call RPC and capture response
-                response = self.bot.supabase_client.rpc('record_game_result_v4', {
-                    'p_user_id': uid,
-                    'p_guild_id': channel.guild.id if channel.guild else None,
-                    'p_mode': 'MULTI',
-                    'p_xp_gain': final_xp,
-                    'p_wr_delta': final_wr,
-                    'p_is_win': (i == 0),
-                    'p_egg_trigger': None
-                }).execute()
-                
-                if response.data:
-                    res_data = response.data
-                    new_xp = res_data.get('xp', 0)
+                # Use MANUAL UPDATE to avoid incrementing games_played
+                res = update_user_stats_manual(self.bot, uid, final_xp, final_wr, mode='MULTI')
+                if res:
+                    new_xp = res.get('xp', 0)
                     old_xp = new_xp - final_xp
                     if calculate_level(new_xp) > calculate_level(old_xp):
                         level_up_msg = f" 🆙 **Lvl {calculate_level(new_xp)}**"
-                        
-                    # Check Tier up
-                    new_wr = res_data.get('multi_wr', 0)
+                    
+                    new_wr = res.get('wr', 0)
                     old_wr = new_wr - final_wr
                     
                     old_tier = None
@@ -635,7 +654,7 @@ class ConstraintMode(commands.Cog):
                         tier_up_msg = f" 🏆 **{new_tier['name']}!**"
 
             except Exception as e:
-                print(f"Failed to record checkpoint for {uid}: {e}")
+                print(f"Failed to record rewards for {uid}: {e}")
             
             medal = medals[i] if i < 3 else "▫️"
             lines.append(f"{medal} **{user_name}** • {rp_total} pts (+{final_wr} WR){level_up_msg}{tier_up_msg}")
@@ -654,24 +673,46 @@ class ConstraintMode(commands.Cog):
                 }
             )
 
-            # --- STREAK CHECK (Once per session per user) ---
+            # Streak Check (Once per session per user)
             #if uid not in game.streak_updated_users and rp_total > 0:
             #    try:
-            #        streak_mgr = StreakManager(self.bot)
-            #        s_msg, _, s_badge = streak_mgr.check_streak(uid)
+            #        s_msg, _, s_badge = self.bot.streak_manager.check_streak(uid) if hasattr(self.bot, 'streak_manager') else StreakManager(self.bot).check_streak(uid)
             #        game.streak_updated_users.add(uid)
             #        
             #        if s_msg:
             #            from src.utils import send_smart_message
-            #            # Send transient message in channel using centralized utility
-            #            await send_smart_message(channel, f"<@{uid}> {s_msg}", ephemeral=True, transient_duration=15)
+            #            p_user = self.bot.get_user(uid)
+            #            await send_smart_message(channel, s_msg, ephemeral=True, transient_duration=15, user=p_user)
             #        
             #        if s_badge:
             #            from src.utils import get_badge_emoji, send_smart_message
             #            b_emoji = get_badge_emoji(s_badge)
-            #            await send_smart_message(channel, f"<@{uid}> 💎 **BADGE UNLOCKED:** {b_emoji}!", ephemeral=True, transient_duration=15)
+            #            p_user = self.bot.get_user(uid)
+            #            await send_smart_message(channel, f"💎 **BADGE UNLOCKED:** {b_emoji}!", ephemeral=True, transient_duration=15, user=p_user)
             #    except Exception as e:
             #        print(f"Streak check error: {e}")
+
+        return lines
+
+    async def show_checkpoint(self, channel, game):
+        """Display checkpoint with scores and distribute rewards."""
+        checkpoint_embed = discord.Embed(
+            title="🏁 Checkpoint",
+            description="Calculating scores and distributing rewards...\n\n\u200b\n\u200b\n\u200b",
+            color=discord.Color.blue()
+        )
+        checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
+        msg = await channel.send(embed=checkpoint_embed)
+        
+        lines = await self.distribute_rewards(channel, game)
+        game.scores = {}
+
+        if not lines:
+            checkpoint_embed.description = "No scores to report this checkpoint.\n\nGet ready, game is about to continue!\n\n\u200b\n\u200b"
+            checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
+            await msg.edit(embed=checkpoint_embed)
+            await asyncio.sleep(5)
+            return
 
         # Basic Stats Summary
         is_solo = len(game.participants) == 1
@@ -708,8 +749,6 @@ class ConstraintMode(commands.Cog):
         checkpoint_embed.set_thumbnail(url=self.signal_urls['checkpoint'])
         await msg.edit(embed=checkpoint_embed)
         
-        game.scores = {}
-        
         await asyncio.sleep(8)
 
     @commands.Cog.listener()
@@ -723,7 +762,8 @@ class ConstraintMode(commands.Cog):
         game = self.bot.constraint_mode[cid]
         if game.game_msg and reaction.message.id == game.game_msg.id:
             if not game.start_confirmed.is_set():
-                game.participants.add(user.id)
+                if len(game.participants) < 10:
+                    game.participants.add(user.id)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -735,6 +775,10 @@ class ConstraintMode(commands.Cog):
         
         game = self.bot.constraint_mode[cid]
         if not game.is_round_active or not game.active_puzzle:
+            return
+        
+        # Only process messages from participants
+        if message.author.id not in game.participants:
             return
         
         content = message.content.strip().lower()
@@ -781,7 +825,9 @@ class ConstraintMode(commands.Cog):
         # Standard rounds
         if content in game.used_words:
             return
-        if content not in puzzle['solutions']:
+        
+        # Optimize: Use the validator function from the puzzle
+        if not puzzle['validator'](content):
             return
         
         # Check if user already answered this round
