@@ -337,13 +337,6 @@ class HelpView(discord.ui.View):
                 "🟨 Correct letter, wrong spot\n"
                 "⬜ Letter not in word"
             ), inline=False)
-
-            embed.add_field(name= f"Whats New?", value=(
-                "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
-                "• **Hard Mode**: Try `/hard_mode` for a greater challenge!\n"
-                "• **Advanced Help Menu**: Type /help and select among features for detailed guides.\n"
-                "• **New -G support**: -g also in -G now, helpful against unwanted autocapitalization or those who prefer caps 🧢.\n"
-            ))
             
             # Build example with custom emojis
             apple_example = "Guess: **APPLE**\n"
@@ -351,6 +344,13 @@ class HelpView(discord.ui.View):
             apple_example += "**A** is correct! **P** is in word but wrong spot."
             
             embed.add_field(name="❓ Example", value=apple_example, inline=False)
+            embed.add_field(name= f"{EMOJIS.get('28_streak','🔥')}Whats New?", value=(
+                "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
+                "• **Hard Mode**: Try `/hard_mode` for a greater challenge!\n"
+                "• **Advanced Help Menu**: Type /help and select among features for detailed guides.\n"
+                "• **New -G support**: -g also in -G now, helpful against unwanted autocapitalization or those who prefer caps 🧢.\n"
+            ))
+            
             embed.set_footer(text="Page 1/2 • type /help and select feature for detailed guides!")
             
         else:
