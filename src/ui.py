@@ -344,13 +344,14 @@ class HelpView(discord.ui.View):
             apple_example += "**A** is correct! **P** is in word but wrong spot."
             
             embed.add_field(name="❓ Example", value=apple_example, inline=False)
+
             embed.add_field(name= f"{EMOJIS.get('28_streak','🔥')}Whats New?", value=(
                 "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
                 "• **Hard Mode**: Try `/hard_mode` for a greater challenge!\n"
                 "• **Advanced Help Menu**: Type /help and select among features for detailed guides.\n"
                 "• **New -G support**: -g also in -G now, helpful against unwanted autocapitalization or those who prefer caps 🧢.\n"
             ))
-            
+
             embed.set_footer(text="Page 1/2 • type /help and select feature for detailed guides!")
             
         else:
@@ -787,11 +788,12 @@ class HelpView(discord.ui.View):
                 for t in TIERS
             ])
 
-            tier_text = "\n\n".join([
-                f"Global WR is subject to drop every month on 1st based on Tiers, this is to keep the leaderboard fresh and competitive\n"
+            tier_text = "".join([
+                f"{tier_text}\n\nGlobal WR is subject to drop every month on 1st based on Tiers, this is to keep the leaderboard fresh and competitive\n"
             ])
-            
+
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
+
         else:
             embed = discord.Embed(title="❓ Unknown Feature", description="Feature not found.", color=discord.Color.red())
 
