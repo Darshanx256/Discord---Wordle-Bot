@@ -786,11 +786,12 @@ class HelpView(discord.ui.View):
                 f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** - WR ≥ {t['min_wr']}" 
                 for t in TIERS
             ])
-            embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
 
             tier_text = "\n\n".join([
                 f"Global WR is subject to drop every month on 1st based on Tiers, this is to keep the leaderboard fresh and competitive\n"
             ])
+            
+            embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
         else:
             embed = discord.Embed(title="❓ Unknown Feature", description="Feature not found.", color=discord.Color.red())
 
