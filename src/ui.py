@@ -253,8 +253,10 @@ class LeaderboardView(discord.ui.View):
                 badge_str = f" {badge_emoji}" if badge_emoji else ""
                 
                 medal = {1:"🥇", 2:"🥈", 3:"🥉"}.get(rank, f"`#{rank}`")
+
+                calc_level = lambda xp: xp // 100 if xp < 1000 else 10 + (xp - 1000) // 200 if xp < 5000 else 30 + (xp - 5000) // 350 if xp < 15500 else 60 + (xp - 15500) // 500
                 
-                description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}**")
+                description_lines.append(f"{medal} {icon} **{name}{badge_str}**\n   > WR: **{wr}** | Level {calc_level(xp)}")
 
         embed = discord.Embed(title=self.title, description="\n".join(description_lines), color=self.color)
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.total_pages} • Total Players: {self.total_count} | Name changes take up to 48 hours to reflect")
