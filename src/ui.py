@@ -115,32 +115,15 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
                 embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 
-                # Record Results (Optimized)
-                from src.database import fetch_user_profile_v2, simulate_record_game, record_game_v2, get_daily_wr_gain
-                p = fetch_user_profile_v2(self.bot, interaction.user.id)
-                if p:
-                    pre_wr = p.get('solo_wr', 0)
-                    pre_xp = p.get('xp', 0)
-                    pre_daily = get_daily_wr_gain(self.bot, interaction.user.id) # Still need this, but might be cached in DB layer soon
+                # Record Results
+                from src.database import record_game_v2
+                res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken)
+                if res:
+                    xp_show = f"**{res.get('xp_gain',0)}** 💠"
+                    embed.add_field(name="Progression", value=f"➕ {xp_show} XP | 📈 WR: {res.get('solo_wr')}", inline=False)
                     
-                    res = simulate_record_game(self.bot, interaction.user.id, 'SOLO', 'win', self.game.attempts_used, time_taken, pre_wr, pre_xp, pre_daily)
-                    
-                    # Background update
-                    asyncio.create_task(asyncio.to_thread(
-                        record_game_v2, self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken, pre_wr=pre_wr, pre_daily=pre_daily
-                    ))
-                    
-                    if res:
-                        xp_show = f"**{res.get('xp_gain',0)}** 💠"
-                        embed.add_field(name="Progression", value=f"➕ {xp_show} XP | 📈 WR: {res.get('solo_wr')}", inline=False)
-                        if res.get('level_up'):
-                            embed.description += f"\n\n🔼 **LEVEL UP!** You are now **Level {res['level_up']}**! 🔼"
-                else:
-                    # Fallback to sync if profile fetch fails
-                    res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken)
-                    if res:
-                        xp_show = f"**{res.get('xp_gain',0)}** 💠"
-                        embed.add_field(name="Progression", value=f"➕ {xp_show} XP | 📈 WR: {res.get('solo_wr')}", inline=False)
+                    if res.get('level_up'):
+                        embed.description += f"\n\n🔼 **LEVEL UP!** You are now **Level {res['level_up']}**! 🔼"
 
                 embed.set_footer(text=f"Time: {time_taken:.1f}s")
                 self.view_ref.disable_all()
@@ -148,6 +131,13 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 self.bot.solo_games.pop(interaction.user.id, None)
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
+                # Streak notifications (Delayed & Ephemeral)
+                #if res:
+                #    import asyncio
+                #    if res.get('streak_msg'):
+                #        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
+                #    if res.get('streak_badge'):
+                #        asyncio.create_task(send_smart_message(interaction, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(res['streak_badge'])} Badge!", ephemeral=True))
 
             elif game_over:
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)
@@ -156,15 +146,15 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 
                 self.view_ref.disable_all()
                 self.bot.solo_games.pop(interaction.user.id, None)
-                
-                # Record Solo Loss (Background)
-                from src.database import record_game_v2
-                asyncio.create_task(asyncio.to_thread(
-                    record_game_v2, self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999
-                ))
-                
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
+                # Streak notifications for Loss (Delayed & Ephemeral)
+                #try:
+                #    res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999)
+                #    if res and res.get('streak_msg'):
+                #        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
+                #except:
+                #    pass
 
             else:
                 # Ongoing game - board + keyboard in embed description
@@ -331,110 +321,106 @@ class HelpView(discord.ui.View):
         if self.page == 0:
             return self.get_feature_help_embed(self.feature)
         if self.page == 1:
-            # BASIC PAGE - Modernized & Formal
-            embed = discord.Embed(
-                title="📖 Wordle Bot User Guide", 
-                description="Welcome to the official Wordle Bot. Engagement in strategic deduction across various competitive and casual modules.",
-                color=discord.Color.blue()
+            # BASIC PAGE
+            embed = discord.Embed(title=f"📚 Wordle Bot Guide (Basic)", color=discord.Color.blue())
+            embed.description = "A fun and engaging Wordle bot for Discord with various different game modes, level-up system and leaderboards!"
+            
+            embed.add_field(name="🎮 How to Play", value=(
+                "**1. Start a Game**\n"
+            # CATEGORIES
+            embed.add_field(name="🚀 Deployment", value=(
+                "• `/wordle` — Simple vocabulary (Standard)\n"
+                "• `/wordle_classic` — Extensive vocabulary (Classic)\n"
+                "• `/word_rush` — Rapid-fire constraint puzzles\n"
+                "• `/custom` — Define a private word in-channel\n"
+                "• `/solo` — Private session (Ephemeral)"
+            ), inline=False)
+            
+            embed.add_field(name="🕹️ Interaction", value=(
+                "**Make a Guess:**\n"
+                "• `/guess word:<word>` or `-g <word>`\n"
+                "*Note: `-G` prefix is also supported for accessibility.*"
+            ), inline=False)
+            
+            # VISUAL FEEDBACK
+            example_text = (
+                f"**A** {EMOJIS.get('block_a_green', '🟩')} — Correct slot\n"
+                f"**P** {EMOJIS.get('block_p_yellow', '🟨')} — Misplaced slot\n"
+                f"**L** {EMOJIS.get('block_l_white', '⬜')} — Not in word"
             )
-            
-            embed.add_field(name="🎮 Deployment", value=(
-                "**Primary Modules**\n"
-                "• `/wordle` — Curated standard lexicon\n"
-                "• `/wordle_classic` — Complete official dictionary\n"
-                "• `/word_rush` — Accelerated constraint-based puzzles\n"
-                "• `/race` — Competitive multi-user synchronous solve\n\n"
-                "**Specialized Modes**\n"
-                "• `/solo` — Private, single-user instance\n"
-                "• `/custom` — User-defined parameters and lexicon"
-            ), inline=False)
-            
-            embed.add_field(name="⌨️ Interaction", value=(
-                "Submit your 5-letter deduction using the Following identifiers:\n"
-                "• `/guess word:<input>`\n"
-                "• `-g <input>` (Standard)\n"
-                "• `-G <input>` (Case-insensitive support)\n\n"
-                "**Visual Feedback**\n"
-                f"{EMOJIS.get('block_a_green', '🟩')} **Correct** — Matches letter and position\n"
-                f"{EMOJIS.get('block_a_yellow', '🟨')} **Misplaced** — Matches letter only\n"
-                f"{EMOJIS.get('block_a_white', '⬜')} **Incorrect** — No match in target"
-            ), inline=False)
-            
-            # Whats New remains as requested
-            embed.add_field(name= f"{EMOJIS.get('28_streak','🔥')}Whats New?", value=(
+            embed.add_field(name="📊 Visual Feedback", value=example_text, inline=False)
+
+            # PRESERVE WHAT'S NEW
+            embed.add_field(name=f"{EMOJIS.get('28_streak','🔥')} What's New?", value=(
                 "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
                 "• **Hard Mode**: Try `/hard_mode` for a greater challenge!\n"
-                "• **Advanced Help Menu**: Type /help and select among features for detailed guides.\n"
-                "• **New -G support**: -g also in -G now, helpful against unwanted autocapitalization or those who prefer caps 🧢.\n"
-            ), inline=False)
+                "• **Advanced Help Menu**: Type /help and select features for detailed guides.\n"
+                "• **New -G support**: Case-insensitive guess support for all users.\n"
+            ))
 
-            embed.set_footer(text="Documentation Page 1/2 • Utilize the selection menu below for detailed technical manuals.")
+            embed.set_footer(text="Page 1/2 • Use /help <feature> for technical deep-dives")
             
         else:
-            # ADVANCED PAGE - Technical Documentation
-            embed = discord.Embed(
-                title="🧠 Wordle Bot Technical Manual (Advanced)", 
-                description="Comprehensive documentation for advanced gameplay systems, progression mechanics, and customization protocols.",
-                color=discord.Color.dark_purple()
-            )
+            # ADVANCED PAGE - Improved Layout
+            embed = discord.Embed(title="Wordle Bot Technical Manual (Advanced)", color=discord.Color.dark_purple())
+            embed.description = "Detailed specifications for commands, ranking systems, and mechanics."
             
-            # Grouped Command Systems
-            embed.add_field(name="🛠️ Operative Commands", value=(
-                "**Core Gameplay**\n"
-                "`/wordle` — Standard instance\n"
-                "`/wordle_classic` — Advanced lexicon\n"
-                "`/word_rush` — Constraint mode\n"
-                "`/race` — Synchronous competition\n\n"
-                "**Guess Submission**\n"
-                "`/guess` | `-g` | `-G` (Universal support)"
+            # OPERATIVE COMMANDS
+            embed.add_field(name="🎮 Operative Commands", value=(
+                "`/wordle` — Standard Simple Session\n"
+                "`/wordle_classic` — Advanced Classic Session\n"
+                "`/word_rush` — Rapid-Fire Logic\n"
+                "`/solo` — Private Instance (Ephemeral)\n"
+                "`/custom` — Configurable Parameter Batch\n"
+                "`/guess`, `-g`, `-G` — Submit Input\n"
+                "`/stop_game` — Force Terminate Session"
             ), inline=True)
             
+            # ANALYTICS & ACCOUNT
             embed.add_field(name="📊 Analytics & Account", value=(
-                "**Statistics**\n"
-                "`/profile` — Personal dossiers\n"
-                "`/leaderboard` — Local rankings\n"
-                "`/leaderboard_global` — Universal ranks\n\n"
-                "**Customization**\n"
-                "`/shop` — Badge procurement\n"
-                "`/custom` — Mode initialization"
+                "`/profile` — Personal Performance Data\n"
+                "`/leaderboard` — Guild Rankings\n"
+                "`/leaderboard_global` — Global Standing\n"
+                "`/shop` — Artifact Modification\n"
+                "`/message` — Feedback Transmission"
             ), inline=True)
             
-            # Ranking Tiers - Formalized
+            # RANKING TIERS
             tier_text = "\n".join([
-                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** — {t['min_wr']} WR Minimum" 
+                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** — WR ≥ {t['min_wr']}" 
                 for t in TIERS
             ])
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
             
-            # Rare Artifacts & Collectibles
-            embed.add_field(name="💎 Artifact Acquisition", value=(
-                "Probability-based rewards discovered during guess synchronization:\n"
-                f"• {EMOJIS.get('duck', '🦆')} **Duck** — Simple Module (1.0% Rate)\n"
-                f"• {EMOJIS.get('dragon', '🐲')} **Dragon** — Classic Module (0.1% Rate)\n"
-                f"• {EMOJIS.get('candy', '🍬')} **Candy** — General Discovery (1.0% Rate)\n\n"
-                "Equip artifacts and badges via `/shop` to customize user visibility."
+            # ARTIFACT ACQUISITION
+            embed.add_field(name="🎁 Artifact Acquisition", value=(
+                "**Chance-based drops during active sessions:**\n"
+                f"• {EMOJIS.get('duck', '🦆')} **Duck** — Simple Acquisition (1%)\n"
+                f"• {EMOJIS.get('dragon', '🐲')} **Dragon** — Classic Acquisition (0.1%)\n"
+                f"• {EMOJIS.get('candy', '🍬')} **Candy** — Universal Acquisition (1%)"
             ), inline=False)
             
-            # Gameplay Optimizations
+            # PERFORMANCE DIRECTIVES
             embed.add_field(name="💡 Performance Directives", value=(
-                "• **Initial Deductions**: Prioritize high-vowel lexicon (RAISE, AUDIO).\n"
-                "• **Latency**: Rapid solve times correlate with enhanced reward scaling.\n"
-                "• **Tier Scaling**: Progression into higher tiers increases resource yields.\n"
-                "• **Multi-user Engagement**: Multiplayer participation yields additional XP.\n"
-                "• **Precision Guessing**: Use `-G` to bypass client-side capitalization constraints."
+                "• **Latency Optimization**: Start with high-entropy inputs (e.g., ADIEU).\n"
+                "• **Speed Multipliers**: Rapid solutions yield significant reward bonuses.\n"
+                "• **Tier Scaling**: High-tier profiles benefit from adjusted multiplier curves.\n"
+                "• **Consensus Gameplay**: Multiplayer sessions provide enhanced XP yield."
+            ), inline=False)
+
+            # CUSTOM MODULE PARAMETERS
+            embed.add_field(name="⚙️ Custom Module Parameters", value=(
+                "Apply via `Extra options` during `/custom` setup:\n"
+                "`dict:list` — Supplemental vocabulary\n"
+                "`strict_dict:yes` — Restrict to custom set\n"
+                "`time:<min>` — Temporal constraint (e.g. 0.5)\n"
+                "`player:@u1,@u2` — Defined participants\n"
+                "`blind:<full/green>` — Visual restriction mode\n"
+                "`start:word` — Pre-filled baseline guesses\n"
+                "`title:Text` — Custom session identifier"
             ), inline=False)
             
-            # Advanced Customization Protocols
-            embed.add_field(name="🧂 Custom Module Parameters", value=(
-                "Integrate the following syntax into the `Extra options` field:\n"
-                "`dict:word1,word2` — Append custom lexicon\n"
-                "`time:0.5` — Duration constraint in minutes\n"
-                "`player:@u1,@u2` — Multi-player authorization\n"
-                "`blind:green` — High-tier memory constraint (Greens only)\n"
-                "`start:w1,w2` — Mandatory initial guess injection"
-            ), inline=False)
-            
-            embed.set_footer(text="Documentation Page 2/2 • Technical specifications finalized v4.0.")
+            embed.set_footer(text="Page 2/2 • Access specific feature manuals via /help <feature>")
 
         return embed
 
@@ -495,7 +481,7 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "The classic game of deduction. Guess the hidden 5-letter word in 6 tries.\n\n"
                 "**How to Play:**\n"
-                "• Use `/guess word:xxxxx`, `-g xxxxx`, or `-G xxxxx` to submit guesses.\n"
+                "• Use `/guess word:xxxxx`, `-g xxxxx` or `-G xxxxx` to submit guesses.\n"
                 "• Use `/stop_game` to end the game early.\n"
                 f"• {green_block('A')} = Correct letter in correct position\n"
                 f"• {yellow_block('A')} = Correct letter in wrong position\n"
@@ -520,7 +506,8 @@ class HelpView(discord.ui.View):
                 "• `/wordle_classic` - Uses official Wordle solution list. The true test.\n"
                 "• `/hard_mode` - Forces you to use revealed hints in next guesses.\n\n"
                 "**Rewards:**\n"
-                "• **XP** and **WR** (Wordle Rating) is awarded for every game based on performance.\n"
+                "• **XP** is awarded for every game based on performance.\n"
+                "• **WR** (Wordle Rating) increases with wins, fluctuates based on Tier Rating.\n"
                 "• Faster solves = Speed Bonus!\n"
                 "**\n\nGame Interface:**\n"
                 "• **Progress Bar:** `[●●●○○○]` shows attempts used vs remaining\n"
@@ -711,7 +698,7 @@ class HelpView(discord.ui.View):
                 "Word: START | player:@player1,@player2 | time:5\n"
                 "```\n\n"
                 "**How to Play Custom Games:**\n"
-                "• Use `/guess word:xxxxx`, `-g xxxxx`, or `-G xxxxx` as per standard protocol.\n"
+                "• Use `/guess word:xxxxx`, `-g xxxxx` or `-G xxxxx` like a normal game\n"
                 "• Restricted games only accept guesses from allowed players\n"
                 "• Custom dictionary limits which words are valid\n"
                 "• Use `/stop_game` to end early\n\n"
@@ -744,7 +731,7 @@ class HelpView(discord.ui.View):
             #timestamp = int(reset.timestamp())
             
             embed.description = (
-                "Technical overview of the algorithmic progression system and hierarchical ranking tiers.\n\n"
+                "Climb the ranks from Challenger beginner to Legendary Master!\n\n"
                 "**Core Stats Explained:**\n"
                 "• **XP (Experience Points)** - Earned every game, determines your **Level**\n"
                 "• **WR (Wordle Rating)** - Win/loss-based score, determines your **Tier**\n"

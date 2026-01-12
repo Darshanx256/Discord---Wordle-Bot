@@ -426,16 +426,48 @@ class GameCommands(commands.Cog):
 
     @commands.hybrid_command(name="ping", description="Check bot latency.")
     async def ping(self, ctx):
-        # WebSocket Ping
+        # WebSocket Latency (from heartbeats)
         ws_ping = round(self.bot.latency * 1000)
         
-        # API Ping (measuring response time)
+        # Premium Embed Design
+        embed = discord.Embed(
+            title="🏓 Pong!",
+            description="Calculating API roundtrip...",
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text="Wordle Bot • Latency Diagnostic")
+        
         start_time = time.monotonic()
-        msg = await ctx.send("🏓 Pong...")
+        
+        # Use direct interaction response for speed if available
+        if ctx.interaction:
+            # Acknowledgement
+            await ctx.interaction.response.send_message(embed=embed)
+            msg = await ctx.interaction.original_response()
+        else:
+            msg = await ctx.send(embed=embed)
+            
         end_time = time.monotonic()
         api_ping = round((end_time - start_time) * 1000)
         
-        await msg.edit(content=f"🏓 Pong!\nWebSocket Ping: {ws_ping}ms\nAPI Ping: {api_ping}ms")
+        # Connection Health Color
+        if api_ping < 200: color = discord.Color.green()
+        elif api_ping < 450: color = discord.Color.gold()
+        else: color = discord.Color.red()
+        
+        # Final Embed content
+        embed.title = "🏓 Pong! (High Responsiveness)"
+        embed.description = (
+            f"**WebSocket:** `{ws_ping}ms`\n"
+            f"**API Response:** `{api_ping}ms`"
+        )
+        embed.color = color
+        embed.timestamp = datetime.datetime.utcnow()
+        
+        status = "🟢 Excellent" if api_ping < 200 else "🟡 Average" if api_ping < 450 else "🔴 Delayed"
+        embed.add_field(name="Network Health", value=status)
+        
+        await msg.edit(embed=embed)
 
     @commands.hybrid_command(name="wordle", description="Start a new game (Simple word list).")
     @commands.guild_only()
