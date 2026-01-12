@@ -86,7 +86,7 @@ class HelpCommands(commands.Cog):
             inline=False
         )
         
-        embed.set_footer(text="Wordle Game Bot - v4.0 • Feature requests are welcomed via the /message command.")
+        embed.set_footer(text="Wordle Game Bot - v4.1 • Feature requests are welcomed via the /message command.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):

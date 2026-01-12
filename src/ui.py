@@ -118,6 +118,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 # Record Results
                 from src.database import record_game_v2
                 res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken)
+
                 if res:
                     xp_show = f"**{res.get('xp_gain',0)}** 💠"
                     embed.add_field(name="Progression", value=f"➕ {xp_show} XP | 📈 WR: {res.get('solo_wr')}", inline=False)
@@ -327,100 +328,107 @@ class HelpView(discord.ui.View):
             
             embed.add_field(name="🎮 How to Play", value=(
                 "**1. Start a Game**\n"
-            # CATEGORIES
-            embed.add_field(name="🚀 Deployment", value=(
-                "• `/wordle` — Simple vocabulary (Standard)\n"
-                "• `/wordle_classic` — Extensive vocabulary (Classic)\n"
-                "• `/word_rush` — Rapid-fire constraint puzzles\n"
-                "• `/custom` — Define a private word in-channel\n"
-                "• `/solo` — Private session (Ephemeral)"
+                "• `/wordle` -> Simple 5-letter words\n"
+                "• `/wordle_classic` -> Harder, full dictionary\n"
+                "• `/word_rush` -> Rapid constraint puzzles\n"
+                "• `/custom` -> Custom word in channel\n"
+                "• `/solo` -> Private Solo Mode\n\n"
+                "**2. Make a Guess**\n"
+                "• `/guess word:apple` or `-g apple`\n\n"
+                "**3. Hints**\n"
+                "🟩 Correct letter, correct spot\n"
+                "🟨 Correct letter, wrong spot\n"
+                "⬜ Letter not in word"
             ), inline=False)
             
-            embed.add_field(name="🕹️ Interaction", value=(
-                "**Make a Guess:**\n"
-                "• `/guess word:<word>` or `-g <word>`\n"
-                "*Note: `-G` prefix is also supported for accessibility.*"
-            ), inline=False)
+            # Build example with custom emojis
+            apple_example = "Guess: **APPLE**\n"
+            apple_example += f"{EMOJIS.get('block_a_green', '🟩')}{EMOJIS.get('block_p_yellow', '🟨')}{EMOJIS.get('block_p_yellow', '🟨')}{EMOJIS.get('block_l_white', '⬜')}{EMOJIS.get('block_e_white', '⬜')}\n"
+            apple_example += "**A** is correct! **P** is in word but wrong spot."
             
-            # VISUAL FEEDBACK
-            example_text = (
-                f"**A** {EMOJIS.get('block_a_green', '🟩')} — Correct slot\n"
-                f"**P** {EMOJIS.get('block_p_yellow', '🟨')} — Misplaced slot\n"
-                f"**L** {EMOJIS.get('block_l_white', '⬜')} — Not in word"
-            )
-            embed.add_field(name="📊 Visual Feedback", value=example_text, inline=False)
+            embed.add_field(name="❓ Example", value=apple_example, inline=False)
 
-            # PRESERVE WHAT'S NEW
-            embed.add_field(name=f"{EMOJIS.get('28_streak','🔥')} What's New?", value=(
+            embed.add_field(name= f"{EMOJIS.get('28_streak','🔥')}What's New?", value=(
                 "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
                 "• **Hard Mode**: Try `/hard_mode` for a greater challenge!\n"
-                "• **Advanced Help Menu**: Type /help and select features for detailed guides.\n"
-                "• **New -G support**: Case-insensitive guess support for all users.\n"
+                "• **Advanced Help Menu**: Type /help and select among features for detailed guides.\n"
+                "• **New -G support**: -g also in -G now, helpful against unwanted autocapitalization or those who prefer caps 🧢.\n"
             ))
 
-            embed.set_footer(text="Page 1/2 • Use /help <feature> for technical deep-dives")
+            embed.set_footer(text="Page 1/2 • type /help and select feature for detailed guides!")
             
         else:
-            # ADVANCED PAGE - Improved Layout
-            embed = discord.Embed(title="Wordle Bot Technical Manual (Advanced)", color=discord.Color.dark_purple())
-            embed.description = "Detailed specifications for commands, ranking systems, and mechanics."
+            # ADVANCED PAGE
+            embed = discord.Embed(title="🧠 Wordle Bot Guide (Advanced)", color=discord.Color.dark_purple())
+            embed.description = "Deep dive into commands, tiers, and collectibles!"
             
-            # OPERATIVE COMMANDS
-            embed.add_field(name="🎮 Operative Commands", value=(
-                "`/wordle` — Standard Simple Session\n"
-                "`/wordle_classic` — Advanced Classic Session\n"
-                "`/word_rush` — Rapid-Fire Logic\n"
-                "`/solo` — Private Instance (Ephemeral)\n"
-                "`/custom` — Configurable Parameter Batch\n"
-                "`/guess`, `-g`, `-G` — Submit Input\n"
-                "`/stop_game` — Force Terminate Session"
+            # Commands Section - Two columns for better organization
+            embed.add_field(name="🎮 Game Commands", value=(
+                "`/wordle` -> Simple Game\n"
+                "`/wordle_classic` -> Hard Game\n"
+                "`/word_rush` -> Rush Mode\n"
+                "`/solo` -> Private Game\n"
+                "`/custom` -> Set Custom Word\n"
+                "`/guess`, `-g` or `-G` -> Guess\n"
+                "`/stop_game` or `/stop_rush` -> Stop\n"
+                "`/race` -> Start Race Mode"
             ), inline=True)
             
-            # ANALYTICS & ACCOUNT
-            embed.add_field(name="📊 Analytics & Account", value=(
-                "`/profile` — Personal Performance Data\n"
-                "`/leaderboard` — Guild Rankings\n"
-                "`/leaderboard_global` — Global Standing\n"
-                "`/shop` — Artifact Modification\n"
-                "`/message` — Feedback Transmission"
+            embed.add_field(name="📊 Stats & Profile", value=(
+                "`/profile` -> Your Stats\n"
+                "`/leaderboard` -> Server Ranks\n"
+                "`/leaderboard_global` -> Global\n"
+                "`/shop` -> Equip Badges\n"
+                "`/showrace` -> Resume Race\n\n"
+                #"🔥 **Streaks**\n"
+                #"Play daily to build your streak for\n"
+                #"Multipliers & exclusive Badges!\n"
+                #"*Streaks reset daily at 00:00 UTC.*"
             ), inline=True)
             
-            # RANKING TIERS
+            # Tiers Section
             tier_text = "\n".join([
-                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** — WR ≥ {t['min_wr']}" 
+                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** -> WR ≥ {t['min_wr']}" 
                 for t in TIERS
             ])
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
             
-            # ARTIFACT ACQUISITION
-            embed.add_field(name="🎁 Artifact Acquisition", value=(
-                "**Chance-based drops during active sessions:**\n"
-                f"• {EMOJIS.get('duck', '🦆')} **Duck** — Simple Acquisition (1%)\n"
-                f"• {EMOJIS.get('dragon', '🐲')} **Dragon** — Classic Acquisition (0.1%)\n"
-                f"• {EMOJIS.get('candy', '🍬')} **Candy** — Universal Acquisition (1%)"
+            # Easter Eggs Section
+            duck_emoji = EMOJIS.get("duck", "🦆")
+            dragon_emoji = EMOJIS.get("dragon", "🐲")
+            candy_emoji = EMOJIS.get("candy", "🍬")
+            
+            embed.add_field(name="🎁 Easter Eggs & Badges", value=(
+                f"**Rare Drops during `/guess`:**\n"
+                f"{duck_emoji} **Duck** -> Simple Mode (1/100)\n"
+                f"{dragon_emoji} **Dragon** -> Classic Mode (1/1000)\n"
+                f"{candy_emoji} **Candy** -> Both Modes (1/100)\n\n"
+                "View your collection via `/profile`\n"
+                "Unlock **Badges** in `/shop`!"
             ), inline=False)
             
-            # PERFORMANCE DIRECTIVES
-            embed.add_field(name="💡 Performance Directives", value=(
-                "• **Latency Optimization**: Start with high-entropy inputs (e.g., ADIEU).\n"
-                "• **Speed Multipliers**: Rapid solutions yield significant reward bonuses.\n"
-                "• **Tier Scaling**: High-tier profiles benefit from adjusted multiplier curves.\n"
-                "• **Consensus Gameplay**: Multiplayer sessions provide enhanced XP yield."
-            ), inline=False)
-
-            # CUSTOM MODULE PARAMETERS
-            embed.add_field(name="⚙️ Custom Module Parameters", value=(
-                "Apply via `Extra options` during `/custom` setup:\n"
-                "`dict:list` — Supplemental vocabulary\n"
-                "`strict_dict:yes` — Restrict to custom set\n"
-                "`time:<min>` — Temporal constraint (e.g. 0.5)\n"
-                "`player:@u1,@u2` — Defined participants\n"
-                "`blind:<full/green>` — Visual restriction mode\n"
-                "`start:word` — Pre-filled baseline guesses\n"
-                "`title:Text` — Custom session identifier"
+            # Pro Tips
+            embed.add_field(name="💡 Pro Tips", value=(
+                "• Start with vowel-heavy words (AUDIO, RAISE)\n"
+                "• Speed matters -> faster solves = bonus rewards\n"
+                "• Higher tiers receive scaled rewards\n"
+                "• Participate in Multiplayer for extra XP\n"
+                "• Word Rush Checkpoints convert Points to WR!"
             ), inline=False)
             
-            embed.set_footer(text="Page 2/2 • Access specific feature manuals via /help <feature>")
+            # Custom Game Options
+            embed.add_field(name="🧂 Custom Game Extra Options", value=(
+                "Use in `Extra options` field:\n"
+                "`dict:word1,word2` -> Add custom words\n"
+                "`strict_dict:list` -> ONLY use these words\n"
+                "`time:0.5` -> Time limit (min, e.g. 0.5=30s)\n"
+                "`player:@u1,@u2` -> Allow multiple users\n"
+                "`blind:green` -> Show greens only 🟢\n"
+                "`start:w1,w2` -> Force start guesses\n"
+                "`title:My Text` -> Set custom title"
+            ), inline=False)
+            
+            embed.set_footer(text="Page 2/2 • type /help and select feature for detailed guides!")
 
         return embed
 
