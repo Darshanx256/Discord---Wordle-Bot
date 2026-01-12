@@ -27,10 +27,10 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     stats_map = {} # {uid: {'wr': 1200, 'badge': '...', 'daily': 50}}
     
     try:
-        # Fetch WR and Badges
-        s_res = bot.supabase_client.table('user_stats_v2').select('user_id, multi_wr, active_badge').in_('user_id', all_participants).execute()
+        # Fetch WR, XP and Badges
+        s_res = bot.supabase_client.table('user_stats_v2').select('user_id, multi_wr, xp, active_badge').in_('user_id', all_participants).execute()
         for r in s_res.data:
-            stats_map[r['user_id']] = {'wr': r['multi_wr'], 'badge': r['active_badge'], 'daily': 0}
+            stats_map[r['user_id']] = {'wr': r['multi_wr'], 'xp': r['xp'], 'badge': r['active_badge'], 'daily': 0}
             
         # Fetch Daily Gains (match_history table)
         today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -53,12 +53,21 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     embed.description = f"**{winner_user.mention}{win_badge_str}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
     embed.add_field(name="Final Board", value=board_display, inline=False)
     
-    # Award winner with pre-fetched stats
-    res = record_game_v2(
-        bot, winner_user.id, interaction.guild.id, 'MULTI', 'win', 
+    # Simulate winner rewards locally
+    from src.database import simulate_record_game
+    res = simulate_record_game(
+        bot, winner_user.id, 'MULTI', 'win', 
+        game.attempts_used, time_taken, 
+        pre_wr=winner_stats['wr'], pre_xp=winner_stats['xp'], pre_daily=winner_stats['daily']
+    )
+    
+    # Background DB update for winner
+    asyncio.create_task(asyncio.to_thread(
+        record_game_v2, bot, winner_user.id, interaction.guild.id, 'MULTI', 'win', 
         game.attempts_used, time_taken, 
         pre_wr=winner_stats['wr'], pre_daily=winner_stats['daily']
-    )
+    ))
+
     if res:
         xp_gain = res.get('xp_gain', 0)
         embed.add_field(name="Winner Rewards", value=f"+ {xp_gain} XP | 📈 WR: {res.get('multi_wr')}", inline=False)
@@ -86,7 +95,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
                     discovered_indices.add(i)
                     user_unique_greens[uid] = user_unique_greens.get(uid, 0) + 1
 
-    # Pre-calculate outcome keys to parallelize DB calls
+    # Pre-calculate outcome keys to parallelize
     async def process_participant(uid):
         unique_greens = user_unique_greens.get(uid, 0)
 
@@ -97,15 +106,23 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
         elif unique_greens == 1: outcome_key = 'correct_1'
         else: outcome_key = 'participation'
 
-        # DB operations in threads since record_game_v2 is blocking (via calculate_final_rewards)
-        p_stats = stats_map.get(uid, {'wr': 0, 'badge': None, 'daily': 0})
-        pres = await asyncio.to_thread(
+        p_stats = stats_map.get(uid, {'wr': 1200, 'xp': 0, 'badge': None, 'daily': 0})
+        
+        # Simulate local result
+        pres = simulate_record_game(
+            bot, uid, 'MULTI', outcome_key, 
+            game.attempts_used, 999, pre_wr=p_stats['wr'], pre_xp=p_stats['xp'], pre_daily=p_stats['daily']
+        )
+        
+        # Background DB update
+        asyncio.create_task(asyncio.to_thread(
             record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, 
             game.attempts_used, 999, pre_wr=p_stats['wr'], pre_daily=p_stats['daily']
-        )
+        ))
+        
         return (uid, outcome_key, pres)
 
-    # Gather all participant rewards in parallel
+    # Gather local simulations
     if others:
         results = await asyncio.gather(*(process_participant(uid) for uid in others))
     else:
@@ -178,9 +195,10 @@ async def handle_game_loss(bot, game, interaction, cid):
     all_participants = list(game.participants)
     stats_map = {}
     try:
-        s_res = bot.supabase_client.table('user_stats_v2').select('user_id, multi_wr, active_badge').in_('user_id', all_participants).execute()
+        # Fetch WR, XP and Badges
+        s_res = bot.supabase_client.table('user_stats_v2').select('user_id, multi_wr, xp, active_badge').in_('user_id', all_participants).execute()
         for r in s_res.data:
-            stats_map[r['user_id']] = {'wr': r['multi_wr'], 'badge': r['active_badge'], 'daily': 0}
+            stats_map[r['user_id']] = {'wr': r['multi_wr'], 'xp': r['xp'], 'badge': r['active_badge'], 'daily': 0}
         
         today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         h_res = bot.supabase_client.table('match_history').select('user_id, wr_delta').in_('user_id', all_participants).gte('created_at', today_start.isoformat()).gt('wr_delta', 0).execute()
@@ -218,11 +236,21 @@ async def handle_game_loss(bot, game, interaction, cid):
         elif unique_greens == 1: outcome_key = 'correct_1'
         else: outcome_key = 'participation'
 
-        p_stats = stats_map.get(uid, {'wr': 0, 'badge': None, 'daily': 0})
-        pres = await asyncio.to_thread(
+        p_stats = stats_map.get(uid, {'wr': 1200, 'xp': 0, 'badge': None, 'daily': 0})
+        
+        from src.database import simulate_record_game
+        # Simulate local result
+        pres = simulate_record_game(
+            bot, uid, 'MULTI', outcome_key, 
+            6, 999, pre_wr=p_stats['wr'], pre_xp=p_stats['xp'], pre_daily=p_stats['daily']
+        )
+        
+        # Background DB update
+        asyncio.create_task(asyncio.to_thread(
             record_game_v2, bot, uid, interaction.guild.id, 'MULTI', outcome_key, 
             6, 999, pre_wr=p_stats['wr'], pre_daily=p_stats['daily']
-        )
+        ))
+        
         return (uid, outcome_key, pres)
 
     results = await asyncio.gather(*(process_participant(uid) for uid in game.participants))

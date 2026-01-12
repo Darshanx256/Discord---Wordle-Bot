@@ -84,27 +84,6 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
         # 3. Calculate Final Rewards
         xp_gain, wr_delta = calculate_final_rewards(mode, outcome, guesses, time_taken, current_wr, daily_gain)
         
-        # --- STREAK INTEGRATION ---
-        streak_msg = None
-        badge_awarded = None
-        
-        if mode != 'CUSTOM':
-            from src.mechanics.streaks import StreakManager
-            streak_mgr = StreakManager(bot)
-            
-            # Check/Update Streak (Increments if new day, regardless of win/loss)
-            streak_msg, raw_mult, badge_awarded = streak_mgr.check_streak(user_id)
-            
-            # Apply Multiplier if WIN and within limit
-            if outcome == 'win' and raw_mult > 1.0:
-                daily_wins = get_daily_wins(bot, user_id)
-                limit = 0
-                if raw_mult >= 3.0: limit = 4
-                elif raw_mult >= 2.5: limit = 4
-                elif raw_mult >= 2.0: limit = 3
-                
-                if daily_wins < limit:
-                    wr_delta = int(wr_delta * raw_mult)
         # --------------------------
         
         # "Solves" check for Challenger Tier? 
@@ -179,14 +158,52 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
                 
             return {
                 'xp': new_xp, 'solo_wr': data.get('solo_wr',0), 'multi_wr': data.get('multi_wr',0),
-                'xp_gain': xp_gain, 'level_up': data.get('level_up'), 'tier_up': data.get('tier_up'),
-                'streak_msg': streak_msg, 'streak_badge': badge_awarded
+                'xp_gain': xp_gain, 'level_up': data.get('level_up'), 'tier_up': data.get('tier_up')
             }
         return None
         
     except Exception as e:
         print(f"DB ERROR in record_game_v2: {e}")
         return None
+
+def simulate_record_game(bot: commands.Bot, user_id: int, mode: str, outcome: str, guesses: int, time_taken: float, pre_wr: int, pre_xp: int, pre_daily: int):
+    """
+    Simulates the result of record_game_v2 locally for instant feedback.
+    """
+    from src.mechanics.rewards import calculate_final_rewards
+    from src.utils import calculate_level
+    from src.config import TIERS
+    
+    xp_gain, wr_delta = calculate_final_rewards(mode, outcome, guesses, time_taken, pre_wr, pre_daily)
+    
+    new_xp = pre_xp + xp_gain
+    new_wr = pre_wr + wr_delta
+    
+    old_tier = None
+    new_tier = None
+    for t in TIERS:
+        if old_tier is None and pre_wr >= t['min_wr']: old_tier = t
+        if new_tier is None and new_wr >= t['min_wr']: new_tier = t
+        if old_tier and new_tier: break
+        
+    tier_up = None
+    if new_tier and old_tier:
+        if new_tier['min_wr'] > old_tier['min_wr']: tier_up = new_tier
+    elif new_tier and not old_tier:
+        tier_up = new_tier
+        
+    old_lvl = calculate_level(pre_xp)
+    new_lvl = calculate_level(new_xp)
+    level_up = new_lvl if new_lvl > old_lvl else None
+    
+    return {
+        'xp': new_xp, 
+        'solo_wr': new_wr if mode == 'SOLO' else 0, 
+        'multi_wr': new_wr if mode == 'MULTI' else 0,
+        'xp_gain': xp_gain, 
+        'level_up': level_up, 
+        'tier_up': tier_up
+    }
 
 def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = True):
     """Fetches full profile V2 with optional caching."""
@@ -215,18 +232,6 @@ def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = Tru
                     break
             data['tier'] = tier_info
             
-            # --- FETCH STREAK INFO ---
-            try:
-                s_res = bot.supabase_client.table('streaks_v4').select('current_streak, max_streak').eq('user_id', user_id).execute()
-                if s_res.data:
-                    data['current_streak'] = s_res.data[0].get('current_streak', 0)
-                    data['max_streak'] = s_res.data[0].get('max_streak', 0)
-                else:
-                    data['current_streak'] = 0
-                    data['max_streak'] = 0
-            except:
-                data['current_streak'] = 0
-                data['max_streak'] = 0
             
             # Update Cache
             _PROFILE_CACHE[user_id] = (data, now + CACHE_TTL)
@@ -398,22 +403,6 @@ def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str = 'sim
 def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, guesses: int, time_taken: float, xp: int, wr: int, rank: int):
     """Record race mode result in database with streak integration."""
     try:
-        # --- STREAK INTEGRATION ---
-        from src.mechanics.streaks import StreakManager
-        streak_mgr = StreakManager(bot)
-        streak_msg, raw_mult, badge_awarded = streak_mgr.check_streak(user_id)
-        
-        # Apply Multiplier if WIN and within limit (Races are MULTI)
-        if won and raw_mult > 1.0:
-            daily_wins = get_daily_wins(bot, user_id)
-            limit = 0
-            if raw_mult >= 3.0: limit = 4
-            elif raw_mult >= 2.5: limit = 4
-            elif raw_mult >= 2.0: limit = 3
-            
-            if daily_wins < limit:
-                wr = int(wr * raw_mult)
-
         # Record in match history
         bot.supabase_client.table('match_history').insert({
             'user_id': user_id,

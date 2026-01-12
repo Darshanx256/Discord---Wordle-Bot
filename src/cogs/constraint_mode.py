@@ -673,24 +673,6 @@ class ConstraintMode(commands.Cog):
                 }
             )
 
-            # Streak Check (Once per session per user)
-            #if uid not in game.streak_updated_users and rp_total > 0:
-            #    try:
-            #        s_msg, _, s_badge = self.bot.streak_manager.check_streak(uid) if hasattr(self.bot, 'streak_manager') else StreakManager(self.bot).check_streak(uid)
-            #        game.streak_updated_users.add(uid)
-            #        
-            #        if s_msg:
-            #            from src.utils import send_smart_message
-            #            p_user = self.bot.get_user(uid)
-            #            await send_smart_message(channel, s_msg, ephemeral=True, transient_duration=15, user=p_user)
-            #        
-            #        if s_badge:
-            #            from src.utils import get_badge_emoji, send_smart_message
-            #            b_emoji = get_badge_emoji(s_badge)
-            #            p_user = self.bot.get_user(uid)
-            #            await send_smart_message(channel, f"💎 **BADGE UNLOCKED:** {b_emoji}!", ephemeral=True, transient_duration=15, user=p_user)
-            #    except Exception as e:
-            #        print(f"Streak check error: {e}")
 
         return lines
 

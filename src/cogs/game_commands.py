@@ -424,6 +424,19 @@ class GameCommands(commands.Cog):
         task = asyncio.create_task(self._run_custom_timer(channel_id, game))
         self._custom_timers[channel_id] = task
 
+    @commands.hybrid_command(name="ping", description="Check bot latency.")
+    async def ping(self, ctx):
+        # WebSocket Ping
+        ws_ping = round(self.bot.latency * 1000)
+        
+        # API Ping (measuring response time)
+        start_time = time.monotonic()
+        msg = await ctx.send("🏓 Pong...")
+        end_time = time.monotonic()
+        api_ping = round((end_time - start_time) * 1000)
+        
+        await msg.edit(content=f"🏓 Pong!\nWebSocket Ping: {ws_ping}ms\nAPI Ping: {api_ping}ms")
+
     @commands.hybrid_command(name="wordle", description="Start a new game (Simple word list).")
     @commands.guild_only()
     async def start(self, ctx):
