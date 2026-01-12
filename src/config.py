@@ -101,5 +101,5 @@ ROTATING_ACTIVITIES = [
 #    {"type": discord.ActivityType.playing, "name": "collecting green squares like trophies"},
 #    {"type": discord.ActivityType.playing, "name": "/word_rush for fast paced word game!"},
 #    {"type": discord.ActivityType.listening, "name": "/custom is now redefined!"},
-    {"type": discord.ActivityType.playing, "name": "Try the brand new /word_rush"},
+    {"type": discord.ActivityType.playing, "name": "/wordle to start"},
 ]
