@@ -35,7 +35,6 @@ def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
             total = sum(r['wr_delta'] for r in response.data)
             return total
         return 0
-        return 0
     except Exception as e:
         # print(f"⚠️ Could not fetch daily WR stats: {e}")
         return 0
@@ -158,7 +157,8 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
                 
             return {
                 'xp': new_xp, 'solo_wr': data.get('solo_wr',0), 'multi_wr': data.get('multi_wr',0),
-                'xp_gain': xp_gain, 'level_up': data.get('level_up'), 'tier_up': data.get('tier_up')
+                'xp_gain': xp_gain, 'level_up': data.get('level_up'), 'tier_up': data.get('tier_up'),
+                'streak_msg': data.get('streak_msg'), 'streak_badge': data.get('streak_badge')
             }
         return None
         
@@ -323,7 +323,7 @@ def fetch_user_profiles_batched(bot: commands.Bot, user_ids: list):
             data['tier'] = tier_info
             
             results[uid] = data
-            _PROFILE_CACHE[uid] = (data, now + CACHE_TTL) # Back-fill cache
+            _PROFILE_CACHE[uid] = data # Back-fill cache
             
         return results
     except Exception as e:
@@ -414,7 +414,7 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
         }).execute()
         
         # Update user stats
-        bot.supabase_client.rpc('record_game_result_v4', {
+        rpc_res = bot.supabase_client.rpc('record_game_result_v4', {
             'p_user_id': user_id,
             'p_guild_id': None,
             'p_mode': 'MULTI',
@@ -424,6 +424,13 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
             'p_egg_trigger': None
         }).execute()
         
+        streak_msg = None
+        badge_awarded = None
+        if rpc_res.data:
+            data = rpc_res.data
+            streak_msg = data.get('streak_msg')
+            badge_awarded = data.get('streak_badge')
+            
         return {'streak_msg': streak_msg, 'streak_badge': badge_awarded}
     except Exception as e:
         print(f"DB ERROR in record_race_result: {e}")

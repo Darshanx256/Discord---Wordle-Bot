@@ -128,12 +128,27 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                     pre_wr=pre_wr, pre_xp=pre_xp, pre_daily=pre_daily
                 )
                 
-                # BACKGROUND: Actual DB write (non-blocking)
-                asyncio.create_task(asyncio.to_thread(
-                    record_game_v2, self.bot, uid, None, 'SOLO', 'win',
-                    self.game.attempts_used, time_taken,
-                    pre_wr=pre_wr, pre_daily=pre_daily
-                ))
+                # BACKGROUND: Actual DB write (non-blocking) with Streak Handling
+                async def _bg_save():
+                    try:
+                        db_res = await asyncio.to_thread(
+                            record_game_v2, self.bot, uid, None, 'SOLO', 'win',
+                            self.game.attempts_used, time_taken,
+                            pre_wr=pre_wr, pre_daily=pre_daily
+                        )
+                        if db_res:
+                            s_msg = db_res.get('streak_msg')
+                            s_badge = db_res.get('streak_badge')
+                            if s_msg or s_badge:
+                                from src.utils import send_smart_message, get_badge_emoji
+                                msg = s_msg or ""
+                                if s_badge:
+                                    msg += f"\n💎 **BADGE UNLOCKED:** {get_badge_emoji(s_badge)} Badge!"
+                                await send_smart_message(interaction, msg, ephemeral=True)
+                    except Exception as e:
+                        print(f"Background Save Error: {e}")
+
+                asyncio.create_task(_bg_save())
 
                 if res:
                     xp_show = f"**{res.get('xp_gain',0)}** 💠"
