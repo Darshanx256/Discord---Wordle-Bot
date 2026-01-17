@@ -19,11 +19,10 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, 
             f"> You summoned a RARE Duck of Luck!"
         )
         if bot and user_id:
+            import threading
             from src.database import trigger_egg
-            try:
-                trigger_egg(bot, user_id, egg)
-            except:
-                pass
+            # Fire-and-forget: run in background thread to avoid blocking
+            threading.Thread(target=lambda: trigger_egg(bot, user_id, egg), daemon=True).start()
             
     elif rng <= 2:  
         eye_emoji = EMOJIS.get('eyes', '👁️') if 'eyes' in EMOJIS else '👁️'
@@ -33,11 +32,10 @@ def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, 
         egg_emoji = EMOJIS.get('candy', '🍬')
         extra_line = f"\n> *Does this keyboard feel sticky to you?* {egg_emoji}"
         if bot and user_id:
+            import threading
             from src.database import trigger_egg
-            try:
-                trigger_egg(bot, user_id, egg)
-            except:
-                pass
+            # Fire-and-forget: run in background thread to avoid blocking
+            threading.Thread(target=lambda: trigger_egg(bot, user_id, egg), daemon=True).start()
     #egg end
 
     """Generates the stylized keypad using Discord Markdown."""
@@ -109,15 +107,34 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             
             # Embed Update
             if win:
+                import asyncio
+                from src.database import record_game_v2, simulate_record_game, fetch_user_profile_v2, get_daily_wr_gain
+                
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)
                 time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
                 flavor = get_win_flavor(self.game.attempts_used)
                 embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
                 embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
                 
-                # Record Results
-                from src.database import record_game_v2
-                res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'win', self.game.attempts_used, time_taken)
+                # INSTANT FEEDBACK: Simulate rewards locally first
+                uid = interaction.user.id
+                profile = fetch_user_profile_v2(self.bot, uid, use_cache=True)
+                pre_wr = profile.get('solo_wr', 0) if profile else 0
+                pre_xp = profile.get('xp', 0) if profile else 0
+                pre_daily = get_daily_wr_gain(self.bot, uid)
+                
+                res = simulate_record_game(
+                    self.bot, uid, 'SOLO', 'win',
+                    self.game.attempts_used, time_taken,
+                    pre_wr=pre_wr, pre_xp=pre_xp, pre_daily=pre_daily
+                )
+                
+                # BACKGROUND: Actual DB write (non-blocking)
+                asyncio.create_task(asyncio.to_thread(
+                    record_game_v2, self.bot, uid, None, 'SOLO', 'win',
+                    self.game.attempts_used, time_taken,
+                    pre_wr=pre_wr, pre_daily=pre_daily
+                ))
 
                 if res:
                     xp_show = f"**{res.get('xp_gain',0)}** 💠"
@@ -131,14 +148,6 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 
                 self.bot.solo_games.pop(interaction.user.id, None)
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
-
-                # Streak notifications (Delayed & Ephemeral)
-                #if res:
-                #    import asyncio
-                #    if res.get('streak_msg'):
-                #        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
-                #    if res.get('streak_badge'):
-                #        asyncio.create_task(send_smart_message(interaction, f"💎 **BADGE UNLOCKED:** {get_badge_emoji(res['streak_badge'])} Badge!", ephemeral=True))
 
             elif game_over:
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)

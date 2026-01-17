@@ -161,12 +161,15 @@ class GuessHandler(commands.Cog):
             else:
                 board_display = "\n".join([h['pattern'] for h in game.history])
 
-            # Fetch player badge
+            # Fetch player badge (use cached profile - avoids DB hit on every guess)
+            active_badge = None
             try:
-                b_res = self.bot.supabase_client.table('user_stats_v2').select('active_badge').eq('user_id', ctx.author.id).execute()
-                active_badge = b_res.data[0]['active_badge'] if b_res.data else None
+                from src.database import fetch_user_profile_v2
+                cached_profile = fetch_user_profile_v2(self.bot, ctx.author.id, use_cache=True)
+                if cached_profile:
+                    active_badge = cached_profile.get('active_badge')
             except:
-                active_badge = None
+                pass
             badge_str = f" {get_badge_emoji(active_badge)}" if active_badge else ""
 
             # Determine if keyboard should be shown

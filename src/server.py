@@ -1,6 +1,6 @@
 import os
 import json
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, request
 
 def run_flask_server():
     # Determine absolute path to the static folder (one level up from src)
@@ -10,7 +10,27 @@ def run_flask_server():
     # Initialize Flask App
     app = Flask(__name__, static_folder=static_dir)
 
-    # --- ROUTE HANDLERS ---
+    # --- CACHE HEADERS ---
+    @app.after_request
+    def add_cache_headers(response):
+        """Add cache-control and expiry headers for better performance."""
+        # Get the request path
+        path = request.path.lower()
+        
+        # Static assets (images, CSS) - cache for 1 week
+        if path.endswith(('.png', '.jpg', '.jpeg', '.ico', '.css')):
+            response.cache_control.max_age = 604800  # 1 week
+            response.cache_control.public = True
+        # HTML pages - cache for 1 hour (allows updates to propagate)
+        elif path.endswith('.html') or path in ['/', '/terms', '/privacy']:
+            response.cache_control.max_age = 3600  # 1 hour
+            response.cache_control.public = True
+        # API endpoints - no cache
+        elif path.startswith('/api/'):
+            response.cache_control.no_cache = True
+            response.cache_control.no_store = True
+        
+        return response
     
     # 1. Homepage Route (Serving index.html)
     @app.route('/')

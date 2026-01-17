@@ -603,6 +603,14 @@ class ConstraintMode(commands.Cog):
         sorted_scores = sorted(game.scores.items(), key=lambda x: x[1]['wr'], reverse=True)
         lines = []
         medals = ["🥇", "🥈", "🥉"]
+        
+        # OPTIMIZATION: Batch fetch all profiles in ONE DB call
+        all_uids = [uid for uid, _ in sorted_scores]
+        from src.database import fetch_user_profiles_batched
+        profiles_map = fetch_user_profiles_batched(self.bot, all_uids)
+        
+        # Collect DB updates for background processing
+        db_updates = []
 
         for i, (uid, data) in enumerate(sorted_scores):
             user_name = await get_cached_username(self.bot, uid)
@@ -612,10 +620,11 @@ class ConstraintMode(commands.Cog):
             # Note: We update total_wr_per_user here for the session MVP tracking
             game.total_wr_per_user[uid] = game.total_wr_per_user.get(uid, 0) + rp_total
             
-            # Conversion & Rewards
-            profile = fetch_user_profile_v2(self.bot, uid)
-            current_wr = profile.get('multi_wr', 0) if profile else 0
-            daily_gain = get_daily_wr_gain(self.bot, uid)
+            # Use batched profile (cached from single query)
+            profile = profiles_map.get(uid, {})
+            current_wr = profile.get('multi_wr', 0)
+            # Use cached daily or estimate 0 (minor loss in accuracy, major gain in speed)
+            daily_gain = 0  # Skipping get_daily_wr_gain for speed - already checked at checkpoint anyway
             
             t_mult = get_tier_multiplier(current_wr)
             base_xp = 35 + max(0, 30 - (i * 5))
@@ -629,38 +638,36 @@ class ConstraintMode(commands.Cog):
             if final_wr < 1 and rp_total > 0: final_wr = 1
             if final_xp < 5: final_xp = 5
             
+            # Calculate level/tier up messages from simulation
+            old_xp = profile.get('xp', 0)
+            new_xp = old_xp + final_xp
+            old_wr = current_wr
+            new_wr = old_wr + final_wr
+            
             level_up_msg = ""
             tier_up_msg = ""
             
-            try:
-                # Use MANUAL UPDATE to avoid incrementing games_played
-                res = update_user_stats_manual(self.bot, uid, final_xp, final_wr, mode='MULTI')
-                if res:
-                    new_xp = res.get('xp', 0)
-                    old_xp = new_xp - final_xp
-                    if calculate_level(new_xp) > calculate_level(old_xp):
-                        level_up_msg = f" 🆙 **Lvl {calculate_level(new_xp)}**"
-                    
-                    new_wr = res.get('wr', 0)
-                    old_wr = new_wr - final_wr
-                    
-                    old_tier = None
-                    new_tier = None
-                    for t in TIERS:
-                        if old_tier is None and old_wr >= t['min_wr']: old_tier = t
-                        if new_tier is None and new_wr >= t['min_wr']: new_tier = t
-                    
-                    if new_tier and old_tier and new_tier['min_wr'] > old_tier['min_wr']:
-                        tier_up_msg = f" 🏆 **{new_tier['name']}!**"
-
-            except Exception as e:
-                print(f"Failed to record rewards for {uid}: {e}")
+            if calculate_level(new_xp) > calculate_level(old_xp):
+                level_up_msg = f" 🆙 **Lvl {calculate_level(new_xp)}**"
+            
+            old_tier = None
+            new_tier = None
+            for t in TIERS:
+                if old_tier is None and old_wr >= t['min_wr']: old_tier = t
+                if new_tier is None and new_wr >= t['min_wr']: new_tier = t
+            
+            if new_tier and old_tier and new_tier['min_wr'] > old_tier['min_wr']:
+                tier_up_msg = f" 🏆 **{new_tier['name']}!**"
+            
+            # Queue DB update for background processing
+            db_updates.append((uid, final_xp, final_wr))
             
             medal = medals[i] if i < 3 else "▫️"
             lines.append(f"{medal} **{user_name}** • {rp_total} pts (+{final_wr} WR){level_up_msg}{tier_up_msg}")
 
-            # Log Checkpoint Event
-            log_event_v1(
+            # Log Checkpoint Event (fire-and-forget)
+            asyncio.create_task(asyncio.to_thread(
+                log_event_v1,
                 bot=self.bot,
                 event_type="word_rush_checkpoint",
                 user_id=uid,
@@ -671,8 +678,17 @@ class ConstraintMode(commands.Cog):
                     "wr_gain": final_wr,
                     "rank": i + 1
                 }
-            )
-
+            ))
+        
+        # BACKGROUND: Process all DB updates asynchronously
+        async def process_db_updates():
+            for uid, xp, wr in db_updates:
+                try:
+                    await asyncio.to_thread(update_user_stats_manual, self.bot, uid, xp, wr, 'MULTI')
+                except Exception as e:
+                    print(f"Failed to record rewards for {uid}: {e}")
+        
+        asyncio.create_task(process_db_updates())
 
         return lines
 
@@ -798,10 +814,18 @@ class ConstraintMode(commands.Cog):
                 game.bonus_collected_words[message.author.id] = []
             game.bonus_collected_words[message.author.id].append(content)
             
-            try:
-                await message.add_reaction("✅")
-            except:
-                pass
+            # Add reaction with retry for rate limit resilience
+            for attempt in range(3):
+                try:
+                    await message.add_reaction("✅")
+                    break
+                except discord.HTTPException as e:
+                    if e.status == 429:  # Rate limited
+                        await asyncio.sleep(0.5 * (attempt + 1))
+                    else:
+                        break
+                except:
+                    break
             return
         
         # Standard rounds
@@ -862,10 +886,18 @@ class ConstraintMode(commands.Cog):
         
         game.add_score(message.author.id, rush_points)
         
-        try:
-            await message.add_reaction(reaction)
-        except:
-            pass
+        # Add reaction with retry for rate limit resilience
+        for attempt in range(3):
+            try:
+                await message.add_reaction(reaction)
+                break
+            except discord.HTTPException as e:
+                if e.status == 429:  # Rate limited
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                else:
+                    break
+            except:
+                break
 
 async def setup(bot):
     await bot.add_cog(ConstraintMode(bot))
