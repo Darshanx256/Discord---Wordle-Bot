@@ -4,7 +4,6 @@ import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
 from src.utils import EMOJIS, get_win_flavor, get_badge_emoji#, send_smart_message
-from datetime import datetime, timedelta, timezone
 
 
 def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, blind_mode=False) -> str:
@@ -741,8 +740,8 @@ class HelpView(discord.ui.View):
             # mythic_badge = EMOJIS.get('28_streak', '🔵')
 
             # def get_next_utc_midnight():
-            #    now = datetime.now(timezone.utc)
-            #    return (now + timedelta(days=1)).replace( hour=0, minute=0, second=0, microsecond=0)
+            #    now = datetime.datetime.now(datetime.timezone.utc)
+            #    return (now + datetime.timedelta(days=1)).replace( hour=0, minute=0, second=0, microsecond=0)
 
             #reset = get_next_utc_midnight()
             #timestamp = int(reset.timestamp())
