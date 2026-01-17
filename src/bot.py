@@ -126,26 +126,26 @@ class WordleBot(commands.Bot):
             self.secrets = []
 
         # 1. Standard valid 5-letter words (Clean for generation)
-        self.valid_set = set()
+        # 1. Standard valid 5-letter words (Clean for generation)
+        temp_valid_set = set()
         if os.path.exists(VALID_FILE):
             with open(VALID_FILE, "r", encoding="utf-8") as f:
-                self.valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
+                temp_valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
         
         # 2. 'Wild' 5-letter words (Validation/Guessing Only - Excluded from generation)
-        self.rush_wild_set = set()
+        self.rush_wild_set = frozenset()
+        temp_rush_wild_set = set()
         if os.path.exists(RUSH_WILD_FILE):
             with open(RUSH_WILD_FILE, "r", encoding="utf-8") as f:
-                self.rush_wild_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
-
-        # Combined 5-letter set for general validation
-        self.all_valid_5 = self.valid_set | self.rush_wild_set
+                temp_rush_wild_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
+        self.rush_wild_set = frozenset(temp_rush_wild_set)
 
         # 3. Puzzles pool (6+ letters)
         if os.path.exists(FULL_WORDS):
             with open(FULL_WORDS, "r", encoding="utf-8") as f:
-                self.full_dict = {w.strip().lower() for w in f if len(w.strip()) >= 5}
+                self.full_dict = frozenset({w.strip().lower() for w in f if len(w.strip()) >= 5})
         else:
-            self.full_dict = set()
+            self.full_dict = frozenset()
 
         if os.path.exists(CLASSIC_FILE):
             with open(CLASSIC_FILE, "r", encoding="utf-8") as f:
@@ -155,11 +155,14 @@ class WordleBot(commands.Bot):
             self.hard_secrets = []
 
         # Ensure secrets and hard_secrets are also in the clean valid set
-        self.valid_set.update(self.secrets)
-        self.valid_set.update(self.hard_secrets)
+        temp_valid_set.update(self.secrets)
+        temp_valid_set.update(self.hard_secrets)
         
-        # Ensure they are in the all-inclusive validation set too
-        self.all_valid_5.update(self.valid_set)
+        # Freezing the sets for performance
+        self.valid_set = frozenset(temp_valid_set)
+        
+        # Combined 5-letter set for general validation
+        self.all_valid_5 = frozenset(temp_valid_set | temp_rush_wild_set)
     
     def load_banned_users(self):
         """Load banned user IDs from file."""
@@ -482,21 +485,21 @@ async def shop(interaction: discord.Interaction):
     
     async def buy_duck(inter: discord.Interaction):
         if duck_count >= 4:
-            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'duck_lord_badge'}).eq('user_id', interaction.user.id).execute()
+            await asyncio.to_thread(lambda: bot.supabase_client.table('user_stats_v2').update({'active_badge': 'duck_lord_badge'}).eq('user_id', interaction.user.id).execute())
             await inter.response.send_message("✅ Equipped Duck Lord Badge!", ephemeral=True)
         else:
             await inter.response.send_message(f"❌ Need 4 Ducks. You have {duck_count}.", ephemeral=True)
 
     async def buy_dragon(inter: discord.Interaction):
         if dragon_count >= 2:
-            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'dragon_slayer_badge'}).eq('user_id', interaction.user.id).execute()
+            await asyncio.to_thread(lambda: bot.supabase_client.table('user_stats_v2').update({'active_badge': 'dragon_slayer_badge'}).eq('user_id', interaction.user.id).execute())
             await inter.response.send_message("✅ Equipped Dragon Slayer Badge!", ephemeral=True)
         else:
             await inter.response.send_message(f"❌ Need 2 Dragons. You have {dragon_count}.", ephemeral=True)
 
     async def buy_candy(inter: discord.Interaction):
         if candy_count >= 3:
-            bot.supabase_client.table('user_stats_v2').update({'active_badge': 'candy_rush_badge'}).eq('user_id', interaction.user.id).execute()
+            await asyncio.to_thread(lambda: bot.supabase_client.table('user_stats_v2').update({'active_badge': 'candy_rush_badge'}).eq('user_id', interaction.user.id).execute())
             await inter.response.send_message("✅ Equipped Sugar Rush Badge!", ephemeral=True)
         else:
             await inter.response.send_message(f"❌ Need 3 Candies. You have {candy_count}.", ephemeral=True)
@@ -506,7 +509,7 @@ async def shop(interaction: discord.Interaction):
         if not current_badge:
             await inter.response.send_message("⚠️ No badge equipped.", ephemeral=True)
         else:
-            bot.supabase_client.table('user_stats_v2').update({'active_badge': None}).eq('user_id', interaction.user.id).execute()
+            await asyncio.to_thread(lambda: bot.supabase_client.table('user_stats_v2').update({'active_badge': None}).eq('user_id', interaction.user.id).execute())
             await inter.response.send_message("✅ Badge unequipped.", ephemeral=True)
                
     b1 = discord.ui.Button(label="Duck Lord Badge (4 Ducks)", style=discord.ButtonStyle.secondary, emoji=EMOJIS.get('duck_lord_badge', '🦆'), disabled=(duck_count < 4))

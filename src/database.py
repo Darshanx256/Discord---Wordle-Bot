@@ -9,10 +9,10 @@ from src.mechanics.rewards import calculate_final_rewards
 import datetime
 import time
 
-# --- PROFILE CACHE ---
-# Simple TTL Cache to reduce DB pressure on frequent lookups
-_PROFILE_CACHE = {} # {user_id: (data, expiry)}
-CACHE_TTL = 300 # 5 minutes
+# --- PROFILE CACHE (Industry-Grade TTLCache) ---
+# Bounded cache with auto-eviction: max 1000 profiles, 5-min TTL
+from cachetools import TTLCache
+_PROFILE_CACHE = TTLCache(maxsize=1000, ttl=300)  # Much better than unbounded dict
 
 def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
     """
@@ -207,12 +207,9 @@ def simulate_record_game(bot: commands.Bot, user_id: int, mode: str, outcome: st
 
 def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = True):
     """Fetches full profile V2 with optional caching."""
-    now = time.monotonic()
-    
+    # TTLCache handles expiry automatically - just check if key exists
     if use_cache and user_id in _PROFILE_CACHE:
-        data, expiry = _PROFILE_CACHE[user_id]
-        if now < expiry:
-            return data
+        return _PROFILE_CACHE[user_id]
             
     try:
         response = bot.supabase_client.table('user_stats_v2').select('*').eq('user_id', user_id).execute()
@@ -232,9 +229,8 @@ def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = Tru
                     break
             data['tier'] = tier_info
             
-            
-            # Update Cache
-            _PROFILE_CACHE[user_id] = (data, now + CACHE_TTL)
+            # TTLCache handles TTL automatically
+            _PROFILE_CACHE[user_id] = data
             return data
         return None
     except Exception as e:

@@ -85,7 +85,8 @@ class RaceLobbyView(ui.View):
         
         # Pick the secret from the synchronized bitset pool
         from src.database import get_next_word_bitset
-        secret = get_next_word_bitset(self.bot, interaction.guild.id, 'simple')
+        # Make this async to not block
+        secret = await asyncio.to_thread(get_next_word_bitset, self.bot, interaction.guild.id, 'simple')
         self.race_session.secret = secret
 
         # Initialize games for ALL participants
@@ -270,7 +271,7 @@ async def send_race_summary(bot, channel_id, race_session):
     del bot.race_sessions[channel_id]
     
     try:
-        results = race_session.conclude_race(bot)
+        results = await asyncio.to_thread(race_session.conclude_race, bot)
         if not results:
             # print("⚠️ No results gathered for summary.")
             return
