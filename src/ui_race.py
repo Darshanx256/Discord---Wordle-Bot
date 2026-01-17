@@ -1,10 +1,8 @@
-"""
-UI components for Race Mode: lobby views, race game views, and modals.
-"""
 import discord
 from discord import ui
 import datetime
 import time
+import asyncio
 from src.config import KEYBOARD_LAYOUT
 from src.utils import EMOJIS
 
