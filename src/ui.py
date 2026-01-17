@@ -128,27 +128,12 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                     pre_wr=pre_wr, pre_xp=pre_xp, pre_daily=pre_daily
                 )
                 
-                # BACKGROUND: Actual DB write (non-blocking) with Streak Handling
-                async def _bg_save():
-                    try:
-                        db_res = await asyncio.to_thread(
-                            record_game_v2, self.bot, uid, None, 'SOLO', 'win',
-                            self.game.attempts_used, time_taken,
-                            pre_wr=pre_wr, pre_daily=pre_daily
-                        )
-                        if db_res:
-                            s_msg = db_res.get('streak_msg')
-                            s_badge = db_res.get('streak_badge')
-                            if s_msg or s_badge:
-                                from src.utils import send_smart_message, get_badge_emoji
-                                msg = s_msg or ""
-                                if s_badge:
-                                    msg += f"\n💎 **BADGE UNLOCKED:** {get_badge_emoji(s_badge)} Badge!"
-                                await send_smart_message(interaction, msg, ephemeral=True)
-                    except Exception as e:
-                        print(f"Background Save Error: {e}")
-
-                asyncio.create_task(_bg_save())
+                # BACKGROUND: Actual DB write (non-blocking) - Streaks Discontinued
+                asyncio.create_task(asyncio.to_thread(
+                    record_game_v2, self.bot, uid, None, 'SOLO', 'win',
+                    self.game.attempts_used, time_taken,
+                    pre_wr=pre_wr, pre_daily=pre_daily
+                ))
 
                 if res:
                     xp_show = f"**{res.get('xp_gain',0)}** 💠"
@@ -403,10 +388,7 @@ class HelpView(discord.ui.View):
                 "`/leaderboard_global` -> Global\n"
                 "`/shop` -> Equip Badges\n"
                 "`/showrace` -> Resume Race\n\n"
-                #"🔥 **Streaks**\n"
-                #"Play daily to build your streak for\n"
-                #"Multipliers & exclusive Badges!\n"
-                #"*Streaks reset daily at 00:00 UTC.*"
+
             ), inline=True)
             
             # Tiers Section
@@ -569,9 +551,8 @@ class HelpView(discord.ui.View):
                 "• **Others:** 1 Rush Point\n\n"
                 "**Special Features:**\n"
                 "• **Bonus Rounds:** Random rounds with **3x Rush Points** (e.g., longest word, most words)!\n"
-                "• **Checkpoints:** Every 12 rounds, Rush Points convert to permanent **WR** with streak multipliers applied.\n"
-                "• **Streaks:** Consecutive correct answers tracked for session stats.\n"
-                "• **Stats:** Fastest reflexes and best streaks displayed at checkpoints.\n\n"
+                "• **Checkpoints:** Every 12 rounds, Rush Points convert to permanent **WR**.\n"
+                "• **Stats:** Fastest reflexes and best runs displayed at checkpoints.\n\n"
                 "**Finally:**\n"
                 "• Complete all **100 rounds** to become Rush Champion!\n"
                 "• Game ends if 4 consecutive rounds pass without correct guesses.\n\n"
@@ -607,7 +588,7 @@ class HelpView(discord.ui.View):
                 "• Still earn XP/WR, just reduced amounts\n\n"
                 "**Rewards Distribution:**\n"
                 "• **Delayed Calculation:** Rewards calculated after race ends (all finish or time expires)\n"
-                "• **Higher Streaks** get multiplier bonuses\n"
+
                 "• **Rewards** are Tier based, higher Tiers may receive lower rewards\n"
                 "• **Speed bonus** for fast solves\n\n"
                 "**Game Interface:**\n"
@@ -654,7 +635,7 @@ class HelpView(discord.ui.View):
                 "• **Attempt Counter:** Always know how many tries you have left\n\n"
                 "**Victory & Defeat:**\n"
                 "• **Win:** Solve within 6 tries → Earn XP/WR based on attempts & speed\n"
-                "• **Loss:** Run out of tries → Word revealed, streaks may break\n"
+                "• **Loss:** Run out of tries → Word revealed\n"
                 "• **Rewards:** Calculated instantly with tier multipliers applied\n"
                 "**Commands:**\n"
                 "• `/solo_mode` - Start a new private game\n"
@@ -749,10 +730,7 @@ class HelpView(discord.ui.View):
         elif feature == "progression":
             embed = discord.Embed(title="Progression & Tiers", color=discord.Color.purple())
             
-            # Build streak badge emojis properly
             # spark_badge = EMOJIS.get('7_streak', '✨')
-            # ember_badge = EMOJIS.get('14_streak', '🔥')
-            # mythic_badge = EMOJIS.get('28_streak', '🔵')
 
             # def get_next_utc_midnight():
             #    now = datetime.datetime.now(datetime.timezone.utc)
@@ -776,19 +754,7 @@ class HelpView(discord.ui.View):
                 "• **Attempt Bonus** - Solving in fewer tries earns more rewards\n\n"
                 #"**Daily Streaks System:**\n"
                 #"Play at least one game every day to build your streak!\n\n"
-                #"**Streak Milestones:**\n"
-                #f"• **3 Days:** 2x WR Multiplier ⚡\n"
-                #f"• **7 Days:** {spark_badge} **'First Spark'** Badge Unlocked\n"
-                #f"• **10 Days:** 2.5x WR Multiplier 🔥\n"
-                #f"• **14 Days:** {ember_badge} **'Ember'** Badge Unlocked\n"
-                #f"• **28 Days:** {mythic_badge} **'Mythic'** Badge Unlocked\n"
-                #f"• **35 Days:** 3x WR Multiplier 👑\n\n"
-                #"**Streak Rules:**\n"
-                #"• Maintained by playing **any mode** (Solo, Wordle, Race, Rush)\n"
-                #"• **Wins AND Losses count** - just play daily!\n"
-                #"• Streak breaks if you miss a full day (24-hour window)\n"
-                #"• Multipliers stack with tier bonuses for massive rewards\n"
-                #f"**Next Reset:** <t:{timestamp}:R>\n\n"
+
                 "**Leveling System:**\n"
                 "• XP required increases per level (scaling formula)\n"
                 "• No level cap - climb as high as you can!\n"
@@ -800,7 +766,7 @@ class HelpView(discord.ui.View):
                 "• **Rush Mode:** Points converted at checkpoints with multipliers\n"
                 "• Solo and Multi WR tracked separately\n\n"
                 "**Tips for Fast Progression:**\n"
-                #"• Maintain daily streaks for multiplier bonuses\n"
+
                 "• Solve quickly for speed bonuses (under 60s)\n"
                 "• Win consistently to climb tiers faster\n"
                 "• Rush Mode offers competitive high-reward opportunities\n\n"

@@ -53,7 +53,7 @@ def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
         fav_list = [
             "eyes", "duck", "dragon", "candy", 
             "duck_lord_badge", "dragon_slayer_badge", "candy_rush_badge", 
-            "legend_tier", "7_streak", "14_streak", "28_streak",
+            "legend_tier",
             "unknown", "checkpoint", "fire"
         ]
         if raw_lower in fav_list:
@@ -71,9 +71,6 @@ def get_badge_emoji(badge_type: str) -> str:
         "duck_lord_badge": "duck_lord_badge",
         "dragon_slayer_badge": "dragon_slayer_badge",
         "candy_rush_badge": "candy_rush_badge",
-        "7_streak": "7_streak",
-        "14_streak": "14_streak",
-        "28_streak": "28_streak",
         "dragon": "dragon" # Map the streak milestone ID directly
     }
     if badge_type in badge_map:
@@ -87,9 +84,6 @@ def get_badge_full_display(badge_type: str) -> str:
         "duck_lord_badge": ("duck_lord_badge", "Duck Lord"),
         "dragon_slayer_badge": ("dragon_slayer_badge", "Dragon Slayer"),
         "candy_rush_badge": ("candy_rush_badge", "Sugar Rush"),
-        "7_streak": ("7_streak", "Shiny 7-Day"),
-        "14_streak": ("14_streak", "Hot 14-Day"),
-        "28_streak": ("28_streak", "Mythical 28-Day"),
         "dragon": ("dragon", "Dragon Milestone")
     }
     if badge_type in badge_map:

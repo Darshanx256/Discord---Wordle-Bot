@@ -157,8 +157,7 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
                 
             return {
                 'xp': new_xp, 'solo_wr': data.get('solo_wr',0), 'multi_wr': data.get('multi_wr',0),
-                'xp_gain': xp_gain, 'level_up': data.get('level_up'), 'tier_up': data.get('tier_up'),
-                'streak_msg': data.get('streak_msg'), 'streak_badge': data.get('streak_badge')
+                'xp_gain': xp_gain, 'level_up': data.get('level_up'), 'tier_up': data.get('tier_up')
             }
         return None
         
@@ -424,14 +423,7 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
             'p_egg_trigger': None
         }).execute()
         
-        streak_msg = None
-        badge_awarded = None
-        if rpc_res.data:
-            data = rpc_res.data
-            streak_msg = data.get('streak_msg')
-            badge_awarded = data.get('streak_badge')
-            
-        return {'streak_msg': streak_msg, 'streak_badge': badge_awarded}
+        return {}
     except Exception as e:
         print(f"DB ERROR in record_race_result: {e}")
         return {}

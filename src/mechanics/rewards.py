@@ -175,6 +175,5 @@ def calculate_race_rewards_delayed(bot, user_id: int, game, rank: int, pre_fetch
         'wr': wr,
         'rank': rank,
         'rank_msg': rank_msg,
-        'reward_text': reward_text,
-        'streak_info': db_res
+        'reward_text': reward_text
     }
