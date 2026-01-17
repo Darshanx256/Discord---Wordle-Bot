@@ -2,6 +2,8 @@ requests
 discord.py[voice]
 python-dotenv==1.0.1
 Flask==3.0.0
+flask-compress
+brotli
 supabase==2.5.3
 waitress
 

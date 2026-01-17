@@ -1,6 +1,7 @@
 import os
 import json
 from flask import Flask, send_from_directory, jsonify, request
+from flask_compress import Compress
 
 def run_flask_server():
     # Determine absolute path to the static folder (one level up from src)
@@ -9,8 +10,16 @@ def run_flask_server():
     
     # Initialize Flask App
     app = Flask(__name__, static_folder=static_dir)
-
-    # --- CACHE HEADERS ---
+    
+    # --- COMPRESSION (gzip/brotli) ---
+    # Brotli is preferred when supported by browser (20-26% better than gzip)
+    app.config['COMPRESS_ALGORITHM'] = ['br', 'gzip', 'deflate']
+    app.config['COMPRESS_MIMETYPES'] = [
+        'text/html', 'text/css', 'text/javascript', 'application/javascript',
+        'application/json', 'image/svg+xml'
+    ]
+    app.config['COMPRESS_MIN_SIZE'] = 500  # Only compress files > 500 bytes
+    Compress(app)
     @app.after_request
     def add_cache_headers(response):
         """Add cache-control and expiry headers for better performance."""
