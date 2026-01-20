@@ -47,6 +47,7 @@ def run_flask_server():
         return send_from_directory(app.static_folder, 'index.html')
 
     # 2. Terms of Service Route (Serving tos.html)
+    @app.route('/tos')
     @app.route('/terms')
     def terms():
         return send_from_directory(app.static_folder, 'tos.html')
@@ -68,21 +69,6 @@ def run_flask_server():
     def stylesheet():
         return send_from_directory(app.static_folder, 'styles.css')
 
-    @app.route('/screenshot-leaderboard.jpg')
-    def leaderboard_ss():
-        return send_from_directory(app.static_folder, 'screenshot-leaderboard.jpg')
-
-    @app.route('/screenshot-levelup.png')
-    def levelup_ss():
-        return send_from_directory(app.static_folder, 'screenshot-levelup.png')
-
-    @app.route('/screenshot-solo.png')
-    def solo_ss():
-        return send_from_directory(app.static_folder, 'screenshot-solo.png')
-
-    @app.route('/screenshot-victory.png')
-    def victory_ss():
-        return send_from_directory(app.static_folder, 'screenshot-victory.png')
 
     # API endpoint for bot stats
     @app.route('/api/stats')
