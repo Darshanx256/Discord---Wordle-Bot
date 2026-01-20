@@ -37,8 +37,8 @@
             </h1>
 
             <p class="hero-subtitle">
-                The most sophisticated Wordle experience for Discord. 
-                Bring the world's favorite word game to your server with global rankings, 
+                The best chat-based multiplayer Wordle experience for Discord.
+                Bring the world's favorite word game to your server with global rankings,
                 real-time competition, and a progression system that matters.
             </p>
 
@@ -57,11 +57,11 @@
     <!-- Stats Section -->
     <section class="container stats">
         <div class="stat-item">
-            <div class="stat-number" id="stat-servers">200+</div>
-            <div class="stat-label">Trusted Servers</div>
+            <div class="stat-number" id="stat-servers">0</div>
+            <div class="stat-label">Current Servers</div>
         </div>
         <div class="stat-item">
-            <div class="stat-number">10+</div>
+            <div class="stat-number">7+</div>
             <div class="stat-label">Game Modes</div>
         </div>
         <div class="stat-item">
@@ -73,54 +73,64 @@
     <!-- Features Section -->
     <section id="features" class="container" style="padding: 8rem 0;">
         <div style="margin-bottom: 4rem;">
-            <h2 style="font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em;">Built for the Linguistic Elite.</h2>
-            <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 600px;">Everything you need to turn your Discord server into a competitive Wordle arena.</p>
+            <h2 style="font-size: 2.5rem; font-weight: 800; letter-spacing: -0.04em;">Built for the Linguistic Elite.
+            </h2>
+            <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 600px;">Everything you need to turn your
+                Discord server into a competitive Wordle arena.</p>
         </div>
 
         <div class="features-grid">
             <div class="feature-card">
                 <span class="feature-icon">🛡️</span>
                 <h3 class="feature-title">Ranked Progression</h3>
-                <p class="feature-description">A sophisticated Elo-based rating system. Climb through Bronze to Grandmaster as you solve words with fewer attempts.</p>
+                <p class="feature-description">A ranking system that rewards smartly based on speed, accuracy and tier
+                    ranking. Climb through Challenger to
+                    Grandmaster as you solve words with fewer attempts.</p>
             </div>
 
             <div class="feature-card">
                 <span class="feature-icon">⚡</span>
                 <h3 class="feature-title">Word Rush</h3>
-                <p class="feature-description">The ultimate test of speed and vocabulary. Solve continuous puzzles under pressure and bank your points at checkpoints.</p>
+                <p class="feature-description">The ultimate test of speed and vocabulary. Solve continuous puzzles under
+                    pressure and bank your points at checkpoints.</p>
             </div>
 
             <div class="feature-card">
                 <span class="feature-icon">🏁</span>
                 <h3 class="feature-title">Race Mode</h3>
-                <p class="feature-description">Synchronized competition. Everyone gets the same word at the same time. The fastest mind wins the glory.</p>
+                <p class="feature-description">Synchronized competition. Everyone gets the same word at the same time.
+                    The fastest mind wins the glory.</p>
             </div>
 
             <div class="feature-card">
                 <span class="feature-icon">🏆</span>
-                <h3 class="feature-title">Global Reach</h3>
-                <p class="feature-description">Compare your skills against tens of thousands of players worldwide. Your stats follow you across every server.</p>
+                <h3 class="feature-title">Leaderboards</h3>
+                <p class="feature-description">Climb up the leaderboards as you play more! Bot features global
+                    leaderboards and server leaderboards.</p>
             </div>
 
             <div class="feature-card">
                 <span class="feature-icon">🕵️</span>
                 <h3 class="feature-title">Solo Privacy</h3>
-                <p class="feature-description">Practice in silence. Use ephemeral messages to sharpen your skills without cluttering your server channels.</p>
+                <p class="feature-description">Practice in silence. Use ephemeral messages to sharpen your skills
+                    without cluttering your server channels.</p>
             </div>
 
             <div class="feature-card">
                 <span class="feature-icon">🪄</span>
                 <h3 class="feature-title">Custom Games</h3>
-                <p class="feature-description">Full control. Define your own words, tries, and dictionaries. Perfect for community events and challenges.</p>
+                <p class="feature-description">Full control. Define your own words, tries, and dictionaries. Perfect for
+                    community events and challenges.</p>
             </div>
         </div>
     </section>
 
     <!-- CTA Section -->
     <section class="container" style="padding: 8rem 0; text-align: center; border-top: 1px solid var(--border);">
-        <h2 style="font-size: 3rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 2rem;">Ready to elevate your server?</h2>
-        <a href="https://discord.com/oauth2/authorize?client_id=1446184470251048991&scope=bot"
-            class="btn btn-primary" style="padding: 1.25rem 3rem; font-size: 1.25rem;">
+        <h2 style="font-size: 3rem; font-weight: 900; letter-spacing: -0.05em; margin-bottom: 2rem;">Ready to elevate
+            your server?</h2>
+        <a href="https://discord.com/oauth2/authorize?client_id=1446184470251048991&scope=bot" class="btn btn-primary"
+            style="padding: 1.25rem 3rem; font-size: 1.25rem;">
             Add to Discord
         </a>
     </section>
@@ -139,7 +149,7 @@
                     Octopus icons by Flaticon. Not affiliated with NYT.
                 </p>
             </div>
-            
+
             <div class="footer-links">
                 <a href="/">Home</a>
                 <a href="#features">Features</a>
@@ -159,10 +169,10 @@
                     const stats = await response.json();
                     const serversEl = document.getElementById('stat-servers');
                     if (serversEl && stats.server_count > 0) {
-                        serversEl.textContent = stats.server_count.toLocaleString() + '+';
+                        serversEl.textContent = stats.server_count.toLocaleString();
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
         })();
     </script>
 </body>
