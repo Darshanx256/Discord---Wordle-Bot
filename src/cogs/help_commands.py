@@ -25,18 +25,28 @@ class HelpCommands(commands.Cog):
         await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=True)
 
     # ============================================================
-    # /credits command
+    # /about command
     # ============================================================
-    @app_commands.command(name="credits", description="View bot credits and acknowledgements.")
-    async def credits_cmd(self, interaction: discord.Interaction):
+    @app_commands.command(name="about", description="View bot information, credits, and links.")
+    async def about_cmd(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="🎬 Credits & Acknowledgements",
+            title="ℹ️ About Wordle Bot",
             description=(
                 "I would like to express my gratitude to the contributors and resources "
                 "that have made Wordle Bot possible. This project is dedicated to providing "
                 "a high-quality gaming experience to the Discord community."
             ),
             color=discord.Color.gold()
+        )
+
+        embed.add_field(
+            name="🔗 Important Links",
+            value=(
+                "• **Website** — [bit.ly/wordlegamebot](https://bit.ly/wordlegamebot)\n"
+                "• **Privacy Policy** — [Click Here](https://wordle-new.onrender.com/privacy)\n"
+                "• **Terms of Service** — [Click Here](https://wordle-new.onrender.com/tos)\n"
+            ),
+            inline=False
         )
         
         embed.add_field(
@@ -86,7 +96,7 @@ class HelpCommands(commands.Cog):
             inline=False
         )
         
-        embed.set_footer(text="Wordle Game Bot - v4.1 • Feature requests are welcomed via the /message command.")
+        embed.set_footer(text="Wordle Game Bot - v4.2 • Feature requests are welcomed via the /message command.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):

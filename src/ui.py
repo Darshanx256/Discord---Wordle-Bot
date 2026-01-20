@@ -358,9 +358,7 @@ class HelpView(discord.ui.View):
 
             embed.add_field(name= f"{EMOJIS.get('28_streak','🔥')}What's New?", value=(
                 "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
-                "• **Hard Mode**: Try `/hard_mode` for a greater challenge!\n"
-                "• **Advanced Help Menu**: Type /help and select among features for detailed guides.\n"
-                "• **New -G support**: -g also in -G now, helpful against unwanted autocapitalization or those who prefer caps 🧢.\n"
+                "• **Enhanced Responsiveness**: Optimized code for a faster, more fluid gaming experience!"
             ))
 
             embed.set_footer(text="Page 1/2 • type /help and select feature for detailed guides!")
