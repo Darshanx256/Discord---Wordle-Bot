@@ -30,10 +30,10 @@ class HelpCommands(commands.Cog):
     @app_commands.command(name="about", description="View bot information, credits, and links.")
     async def about_cmd(self, interaction: discord.Interaction):
         embed = discord.Embed(
-            title="ℹ️ About Wordle Bot",
+            title="ℹ️ About Wordle Game Bot",
             description=(
                 "I would like to express my gratitude to the contributors and resources "
-                "that have made Wordle Bot possible. This project is dedicated to providing "
+                "that have made Wordle Game Bot possible. This project is dedicated to providing "
                 "a high-quality gaming experience to the Discord community."
             ),
             color=discord.Color.gold()

@@ -331,8 +331,8 @@ class HelpView(discord.ui.View):
             return self.get_feature_help_embed(self.feature)
         if self.page == 1:
             # BASIC PAGE
-            embed = discord.Embed(title=f"📚 Wordle Bot Guide (Basic)", color=discord.Color.blue())
-            embed.description = "A fun and engaging Wordle bot for Discord with various different game modes, level-up system and leaderboards!"
+            embed = discord.Embed(title=f"📚 Wordle Game Bot Guide (Basic)", color=discord.Color.blue())
+            embed.description = "A fun and engaging Wordle Game Bot for Discord with various different game modes, level-up system and leaderboards!"
             
             embed.add_field(name="🎮 How to Play", value=(
                 "**1. Start a Game**\n"
@@ -365,7 +365,7 @@ class HelpView(discord.ui.View):
             
         else:
             # ADVANCED PAGE
-            embed = discord.Embed(title="🧠 Wordle Bot Guide (Advanced)", color=discord.Color.dark_purple())
+            embed = discord.Embed(title="🧠 Wordle Game Bot Guide (Advanced)", color=discord.Color.dark_purple())
             embed.description = "Deep dive into commands, tiers, and collectibles!"
             
             # Commands Section - Two columns for better organization

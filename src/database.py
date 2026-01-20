@@ -430,7 +430,7 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
 
 def log_event_v1(bot: commands.Bot, event_type: str, user_id: int = None, guild_id: int = None, metadata: dict = None):
     """
-    Flexible event tracker for Wordle Bot.
+    Flexible event tracker for Wordle Game Bot.
     Uses 'event_logs_v1' table with JSONB metadata.
     """
     try:

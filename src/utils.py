@@ -226,7 +226,7 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
                 color=discord.Color.gold(),
                 timestamp=discord.utils.utcnow()
             )
-            dm_embed.set_footer(text="Wordle Bot • Personalized Notification")
+            dm_embed.set_footer(text="Wordle Game Bot • Personalized Notification")
             await target_user.send(embed=dm_embed)
             return
         except:
