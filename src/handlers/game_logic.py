@@ -9,7 +9,7 @@ from src.database import record_game_v2, get_next_word_bitset
 from src.utils import get_badge_emoji, get_win_flavor, get_cached_username
 
 
-async def handle_game_win(bot, game, interaction, winner_user, cid):
+async def handle_game_win(bot, game, interaction, winner_user, cid, include_board: bool = True):
     """
     Handle a game win: award winner + participants, send breakdown embed.
     
@@ -45,14 +45,19 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     winner_stats = stats_map.get(winner_user.id, {'wr': 0, 'badge': None, 'daily': 0})
     win_badge = winner_stats['badge']
     
-    # Main win embed
-    embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
+    # Main win/reward embed
+    if include_board:
+        embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
+        win_badge_str = f" {get_badge_emoji(win_badge)}" if win_badge else ""
+        board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+        embed.description = f"**{winner_user.mention}{win_badge_str}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
+        embed.add_field(name="Final Board", value=board_display, inline=False)
+    else:
+        # Just a reward summary embed
+        embed = discord.Embed(title="✨ Game Rewards", color=discord.Color.gold())
+        win_badge_str = f" {get_badge_emoji(win_badge)}" if win_badge else ""
+        embed.description = f"**{winner_user.mention}{win_badge_str}** won the game!"
 
-    win_badge_str = f" {get_badge_emoji(win_badge)}" if win_badge else ""
-    board_display = "\n".join([f"{h['pattern']}" for h in game.history])
-    embed.description = f"**{winner_user.mention}{win_badge_str}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
-    embed.add_field(name="Final Board", value=board_display, inline=False)
-    
     # Simulate winner rewards locally
     from src.database import simulate_record_game
     res = simulate_record_game(
@@ -180,16 +185,20 @@ async def handle_game_win(bot, game, interaction, winner_user, cid):
     return embed, breakdown_to_send, winner_user, res, level_ups, tier_ups, results
 
 
-async def handle_game_loss(bot, game, interaction, cid):
+async def handle_game_loss(bot, game, interaction, cid, include_board: bool = True):
     """
     Handle a game loss: award all participants based on their best greens.
     
     Returns: (embed, participant_rows_list, level_ups_list, tier_ups_list)
     """
-    board_display = "\n".join([f"{h['pattern']}" for h in game.history])
-    embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
-    embed.description = f"The word was **{game.secret.upper()}**."
-    embed.add_field(name="Final Board", value=board_display, inline=False)
+    if include_board:
+        board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+        embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
+        embed.description = f"The word was **{game.secret.upper()}**."
+        embed.add_field(name="Final Board", value=board_display, inline=False)
+    else:
+        embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
+        embed.description = f"The word was **{game.secret.upper()}**."
 
     # BATCH FETCH STATS for all participants
     all_participants = list(game.participants)
