@@ -476,7 +476,7 @@ class GameCommands(commands.Cog):
         empty = "○" * (6 - game.attempts_used)
         progress_bar = f"[{filled}{empty}]"
 
-        board_display = "\n".join([f"{h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
+        board_display = "\n".join([f"# {h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id, blind_mode=getattr(game, 'blind_mode', False))
 
         embed = discord.Embed(title=f"Solo Wordle | Attempt {game.attempts_used}/6", color=discord.Color.gold())

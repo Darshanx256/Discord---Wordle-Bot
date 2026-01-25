@@ -378,7 +378,7 @@ class ConstraintMode(commands.Cog):
                 title = f"🎁 BONUS ROUND" if game.is_bonus_round else f"Round {game.round_number}"
                 round_embed = discord.Embed(
                     title=title,
-                    description=f"### {display_text}{spacing}",
+                    description=f"# {display_text}{spacing}",
                     color=discord.Color.from_rgb(255, 215, 0) if game.is_bonus_round else discord.Color.from_rgb(46, 204, 113)
                 )
                 round_embed.set_thumbnail(url=self.signal_urls['green'])

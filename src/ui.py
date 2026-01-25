@@ -102,7 +102,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             progress_bar = f"[{filled}{empty}]"
 
             # Board Display
-            board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
+            board_display = "\n".join([f"# {h['pattern']}" for h in self.game.history])
             
             # Embed Update
             if win:

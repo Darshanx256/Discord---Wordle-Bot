@@ -49,7 +49,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid, include_boar
     if include_board:
         embed = discord.Embed(title=f"🏆 VICTORY!\n{flavor}", color=discord.Color.green())
         win_badge_str = f" {get_badge_emoji(win_badge)}" if win_badge else ""
-        board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+        board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
         embed.description = f"**{winner_user.mention}{win_badge_str}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
         embed.add_field(name="Final Board", value=board_display, inline=False)
     else:
@@ -192,7 +192,7 @@ async def handle_game_loss(bot, game, interaction, cid, include_board: bool = Tr
     Returns: (embed, participant_rows_list, level_ups_list, tier_ups_list)
     """
     if include_board:
-        board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+        board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
         embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
         embed.description = f"The word was **{game.secret.upper()}**."
         embed.add_field(name="Final Board", value=board_display, inline=False)
