@@ -230,7 +230,7 @@ class ConstraintMode(commands.Cog):
                     formatted += char
             formatted_lines.append(formatted)
         
-        return '\n'.join(formatted_lines)
+        return '\n'.join([f"# {line}" for line in formatted_lines])
 
     async def finalize_game_session(self, game, channel):
         """

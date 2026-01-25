@@ -157,9 +157,9 @@ class GuessHandler(commands.Cog):
                             else:
                                 masked += EMOJIS.get(f"block_{char_low}_absent", "⬜")
                     lines.append(masked)
-                board_display = "\n".join(lines)
+                board_display = "\n".join([f"# {line}" for line in lines])
             else:
-                board_display = "\n".join([h['pattern'] for h in game.history])
+                board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
 
             # Fetch player badge (use cached profile - avoids DB hit on every guess)
             active_badge = None
@@ -178,7 +178,7 @@ class GuessHandler(commands.Cog):
             if is_custom:
                 # ========= CUSTOM GAME =========
                 if win:
-                    board_display = "\n".join([h['pattern'] for h in game.history])
+                    board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
                     embed = self._build_game_embed(
                         title="🏆 VICTORY!",
                         color=discord.Color.green(),
@@ -192,7 +192,7 @@ class GuessHandler(commands.Cog):
                     await ctx.send(embed=embed)
 
                 elif game_over:
-                    board_display = "\n".join([h['pattern'] for h in game.history])
+                    board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
                     reveal_text = f"The word was **{game.secret.upper()}**." if game.reveal_on_loss else "Better luck next time!"
                     embed = self._build_game_embed(
                         title="💀 GAME OVER",
@@ -235,7 +235,7 @@ class GuessHandler(commands.Cog):
                 # 2. Build and send INSTANT board embed
                 from src.utils import get_win_flavor
                 flavor = get_win_flavor(game.attempts_used)
-                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+                board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
                 
                 instant_embed = self._build_game_embed(
                     title=f"🏆 VICTORY!\n{flavor}",
@@ -258,7 +258,7 @@ class GuessHandler(commands.Cog):
                 self.bot.games.pop(cid, None)
 
                 # 2. Build and send INSTANT board embed
-                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
+                board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
                 instant_embed = self._build_game_embed(
                     title="💀 GAME OVER",
                     color=discord.Color.red(),
