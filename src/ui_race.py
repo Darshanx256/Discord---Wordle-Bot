@@ -152,7 +152,7 @@ class RaceLobbyView(ui.View):
             f"Click **Make Guess** to start!"
         )
         if game.history:
-             board_display = "\n".join([f"# {h['pattern']}" for h in game.history])
+             board_display = "\n".join([f"## {h['pattern']}" for h in game.history])
              embed.description += f"\n\n**Board:**\n{board_display}"
              
              # Keypad
