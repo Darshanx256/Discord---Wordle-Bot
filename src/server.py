@@ -91,7 +91,7 @@ def run_flask_server():
 
 
     # --- SERVER RUN CONFIGURATION ---
-    port = int(os.environ.get('PORT', 10000))
+    port = int(os.environ.get('PORT', 8080))
     # Using waitress for production-ready WSGI server
     from waitress import serve
     print(f"🌍 Starting Web Server on port {port}...")
