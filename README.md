@@ -1,4 +1,4 @@
-# 🟩 Discord Wordle Game Bot (V3)
+# 🟩 Discord Wordle Game Bot (V4)
 
 A feature-rich, competitive Wordle bot for Discord, featuring a dual-track progression system (Rating & XP), cosmetic shop, and private solo modes.
 

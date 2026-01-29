@@ -233,32 +233,34 @@ class GuessHandler(commands.Cog):
                 self.bot.games.pop(cid, None)
 
                 # 2. Build and send INSTANT board embed
+                # 2. Build and send INSTANT board embed
+                final_time = (datetime.datetime.now() - game.start_time).total_seconds()
                 from src.utils import get_win_flavor
                 flavor = get_win_flavor(game.attempts_used)
-                board_display = "\n".join([f"### {h['pattern']}" for h in game.history])
+                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                 
                 instant_embed = self._build_game_embed(
                     title=f"🏆 VICTORY!\n{flavor}",
                     color=discord.Color.green(),
                     board=board_display,
                     keypad=keypad,
-                    footer=f"⏱️ Solved in {(datetime.datetime.now() - game.start_time).total_seconds():.1f}s",
+                    footer=f"⏱️ Solved in {final_time:.1f}s",
                     header_text=f"**{winner_user.display_name}** found **{game.secret.upper()}** in {game.attempts_used}/6!",
                     show_keyboard=True
                 )
                 
-                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False)) if game.difficulty in [0, 1] else None
+                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False), is_win=True) if game.difficulty in [0, 1] else None
                 await ctx.send(embed=instant_embed, view=view)
 
                 # 3. Launch background task for rewards/progression
-                asyncio.create_task(self._finish_game_sequence(ctx, game, winner_user, cid, is_win=True))
+                asyncio.create_task(self._finish_game_sequence(ctx, game, winner_user, cid, is_win=True, final_time=final_time))
 
             elif game_over:
                 # 1. Pop from games immediately
                 self.bot.games.pop(cid, None)
 
                 # 2. Build and send INSTANT board embed
-                board_display = "\n".join([f"### {h['pattern']}" for h in game.history])
+                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                 instant_embed = self._build_game_embed(
                     title="💀 GAME OVER",
                     color=discord.Color.red(),
@@ -269,7 +271,7 @@ class GuessHandler(commands.Cog):
                     show_keyboard=True
                 )
                 
-                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False)) if game.difficulty in [0, 1] else None
+                view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False), is_win=False) if game.difficulty in [0, 1] else None
                 await ctx.send(embed=instant_embed, view=view)
 
                 # 3. Launch background task for rewards/progression
@@ -294,102 +296,52 @@ class GuessHandler(commands.Cog):
                 await ctx.send(f"❌ Internal Error: {e}", ephemeral=True)
             except: pass
 
-    async def _finish_game_sequence(self, ctx, game, winner_user, cid, is_win: bool):
+    async def _finish_game_sequence(self, ctx, game, winner_user, cid, is_win: bool, final_time: float = None):
         """Background task for reward processing and progression embeds."""
+        bot = self.bot
         try:
+            announcements = []
             if is_win:
                 main_embed, breakdown_embed, _, res, level_ups, tier_ups, results = await handle_game_win(
-                    self.bot, game, ctx, winner_user, cid, include_board=False
+                    bot, game, ctx, winner_user, cid, include_board=False, final_time=final_time
                 )
                 
                 if main_embed is None: return # Stopped
 
-                announcements = []
                 if res:
                     if res.get('level_up'):
                         announcements.append(f"🔼 **LEVEL UP!** {winner_user.mention} is now **Level {res['level_up']}**!")
                     if res.get('tier_up'):
                         t_icon = EMOJIS.get(res['tier_up']['icon'], res['tier_up']['icon'])
                         announcements.append(f"🎉 **PROMOTION!** {winner_user.mention} reached **{t_icon} {res['tier_up']['name']}** Tier!")
-
-                for uid, lvl in level_ups:
-                    u = self.bot.get_user(uid)
-                    if u: announcements.append(f"🔼 **LEVEL UP!** {u.mention} is now **Level {lvl}**!")
-                
-                for uid, t_info in tier_ups:
-                    u = self.bot.get_user(uid)
-                    if u:
-                        t_icon = EMOJIS.get(t_info['icon'], t_info['icon'])
-                        announcements.append(f"🎉 **PROMOTION!** {u.mention} reached **{t_icon} {t_info['name']}** Tier!")
-
-                # Send reward/breakdown/progression
-                tasks = []
-                if main_embed:
-                    tasks.append(ctx.channel.send(embed=main_embed))
-                if breakdown_embed:
-                    tasks.append(ctx.channel.send(embed=breakdown_embed))
-                if announcements:
-                    ann_embed = discord.Embed(title="✨ Progression Updates", description="\n".join(announcements), color=discord.Color.gold())
-                    tasks.append(ctx.channel.send(embed=ann_embed))
-                
-                if tasks: await asyncio.gather(*tasks)
-
             else:
                 # Loss
-                main_embed, participant_rows, level_ups, tier_ups, results = await handle_game_loss(
-                    self.bot, game, ctx, cid, include_board=False
+                main_embed, breakdown_embed, _, level_ups, tier_ups, results = await handle_game_loss(
+                    bot, game, ctx, cid, include_board=False
                 )
-                
-                announcements = []
-                for uid, lvl in level_ups:
-                    u = self.bot.get_user(uid)
-                    if u: announcements.append(f"🔼 **LEVEL UP!** {u.mention} is now **Level {lvl}**!")
-                for uid, t_info in tier_ups:
-                    u = self.bot.get_user(uid)
-                    if u:
-                        t_icon = EMOJIS.get(t_info['icon'], t_info['icon'])
-                        announcements.append(f"🎉 **PROMOTION!** {u.mention} reached **{t_icon} {t_info['name']}** Tier!")
+            
+            # 2. Progression Announcements (Shared for participants)
+            for uid, lvl in level_ups:
+                u = bot.get_user(uid)
+                if u: announcements.append(f"🔼 **LEVEL UP!** {u.mention} is now **Level {lvl}**!")
+            
+            for uid, t_info in tier_ups:
+                u = bot.get_user(uid)
+                if u:
+                    t_icon = EMOJIS.get(t_info['icon'], t_info['icon'])
+                    announcements.append(f"🎉 **PROMOTION!** {u.mention} reached **{t_icon} {t_info['name']}** Tier!")
 
-                breakdown = None
-                try:
-                    breakdown = discord.Embed(title="🎖️ Game Over - Rewards", color=discord.Color.greyple())
-                    if participant_rows:
-                        all_uids = [uid for uid, *_ in participant_rows]
-                        badge_map = {}
-                        if all_uids:
-                            try:
-                                b_resp = self.bot.supabase_client.table('user_stats_v2').select('user_id, active_badge').in_('user_id', all_uids).execute()
-                                if b_resp.data:
-                                    for r in b_resp.data:
-                                        badge_map[r['user_id']] = r.get('active_badge')
-                            except: pass
-
-                        name_tasks = [get_cached_username(self.bot, uid) for uid, *_ in participant_rows]
-                        names = await asyncio.gather(*name_tasks)
-                        
-                        lines = []
-                        for (uid, outcome_key, xp_v, wr_v), name in zip(participant_rows, names):
-                            badge_key = badge_map.get(uid)
-                            badge_emoji = get_badge_emoji(badge_key) if badge_key else ''
-                            wr_part = f" | WR: {wr_v}" if wr_v is not None else ""
-                            lines.append(f"{name} {badge_emoji} — {outcome_key.replace('_', ' ').title()}: +{xp_v} XP{wr_part}")
-
-                        participants_text = "\n".join(lines)
-                        if len(participants_text) > 900: participants_text = participants_text[:900] + "\n..."
-                        breakdown.add_field(name="Participants", value=participants_text, inline=False)
-                    breakdown.set_footer(text="Rewards applied instantly.")
-                except: pass
-
-                tasks = []
-                # main_embed for loss also doesn't have much besides "The word was..." if include_board=False
-                # So maybe we just send breakdown/announcements
-                if breakdown:
-                    tasks.append(ctx.channel.send(embed=breakdown))
-                if announcements:
-                    ann_embed = discord.Embed(title="✨ Progression Updates", description="\n".join(announcements), color=discord.Color.gold())
-                    tasks.append(ctx.channel.send(embed=ann_embed))
-                
-                if tasks: await asyncio.gather(*tasks)
+            # 3. Send reward/breakdown/progression (Shared)
+            tasks = []
+            if is_win and main_embed:
+                tasks.append(ctx.channel.send(embed=main_embed))
+            if breakdown_embed:
+                tasks.append(ctx.channel.send(embed=breakdown_embed))
+            if announcements:
+                ann_embed = discord.Embed(title="✨ Progression Updates", description="\n".join(announcements), color=discord.Color.gold())
+                tasks.append(ctx.channel.send(embed=ann_embed))
+            
+            if tasks: await asyncio.gather(*tasks)
 
         except Exception:
             traceback.print_exc()
