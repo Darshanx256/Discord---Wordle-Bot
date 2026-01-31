@@ -1,1 +1,1 @@
-worker: python wordle_bot.py
+web: python wordle_bot.py

@@ -9,7 +9,8 @@ def run_flask_server():
     static_dir = os.path.join(base_dir, 'static')
     
     # Initialize Flask App
-    app = Flask(__name__, static_folder=static_dir)
+    # static_url_path='' serves files from static_folder at the root URL
+    app = Flask(__name__, static_folder=static_dir, static_url_path='')
     
     # --- COMPRESSION (gzip/brotli) ---
     # Brotli is preferred when supported by browser (20-26% better than gzip)
@@ -57,17 +58,13 @@ def run_flask_server():
     def privacy():
         return send_from_directory(app.static_folder, 'privacy.html')
 
-    @app.route('/favicon.ico')
-    def favicon():
-        return send_from_directory(app.static_folder, 'favicon.ico')
+    # Health Check Route (Required for some cloud platforms)
+    @app.route('/health')
+    def health():
+        return {"status": "healthy"}, 200
 
-    @app.route('/icon.png')
-    def icon():
-        return send_from_directory(app.static_folder, 'icon.png')
-
-    @app.route('/styles.css')
-    def stylesheet():
-        return send_from_directory(app.static_folder, 'styles.css')
+    # Redundant individual routes for static files removed as they are 
+    # now handled automatically by static_url_path=''
 
 
     # API endpoint for bot stats

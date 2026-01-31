@@ -1,0 +1,25 @@
+runtime: python311
+entrypoint: python wordle_bot.py
+
+# Use manual scaling to keep the bot alive 24/7. 
+# Automatic scaling may shut down the instance if it doesn't receive HTTP traffic.
+manual_scaling:
+  instances: 1
+
+instance_class: F1
+
+env_variables:
+  # The bot requires these to be set in the environment.
+  # It is recommended to set these in the Google Cloud Console (App Engine > Settings)
+  # instead of hardcoding them here.
+  PORT: "8080"
+
+handlers:
+# Serve static files directly via Google's infrastructure for better performance
+- url: /(.*\.css|.*\.png|.*\.ico|.*\.jpg|.*\.html)
+  static_files: static/\1
+  upload: static/.*
+
+# All other routes go to the Python app
+- url: /.*
+  script: auto
