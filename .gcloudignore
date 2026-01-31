@@ -1,0 +1,37 @@
+# This file specifies files that are not uploaded to Google Cloud
+# when using `gcloud app deploy`
+
+# If you customize your Python runtime
+# only the following directories/files are uploaded unless you add them to `.gcloudignore`.
+# See https://cloud.google.com/appengine/docs/standard/python/using-custom-runtime for more details.
+
+.git
+.gitignore
+.gcloudignore
+
+# Python
+__pycache__
+*.py[cod]
+*.pyc
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+
+# Other
+*.log
+node_modules/
+banned_users.txt

@@ -1,7 +1,18 @@
 import os
 import json
+import signal
+import sys
+import asyncio
 from flask import Flask, send_from_directory, jsonify, request
 from flask_compress import Compress
+
+# Global reference to bot for graceful shutdown
+_bot_instance = None
+
+def set_bot_instance(bot):
+    """Set the bot instance for graceful shutdown."""
+    global _bot_instance
+    _bot_instance = bot
 
 def run_flask_server():
     # Determine absolute path to the static folder (one level up from src)
@@ -89,10 +100,55 @@ def run_flask_server():
             'last_updated': None
         })
 
+    # Health check endpoint for Cloud Run
+    @app.route('/health')
+    def health():
+        """Health check endpoint for Cloud Run / load balancers."""
+        try:
+            # Check if bot is connected
+            if _bot_instance and _bot_instance.is_closed():
+                return jsonify({'status': 'error', 'message': 'Bot disconnected'}), 503
+            
+            return jsonify({'status': 'healthy', 'bot_ready': _bot_instance is not None}), 200
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 503
+
+    # Readiness check endpoint for Cloud Run
+    @app.route('/ready')
+    def ready():
+        """Readiness check endpoint for Cloud Run."""
+        try:
+            if _bot_instance and _bot_instance.is_ready():
+                return jsonify({'status': 'ready'}), 200
+            return jsonify({'status': 'not_ready'}), 503
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 503
+
+    # Graceful shutdown endpoint
+    @app.route('/shutdown', methods=['POST'])
+    def shutdown():
+        """Graceful shutdown endpoint for Cloud Run."""
+        if _bot_instance:
+            # Close bot connection gracefully
+            asyncio.create_task(_bot_instance.close())
+        return jsonify({'status': 'shutting_down'}), 200
+
 
     # --- SERVER RUN CONFIGURATION ---
     port = int(os.environ.get('PORT', 8080))
     # Using waitress for production-ready WSGI server
     from waitress import serve
+    
     print(f"🌍 Starting Web Server on port {port}...")
-    serve(app, host='0.0.0.0', port=port)
+    print("🔗 Health checks available at: http://localhost:{port}/health")
+    
+    # Set up graceful shutdown handlers for Cloud Run
+    def handle_sigterm(signum, frame):
+        print("⚠️ SIGTERM received, gracefully shutting down...")
+        if _bot_instance:
+            sys.exit(0)
+    
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    
+    try:
+        serve(app, host='0.0.0.0', port=port, _quiet=False)

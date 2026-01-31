@@ -1,0 +1,37 @@
+runtime: custom
+env: flex
+
+# Automatic scaling configuration
+automatic_scaling:
+  min_instances: 1
+  max_instances: 100
+  cool_down_period_sec: 60
+  cpu_utilization:
+    target_utilization: 0.6
+  target_throughput_utilization: 0.6
+
+# Environment variables
+env_variables:
+  PORT: "8080"
+
+# Network configuration
+network:
+  session_affinity: "NONE"
+
+# Health checks
+health_check:
+  enable_health_check: true
+  check_interval_sec: 30
+  timeout_sec: 10
+  healthy_threshold: 2
+  unhealthy_threshold: 3
+  path: "/health"
+  
+# Resource allocation
+resources:
+  cpu: 1
+  memory_gb: 1.0
+  volumes:
+    - name: "tmpfs"
+      volume_type: "tmpfs"
+      size_gb: 2
