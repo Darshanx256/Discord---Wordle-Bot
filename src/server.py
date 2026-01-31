@@ -2,6 +2,7 @@ import os
 import json
 from flask import Flask, send_from_directory, jsonify, request
 from flask_compress import Compress
+from flask_cors import CORS
 
 def run_flask_server():
     # Determine absolute path to the static folder (one level up from src)
@@ -21,6 +22,10 @@ def run_flask_server():
     ]
     app.config['COMPRESS_MIN_SIZE'] = 500  # Only compress files > 500 bytes
     Compress(app)
+    
+    # --- CORS (Cross-Origin Resource Sharing) ---
+    # Allow other sites to access the API endpoints (specifically for the standalone web repo)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     @app.after_request
     def add_cache_headers(response):
         """Add cache-control and expiry headers for better performance."""
