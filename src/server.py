@@ -14,7 +14,8 @@ def set_bot_instance(bot):
     global _bot_instance
     _bot_instance = bot
 
-def run_flask_server():
+def create_flask_app():
+    """Create and configure Flask app."""
     # Determine absolute path to the static folder (one level up from src)
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     static_dir = os.path.join(base_dir, 'static')
@@ -133,14 +134,18 @@ def run_flask_server():
             asyncio.create_task(_bot_instance.close())
         return jsonify({'status': 'shutting_down'}), 200
 
+    return app
 
-    # --- SERVER RUN CONFIGURATION ---
-    port = int(os.environ.get('PORT', 8080))
+def run_flask_server():
+    """Legacy function for backward compatibility - creates and runs Flask server."""
     # Using waitress for production-ready WSGI server
     from waitress import serve
     
+    app = create_flask_app()
+    port = int(os.environ.get('PORT', 8080))
+    
     print(f"🌍 Starting Web Server on port {port}...")
-    print("🔗 Health checks available at: http://localhost:{port}/health")
+    print(f"🔗 Health checks available at: http://localhost:{port}/health")
     
     # Set up graceful shutdown handlers for Cloud Run
     def handle_sigterm(signum, frame):

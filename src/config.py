@@ -1,7 +1,11 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env file only if it exists (won't exist in Cloud Run)
+try:
+    load_dotenv()
+except:
+    pass
 
 # --- DISCORD CONFIG ---
 TOKEN = os.getenv('DISCORD_TOKEN')
