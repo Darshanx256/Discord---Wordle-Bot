@@ -13,6 +13,18 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     sys.exit(1)
 
 if __name__ == "__main__":
-    t = threading.Thread(target=run_flask_server)
-    t.start()
-    bot.run(TOKEN)
+    print("🚀 Initializing Wordle Bot System...")
+    
+    # Start the Flask server in a background thread
+    print(f"🌐 Starting Flask server thread...")
+    flask_thread = threading.Thread(target=run_flask_server, daemon=True)
+    flask_thread.start()
+    
+    # Start the Discord bot in the main thread
+    print("🤖 Starting Discord bot...")
+    try:
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"❌ FATAL: Discord bot failed to start: {e}")
+        sys.exit(1)
+
