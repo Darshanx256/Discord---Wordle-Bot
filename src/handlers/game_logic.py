@@ -32,7 +32,6 @@ async def _batch_fetch_participant_stats(bot, participant_ids: list):
         print(f"⚠️ Batch fetch error: {e}")
     return stats_map
 
-=======
 def _calculate_user_greens(history, secret: str):
     """Calculate unique greens discovered by each participant."""
     user_unique_greens = {} # {uid: count}
