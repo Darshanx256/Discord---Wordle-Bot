@@ -379,6 +379,16 @@ class GuessHandler(commands.Cog):
             
             if tasks: await asyncio.gather(*tasks)
 
+        except discord.Forbidden:
+            # Bot lacks permissions in this channel
+            try:
+                await ctx.send(
+                    "⚠️ **Missing Permissions**: Wordle Game Bot isn't properly configured in this channel. "
+                    "Please ensure the bot has **Send Messages**, **Embed Links**, and **Read Message History** permissions.",
+                    ephemeral=True
+                )
+            except:
+                print(f"❌ Permission Error: Cannot send messages in channel {ctx.channel.id}")
         except Exception:
             traceback.print_exc()
 

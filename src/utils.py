@@ -177,6 +177,37 @@ def is_user_banned(bot, user_id: int) -> bool:
     """Check if a user is banned."""
     return hasattr(bot, 'banned_users') and user_id in bot.banned_users
 
+def check_bot_permissions(channel: discord.TextChannel) -> tuple[bool, str]:
+    """
+    Check if bot has required permissions in a channel.
+    Returns (has_permissions: bool, error_message: str)
+    """
+    if not isinstance(channel, discord.TextChannel):
+        return True, ""  # DMs or other channel types don't need permission checks
+    
+    permissions = channel.permissions_for(channel.guild.me)
+    
+    required_perms = {
+        "send_messages": "Send Messages",
+        "embed_links": "Embed Links",
+        "read_message_history": "Read Message History",
+    }
+    
+    missing = []
+    for perm_name, display_name in required_perms.items():
+        if not getattr(permissions, perm_name, False):
+            missing.append(display_name)
+    
+    if missing:
+        error_msg = (
+            f"⚠️ **Missing Permissions**: Wordle Game Bot isn't properly configured in this channel.\n"
+            f"Missing: **{', '.join(missing)}**\n\n"
+            f"Please ask a server admin to grant these permissions to the bot's role."
+        )
+        return False, error_msg
+    
+    return True, ""
+
 async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool = True, transient_duration: int = 30, user: discord.abc.User = None):
     """
     Sends a message intelligently:

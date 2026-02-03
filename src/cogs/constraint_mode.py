@@ -395,7 +395,17 @@ class ConstraintMode(commands.Cog):
                 
                 round_embed.set_footer(text=footer_text)
                 
-                msg = await channel.send(embed=round_embed)
+                try:
+                    msg = await channel.send(embed=round_embed)
+                except discord.Forbidden:
+                    # Bot lacks permissions - stop the game gracefully
+                    await channel.send(
+                        "⚠️ **Word Rush Stopped**: Wordle Game Bot isn't properly configured in this channel. "
+                        "Please ensure the bot has **Send Messages**, **Embed Links**, and **Read Message History** permissions."
+                    )
+                    self.bot.rush_games.pop(channel.id, None)
+                    return
+                
                 game.game_msg = msg
                 game.is_round_active = True
                 game.round_start_time = time.monotonic() # Start stats timer
