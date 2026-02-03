@@ -164,10 +164,8 @@ class ConstraintMode(commands.Cog):
             ),
             color=discord.Color.from_rgb(88, 101, 242)
         )
-        embed.set_thumbnail(url=self.signal_urls['unlit'])
         embed.set_footer(text=f"🎮 Hosted by {interaction.user.display_name}")
         
-        # Add initial participant
         pts = [f"<@{uid}>" for uid in game.participants]
         embed.add_field(name="Participants", value=", ".join(pts) if pts else "None yet", inline=False)
         
