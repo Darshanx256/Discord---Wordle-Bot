@@ -54,7 +54,7 @@ class HelpCommands(commands.Cog):
             value=(
                 "• **Oretsu** -> Lead Developer & Maintainer\n"
                 "• Inquiries may be directed via `/message` or to `Ortsx256@proton.me`.\n"
-                "• **Ko-Fi** -> [Click Here](https://ko-fi.com/wordlegamebot)\n"
+                "• **Ko-Fi** -> [ko-fi.com/wordlegamebot](https://ko-fi.com/wordlegamebot)\n"
             ),
             inline=False
         )
