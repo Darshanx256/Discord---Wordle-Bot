@@ -3,7 +3,7 @@ import random
 import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
-from src.utils import EMOJIS, get_win_flavor, get_badge_emoji#, send_smart_message
+from src.utils import EMOJIS, get_win_flavor, get_badge_emoji
 
 
 def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, blind_mode=False) -> str:
@@ -102,7 +102,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             progress_bar = f"[{filled}{empty}]"
 
             # Board Display
-            board_display = "\n".join([f"### {h['pattern']}" for h in self.game.history])
+            board_display = "\n".join([f" {h['pattern']}" for h in self.game.history])
             
             # Embed Update
             if win:
@@ -157,13 +157,6 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 self.bot.solo_games.pop(interaction.user.id, None)
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
 
-                # Streak notifications for Loss (Delayed & Ephemeral)
-                #try:
-                #    res = record_game_v2(self.bot, interaction.user.id, None, 'SOLO', 'loss', self.game.max_attempts, 999)
-                #    if res and res.get('streak_msg'):
-                #        asyncio.create_task(send_smart_message(interaction, res['streak_msg'], ephemeral=True))
-                #except:
-                #    pass
 
             else:
                 # Ongoing game - board + keyboard in embed description
@@ -305,134 +298,48 @@ class HelpView(discord.ui.View):
     def __init__(self, interaction_user, initial_feature=None):
         super().__init__(timeout=120)
         self.user = interaction_user
-        self.page = 0 if initial_feature else 1 # 0=Feature, 1=Basic, 2=Advanced
         self.feature = initial_feature
-        self.update_buttons()
 
-    def update_buttons(self):
-        if self.page == 0:
-            self.btn_basic.disabled = False
-            self.btn_basic.style = discord.ButtonStyle.primary
-            self.btn_advanced.disabled = False
-            self.btn_advanced.style = discord.ButtonStyle.primary
-        elif self.page == 1:
-            self.btn_basic.disabled = True
-            self.btn_basic.style = discord.ButtonStyle.secondary
-            self.btn_advanced.disabled = False
-            self.btn_advanced.style = discord.ButtonStyle.primary
-        else:
-            self.btn_basic.disabled = False
-            self.btn_basic.style = discord.ButtonStyle.primary
-            self.btn_advanced.disabled = True
-            self.btn_advanced.style = discord.ButtonStyle.secondary
-            
     def create_embed(self):
-        if self.page == 0:
+        if self.feature:
             return self.get_feature_help_embed(self.feature)
-        if self.page == 1:
-            # BASIC PAGE
-            embed = discord.Embed(title=f"📚 Wordle Game Bot Guide (Basic)", color=discord.Color.blue())
-            embed.description = "A fun and engaging Wordle Game Bot for Discord with various different game modes, level-up system and leaderboards!"
-            
-            embed.add_field(name="🎮 How to Play", value=(
-                "**1. Start a Game**\n"
-                "• `/wordle` -> Simple 5-letter words\n"
-                "• `/wordle_classic` -> Harder, full dictionary\n"
-                "• `/word_rush` -> Rapid constraint puzzles\n"
-                "• `/custom` -> Custom word in channel\n"
-                "• `/solo` -> Private Solo Mode\n\n"
-                "**2. Make a Guess**\n"
-                "• `/guess word:apple` or `-g apple`\n\n"
-                "**3. Hints**\n"
-                "🟩 Correct letter, correct spot\n"
-                "🟨 Correct letter, wrong spot\n"
-                "⬜ Letter not in word"
-            ), inline=False)
-            
-            # Build example with custom emojis
-            apple_example = "Guess: **APPLE**\n"
-            apple_example += f"{EMOJIS.get('block_a_green', '🟩')}{EMOJIS.get('block_p_yellow', '🟨')}{EMOJIS.get('block_p_yellow', '🟨')}{EMOJIS.get('block_l_white', '⬜')}{EMOJIS.get('block_e_white', '⬜')}\n"
-            apple_example += "**A** is correct! **P** is in word but wrong spot."
-            
-            embed.add_field(name="❓ Example", value=apple_example, inline=False)
+        
+        # DEFAULT SIMPLE PAGE
+        embed = discord.Embed(title=f"📚 Wordle Game Bot Help", color=discord.Color.blue())
+        embed.description = (
+            "A fun and engaging Wordle Game Bot for Discord with various game modes, "
+            "a level-up system, and competitive leaderboards!"
+        )
+        
+        embed.add_field(name="🎮 Game Commands", value=(
+            "`/wordle` -> Start a Simple Game\n"
+            "`/wordle_classic` -> Start a Classic Game (Hard)\n"
+            "`/word_rush` -> Start Word Rush Mode\n"
+            "`/solo` -> Start a Private Solo Game\n"
+            "`/race` -> Start a Multiplayer Race\n"
+            "`/custom` -> Start a Custom Game"
+        ), inline=False)
 
-            embed.add_field(name= f"{EMOJIS.get('28_streak','🔥')}What's New?", value=(
-                "• **Word Rush Mode**: Fast-paced puzzles with time limits and checkpoints!\n"
-                "• **Enhanced Responsiveness**: Optimized code for a faster, more fluid gaming experience!"
-            ))
+        embed.add_field(name="🛠️ Utility Commands", value=(
+            "`/guess word:xxxxx` -> Make a guess (Shortcut: `-g xxxxx`)\n"
+            "`/profile` -> View your stats, level, and tier\n"
+            "`/leaderboard` -> View global and server rankings\n"
+            "`/shop` -> Equip unique badges\n"
+            "`/about` -> View bot information and credits"
+        ), inline=False)
 
-            embed.set_footer(text="Page 1/2 • type /help and select feature for detailed guides!")
-            
-        else:
-            # ADVANCED PAGE
-            embed = discord.Embed(title="🧠 Wordle Game Bot Guide (Advanced)", color=discord.Color.dark_purple())
-            embed.description = "Deep dive into commands, tiers, and collectibles!"
-            
-            # Commands Section - Two columns for better organization
-            embed.add_field(name="🎮 Game Commands", value=(
-                "`/wordle` -> Simple Game\n"
-                "`/wordle_classic` -> Hard Game\n"
-                "`/word_rush` -> Rush Mode\n"
-                "`/solo` -> Private Game\n"
-                "`/custom` -> Set Custom Word\n"
-                "`/guess`, `-g` or `-G` -> Guess\n"
-                "`/stop_game` or `/stop_rush` -> Stop\n"
-                "`/race` -> Start Race Mode"
-            ), inline=True)
-            
-            embed.add_field(name="📊 Stats & Profile", value=(
-                "`/profile` -> Your Stats\n"
-                "`/leaderboard` -> Server Ranks\n"
-                "`/leaderboard_global` -> Global\n"
-                "`/shop` -> Equip Badges\n"
-                "`/showrace` -> Resume Race\n\n"
-
-            ), inline=True)
-            
-            # Tiers Section
-            tier_text = "\n".join([
-                f"{EMOJIS.get(t['icon'], t['icon'])} **{t['name']}** -> WR ≥ {t['min_wr']}" 
-                for t in TIERS
-            ])
-            embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
-            
-            # Easter Eggs Section
-            duck_emoji = EMOJIS.get("duck", "🦆")
-            dragon_emoji = EMOJIS.get("dragon", "🐲")
-            candy_emoji = EMOJIS.get("candy", "🍬")
-            
-            embed.add_field(name="🎁 Easter Eggs & Badges", value=(
-                f"**Rare Drops during `/guess`:**\n"
-                f"{duck_emoji} **Duck** -> Simple Mode (1/100)\n"
-                f"{dragon_emoji} **Dragon** -> Classic Mode (1/1000)\n"
-                f"{candy_emoji} **Candy** -> Both Modes (1/100)\n\n"
-                "View your collection via `/profile`\n"
-                "Unlock **Badges** in `/shop`!"
-            ), inline=False)
-            
-            # Pro Tips
-            embed.add_field(name="💡 Pro Tips", value=(
-                "• Start with vowel-heavy words (AUDIO, RAISE)\n"
-                "• Speed matters -> faster solves = bonus rewards\n"
-                "• Higher tiers receive scaled rewards\n"
-                "• Participate in Multiplayer for extra XP\n"
-                "• Word Rush Checkpoints convert Points to WR!"
-            ), inline=False)
-            
-            # Custom Game Options
-            embed.add_field(name="🧂 Custom Game Extra Options", value=(
-                "Use in `Extra options` field:\n"
-                "`dict:word1,word2` -> Add custom words\n"
-                "`strict_dict:list` -> ONLY use these words\n"
-                "`time:0.5` -> Time limit (min, e.g. 0.5=30s)\n"
-                "`player:@u1,@u2` -> Allow multiple users\n"
-                "`blind:green` -> Show greens only 🟢\n"
-                "`start:w1,w2` -> Force start guesses\n"
-                "`title:My Text` -> Set custom title"
-            ), inline=False)
-            
-            embed.set_footer(text="Page 2/2 • type /help and select feature for detailed guides!")
-
+        embed.add_field(name="💡 Detailed Guides", value=(
+            "Use `/help [feature]` to access specialized help columns:\n"
+            "• **Wordle Guide** -> `/help feature:wordle`\n"
+            "• **Word Rush Guide** -> `/help feature:word_rush`\n"
+            "• **Race Mode Guide** -> `/help feature:race`\n"
+            "• **Solo Mode Guide** -> `/help feature:solo`\n"
+            "• **Custom Mode Guide** -> `/help feature:custom`\n"
+            "• **Tiers & Progression** -> `/help feature:progression`"
+        ), inline=False)
+        
+        embed.set_footer(text="Tip: Solve words quickly to earn Speed Bonuses!")
+        
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -440,18 +347,6 @@ class HelpView(discord.ui.View):
             await interaction.response.send_message("❌ This is not your help menu.", ephemeral=True)
             return False
         return True
-
-    @discord.ui.button(label="Basic Info", style=discord.ButtonStyle.secondary)
-    async def btn_basic(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.page = 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
-
-    @discord.ui.button(label="Show More", style=discord.ButtonStyle.primary)
-    async def btn_advanced(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.page = 2
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
 
     def get_feature_help_embed(self, feature: str):
         """Generates deep-dive help for specific features."""
@@ -728,38 +623,27 @@ class HelpView(discord.ui.View):
         elif feature == "progression":
             embed = discord.Embed(title="Progression & Tiers", color=discord.Color.purple())
             
-            # spark_badge = EMOJIS.get('7_streak', '✨')
-
-            # def get_next_utc_midnight():
-            #    now = datetime.datetime.now(datetime.timezone.utc)
-            #    return (now + datetime.timedelta(days=1)).replace( hour=0, minute=0, second=0, microsecond=0)
-
-            #reset = get_next_utc_midnight()
-            #timestamp = int(reset.timestamp())
             
             embed.description = (
                 "Climb the ranks from Challenger beginner to Legendary Master!\n\n"
                 "**Core Stats Explained:**\n"
                 "• **XP (Experience Points)** - Earned every game, determines your **Level**\n"
-                "• **WR (Wordle Rating)** - Win/loss-based score, determines your **Tier**\n"
+                "• **WR (Wordle Rating)** - Earned every win, try or participation, determines your **Tier**\n"
                 "• **Solo WR** - Separate rating for Solo Mode games\n"
                 "• **Multi WR** - Rating for multiplayer games (Wordle, Race, Rush)\n\n"
                 "**How Rewards Work:**\n"
                 "• Base XP/WR earned per game varies by mode and performance\n"
-                "• **Tier Multipliers** boost ALL rewards as you climb ranks\n"
                 "• **Speed Bonus** for fast solves (under 60 seconds)\n"
                 "• **Anti-Grind Protection** reduces gains after many daily games (resets daily)\n"
                 "• **Attempt Bonus** - Solving in fewer tries earns more rewards\n\n"
-                #"**Daily Streaks System:**\n"
-                #"Play at least one game every day to build your streak!\n\n"
 
                 "**Leveling System:**\n"
-                "• XP required increases per level (scaling formula)\n"
+                "• XP required increases at certain levels\n"
                 "• No level cap - climb as high as you can!\n"
                 "• Check your progress with `/profile`\n\n"
                 "**WR Rating System:**\n"
                 "• **Wins:** +WR (amount based on tier, mode, speed)\n"
-                "• **Losses:** -WR (reduced penalty at higher tiers)\n"
+                "• **Losses:** No WR deduction\n"
                 "• **Race Mode:** Rank-based rewards (1st place bonus, etc.)\n"
                 "• **Rush Mode:** Points converted at checkpoints with multipliers\n"
                 "• Solo and Multi WR tracked separately\n\n"
@@ -777,14 +661,10 @@ class HelpView(discord.ui.View):
                 for t in TIERS
             ])
 
-            tier_text = "".join([
-                f"{tier_text}\n\nGlobal WR is subject to drop every month on 1st based on Tiers, this is to keep the leaderboard fresh and competitive\n"
-            ])
-
             embed.add_field(name="🏆 Ranking Tiers", value=tier_text, inline=False)
 
         else:
             embed = discord.Embed(title="❓ Unknown Feature", description="Feature not found.", color=discord.Color.red())
 
-        embed.set_footer(text="Use 'Basic' or 'Show More' to navigate back.")
+        embed.set_footer(text="Use /help to return to the main guide.")
         return embed

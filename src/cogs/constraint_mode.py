@@ -230,7 +230,7 @@ class ConstraintMode(commands.Cog):
                     formatted += char
             formatted_lines.append(formatted)
         
-        return '\n'.join([f"### {line}" for line in formatted_lines])
+        return '\n'.join([f"{line}" for line in formatted_lines])
 
     async def finalize_game_session(self, game, channel):
         """
@@ -239,8 +239,8 @@ class ConstraintMode(commands.Cog):
         """
         # Distribute any pending rewards from the final partial/checkpoint
         if game.scores:
-             await self.distribute_rewards(channel, game)
-             game.scores = {}
+            await self.distribute_rewards(channel, game)
+            game.scores = {}
 
         if not game.total_wr_per_user:
             return
@@ -378,7 +378,7 @@ class ConstraintMode(commands.Cog):
                 title = f"🎁 BONUS ROUND" if game.is_bonus_round else f"Round {game.round_number}"
                 round_embed = discord.Embed(
                     title=title,
-                    description=f"### {display_text}{spacing}",
+                    description=f"{display_text}{spacing}",
                     color=discord.Color.from_rgb(255, 215, 0) if game.is_bonus_round else discord.Color.from_rgb(46, 204, 113)
                 )
                 round_embed.set_thumbnail(url=self.signal_urls['green'])

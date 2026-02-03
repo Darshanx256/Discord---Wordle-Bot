@@ -246,7 +246,10 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                 ephemeral=True
             )
 
-        # Add word and dict to valid set temporarily
+        # Convert frozenset to set if needed (all_valid_5 is frozenset in bot.py)
+        if isinstance(self.bot.all_valid_5, frozenset):
+             self.bot.all_valid_5 = set(self.bot.all_valid_5)
+             
         self.bot.all_valid_5.add(word)
         if custom_dict:
             self.bot.all_valid_5.update(custom_dict)
@@ -377,6 +380,11 @@ class GameCommands(commands.Cog):
         """Monotonic timer for custom games with a time limit."""
         try:
             while channel_id in self.bot.custom_games:
+                # Safety check: verify game still exists and hasn't been removed
+                current_game = self.bot.custom_games.get(channel_id)
+                if current_game is None or current_game != game:
+                    break  # Game was removed or replaced
+                
                 now = time.monotonic()
                 remaining = game.monotonic_end_time - now
                 
@@ -394,21 +402,25 @@ class GameCommands(commands.Cog):
                 else:
                     break
             
-            # Time's up
+            # Time's up - verify game still exists before cleanup
             if channel_id in self.bot.custom_games:
-                game = self.bot.custom_games.pop(channel_id, None)
-                if game:
+                current_game = self.bot.custom_games.get(channel_id)
+                if current_game == game:  # Only remove if it's the same game instance
+                    self.bot.custom_games.pop(channel_id, None)
                     channel = self.bot.get_channel(channel_id)
                     if channel:
-                        embed = discord.Embed(
-                            title="⏰ Time's Up!",
-                            color=discord.Color.dark_grey()
-                        )
-                        desc = "The custom game has timed out."
-                        if getattr(game, 'reveal_on_loss', True):
-                            desc += f"\nThe word was **{game.secret.upper()}**."
-                        embed.description = desc
-                        await channel.send(embed=embed)
+                        try:
+                            embed = discord.Embed(
+                                title="⏰ Time's Up!",
+                                color=discord.Color.dark_grey()
+                            )
+                            desc = "The custom game has timed out."
+                            if getattr(game, 'reveal_on_loss', True):
+                                desc += f"\nThe word was **{game.secret.upper()}**."
+                            embed.description = desc
+                            await channel.send(embed=embed)
+                        except Exception as e:
+                            print(f"⚠️ Error sending timeout message: {e}")
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -476,7 +488,7 @@ class GameCommands(commands.Cog):
         empty = "○" * (6 - game.attempts_used)
         progress_bar = f"[{filled}{empty}]"
 
-        board_display = "\n".join([f"### {h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
+        board_display = "\n".join([f"{h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id, blind_mode=getattr(game, 'blind_mode', False))
 
         embed = discord.Embed(title=f"Solo Wordle | Attempt {game.attempts_used}/6", color=discord.Color.gold())
