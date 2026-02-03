@@ -1,4 +1,5 @@
 import random
+import asyncio
 from discord.ext import commands
 
 from src.config import TIERS, XP_GAINS, XP_LEVELS, MPS_BASE, MPS_EFFICIENCY, MPS_SPEED
@@ -13,6 +14,91 @@ import time
 # Bounded cache with auto-eviction: max 1000 profiles, 5-min TTL
 from cachetools import TTLCache
 _PROFILE_CACHE = TTLCache(maxsize=1000, ttl=300)  # Much better than unbounded dict
+
+# --- WORD CACHE FOR LATENCY OPTIMIZATION ---
+# { guild_id: { 'simple': [idx, ...], 'classic': [idx, ...] } }
+_GUILD_WORD_CACHE = {}
+_GUILD_FETCH_EVENTS = {} # { (guild_id, pool_type): asyncio.Event }
+
+async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, count: int = 2):
+    """
+    Fetches multiple words into the cache for a specific guild and pool in parallel.
+    Uses asyncio.Event to coordinate concurrent fetch requests (Wait-on-Busy).
+    """
+    lock_key = (guild_id, pool_type)
+    
+    # If a fetch is already in progress, wait for it
+    if lock_key in _GUILD_FETCH_EVENTS:
+        await _GUILD_FETCH_EVENTS[lock_key].wait()
+        return
+
+    # Create and set event to "busy"
+    _GUILD_FETCH_EVENTS[lock_key] = asyncio.Event()
+    
+    try:
+        if pool_type == 'classic':
+            pool_list = bot.hard_secrets
+        else:
+            pool_list = bot.secrets
+            
+        total_words = len(pool_list)
+        if total_words == 0: return
+
+        def _fetch_one():
+            try:
+                params = {
+                    'p_guild_id': guild_id,
+                    'p_pool_type': pool_type,
+                    'p_total_words': total_words
+                }
+                res = bot.supabase_client.rpc('pick_next_word', params).execute()
+                if res.data is not None:
+                     return int(res.data)
+                return None
+            except Exception as e:
+                print(f"⚠️ RPC Fetch Error: {e}")
+                return None
+
+        tasks = [asyncio.to_thread(_fetch_one) for _ in range(count)]
+        indices = await asyncio.gather(*tasks)
+        
+        if any(idx is not None for idx in indices):
+            if guild_id not in _GUILD_WORD_CACHE:
+                _GUILD_WORD_CACHE[guild_id] = {'simple': [], 'classic': []}
+            
+            for idx in indices:
+                if idx is not None:
+                    _GUILD_WORD_CACHE[guild_id][pool_type].append(idx)
+                
+    except Exception as e:
+        print(f"❌ Batch Word Fetch Error [guild={guild_id}, pool={pool_type}]: {e}")
+    finally:
+        # Signal completion and cleanup
+        event = _GUILD_FETCH_EVENTS.pop(lock_key, None)
+        if event:
+            event.set()
+
+async def ensure_word_cache(bot: commands.Bot, guild_id: int, wait: bool = False):
+    """
+    Checks if the word cache for a guild is low and triggers a background refill.
+    If wait=True, it will await the fetch completion (useful for startup/production).
+    """
+    if guild_id not in _GUILD_WORD_CACHE:
+        _GUILD_WORD_CACHE[guild_id] = {'simple': [], 'classic': []}
+        
+    tasks = []
+    for p_type in ['simple', 'classic']:
+        current_len = len(_GUILD_WORD_CACHE[guild_id][p_type])
+        if current_len < 2:
+            if wait:
+                tasks.append(fetch_words_batch(bot, guild_id, p_type, 2))
+            else:
+                asyncio.create_task(fetch_words_batch(bot, guild_id, p_type, 2))
+    
+    if tasks:
+        await asyncio.gather(*tasks)
+
+
 
 def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
     """
@@ -360,13 +446,12 @@ def trigger_egg(bot: commands.Bot, user_id: int, egg_name: str):
 
 # --- BITSET WORD POOL OPTIMIZATION ---
 
-def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str = 'simple') -> str:
+async def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str = 'simple') -> str:
     """
     Industry-grade optimization: Gets a secret word using a Guild-level bitset.
-    Avoids O(N) database growth and provides atomic selection.
+    Optimized with parallel prefetching and cache-miss synchronization.
     """
     try:
-        # 1. Determine which pool and total words
         if pool_type == 'classic':
             pool_list = bot.hard_secrets
         else:
@@ -374,27 +459,44 @@ def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str = 'sim
             
         total_words = len(pool_list)
         if total_words == 0:
-            return random.choice(['ABOUT', 'PANIC', 'PIZZA', 'LIGHT', 'DREAM']) # Absolute fallback
+            return random.choice(['ABOUT', 'PANIC', 'PIZZA', 'LIGHT', 'DREAM'])
 
-        # 2. Call RPC to get a random unused index
+        # 1. Cache HIT Logic
+        if guild_id in _GUILD_WORD_CACHE and _GUILD_WORD_CACHE[guild_id][pool_type]:
+            idx = _GUILD_WORD_CACHE[guild_id][pool_type].pop(0)
+
+            # Proactive refill if buffer is getting low
+            if len(_GUILD_WORD_CACHE[guild_id][pool_type]) < 2:
+                asyncio.create_task(fetch_words_batch(bot, guild_id, pool_type, 2))
+                
+            return pool_list[idx]
+
+        # 2. Cache MISS Logic - Start a refill and WAIT for it
+        # This ensures we get a word immediately while correctly populating the cache
+        # If a fetch is already in progress, fetch_words_batch will await the existing event.
+        await fetch_words_batch(bot, guild_id, pool_type, 2)
+        
+        # After refill, check cache again
+        if guild_id in _GUILD_WORD_CACHE and _GUILD_WORD_CACHE[guild_id][pool_type]:
+            idx = _GUILD_WORD_CACHE[guild_id][pool_type].pop(0)
+            return pool_list[idx]
+
+
+        # 3. Last Resort Fallback (If DB failed or pool empty)
+        # Directly fetch ONE word if cache refill somehow failed
         params = {
             'p_guild_id': guild_id,
             'p_pool_type': pool_type,
             'p_total_words': total_words
         }
-        
-        response = bot.supabase_client.rpc('pick_next_word', params).execute()
-        
+        response = await asyncio.to_thread(lambda: bot.supabase_client.rpc('pick_next_word', params).execute())
         if response.data is not None:
-            idx = int(response.data)
-            # 3. Return word at that index
-            return pool_list[idx]
+            return pool_list[int(response.data)]
             
         return random.choice(pool_list)
-        
+
     except Exception as e:
         print(f"❌ DB Error [get_next_word_bitset] guild_id={guild_id}, pool={pool_type}: {e}")
-        # Final fallback
         pool = bot.hard_secrets if pool_type == 'classic' else bot.secrets
         return random.choice(pool) if pool else "PANIC"
 
