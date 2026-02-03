@@ -102,7 +102,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             progress_bar = f"[{filled}{empty}]"
 
             # Board Display
-            board_display = "\n".join([f"### {h['pattern']}" for h in self.game.history])
+            board_display = "\n".join([f" {h['pattern']}" for h in self.game.history])
             
             # Embed Update
             if win:
@@ -113,7 +113,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
                 flavor = get_win_flavor(self.game.attempts_used)
                 embed = discord.Embed(title=f"🏆 VICTORY! {flavor}", color=discord.Color.green())
-                embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
+                embed.description = f"**{interaction.user.mention}** found **{self.game.secret.upper()}**!\n\n{board_display}\n\n{keypad}"
                 
                 # INSTANT FEEDBACK: Simulate rewards locally first
                 uid = interaction.user.id
@@ -151,7 +151,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             elif game_over:
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=False)
                 embed = discord.Embed(title="💀 GAME OVER", color=discord.Color.red())
-                embed.description = f"The word was **{self.game.secret.upper()}**.\n\n**Final Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
+                embed.description = f"The word was **{self.game.secret.upper()}**.\n\n{board_display}\n\n{keypad}"
                 
                 self.view_ref.disable_all()
                 self.bot.solo_games.pop(interaction.user.id, None)
@@ -162,7 +162,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 # Ongoing game - board + keyboard in embed description
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=self.game.blind_mode)
                 embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/{self.game.max_attempts}", color=discord.Color.gold())
-                embed.description = f"**Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
+                embed.description = f"{board_display}\n\n{keypad}"
                 embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
             

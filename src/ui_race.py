@@ -375,7 +375,7 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
         empty = "○" * (self.game.max_attempts - self.game.attempts_used)
         progress_bar = f"[{filled}{empty}]"
         
-        board_display = "\n".join([f"{h['pattern']}" for h in self.game.history])
+        board_display = "\n".join([f"# {h['pattern']}" for h in self.game.history])
         keypad = self.view_ref.get_markdown_keypad(self.game.used_letters, interaction.user.id)
         
         if won:

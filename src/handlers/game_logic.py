@@ -125,7 +125,7 @@ async def _process_game_results(bot, game, winner_user, guild_id, time_taken, in
         if include_board:
             board_display = "\n".join([f"{h['pattern']}" for h in game.history])
             embed.description = f"**{winner_user.mention}{win_badge_str}** found **{game.secret.upper()}** in {game.attempts_used}/6!"
-            embed.add_field(name="Final Board", value=board_display, inline=False)
+            embed.add_field(name="\u200b", value=board_display, inline=False)
             embed.set_footer(text=f"⏱️ Solved in {time_taken:.1f}s")
         else:
             embed.description = f"**{winner_user.mention}{win_badge_str}** won the game!"
@@ -136,7 +136,7 @@ async def _process_game_results(bot, game, winner_user, guild_id, time_taken, in
         embed.description = f"The word was **{game.secret.upper()}**."
         if include_board:
             board_display = "\n".join([f"{h['pattern']}" for h in game.history])
-            embed.add_field(name="Final Board", value=board_display, inline=False)
+            embed.add_field(name="\u200b", value=board_display, inline=False)
 
     # 3. Simulate & Record Winners
     winner_res = None
