@@ -492,7 +492,7 @@ class GameCommands(commands.Cog):
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id, blind_mode=getattr(game, 'blind_mode', False))
 
         embed = discord.Embed(title=f"Solo Wordle | Attempt {game.attempts_used}/6", color=discord.Color.gold())
-        embed.add_field(name="Board", value=board_display, inline=False)
+        embed.add_field(name="\u200b", value=board_display, inline=False)
         embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
 
         message_content = f"**Keyboard Status:**\n{keypad}"

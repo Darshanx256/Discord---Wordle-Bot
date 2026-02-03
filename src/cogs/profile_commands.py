@@ -33,8 +33,8 @@ class ProfileCommands(commands.Cog):
 
         embed.description = f"{badge_str}**Level {p.get('level', 1)}** | {tier_icon} **{tier_name}**"
 
-        embed.add_field(name="⚔️ Multiplayer", value=f"WR: **{p['multi_wr']}**\nWins: {p['multi_wins']}", inline=True)
-        embed.add_field(name="🕵️ Solo", value=f"WR: **{p['solo_wr']}**\nWins: {p['solo_wins']}", inline=True)
+        embed.add_field(name="Multiplayer", value=f"WR: **{p['multi_wr']}**\nWins: {p['multi_wins']}", inline=True)
+        embed.add_field(name="Solo", value=f"WR: **{p['solo_wr']}**\nWins: {p['solo_wins']}", inline=True)
         
 
         eggs = p.get('eggs', {})
@@ -42,7 +42,7 @@ class ProfileCommands(commands.Cog):
         if eggs:
             egg_str = "\n".join([f"{k.capitalize()}: {v}x" for k, v in eggs.items()])
 
-        embed.add_field(name="🎒 Collection", value=egg_str, inline=False)
+        embed.add_field(name="Collection", value=egg_str, inline=False)
 
         curr = p.get('current_level_xp', 0)
         nxt = p.get('next_level_xp', 100)
