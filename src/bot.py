@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 from supabase import create_client, Client
 
 from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, FULL_WORDS, CLASSIC_FILE, ROTATING_ACTIVITIES
-from src.database import fetch_user_profile_v2
+from src.database import fetch_user_profile_v2, ensure_word_cache
 from src.utils import EMOJIS, get_badge_emoji
 
 # ========= BOT SETUP =========
@@ -97,7 +97,8 @@ class WordleBot(commands.Bot):
         self._background_tasks['activity'] = asyncio.create_task(self.activity_loop_task())
         self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
         self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
-        self._background_tasks['name_cache_cleanup'] = asyncio.create_task(self.name_cache_cleanup_task_loop())
+        self._background_tasks['prefetch'] = asyncio.create_task(self.prefetch_task_loop())
+        
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
 
@@ -401,40 +402,43 @@ class WordleBot(commands.Bot):
             remaining = next_run - time.monotonic()
             await asyncio.sleep(min(max(remaining, 1), 3600))
 
-    async def name_cache_cleanup_task_loop(self):
-        """
-        Daily cleanup to remove any cached names beyond the current Top 10 by WR.
-        """
+    async def prefetch_task_loop(self):
+        """One-off background task to prefill word caches for all guilds with semaphored batching."""
         await self.wait_until_ready()
-        INTERVAL = 24 * 3600 # 24 hours
-        next_run = time.monotonic()
-
-        while not self.is_closed():
-            if time.monotonic() >= next_run:
+        print(f"🔄 Starting Word Cache Prefetch for {len(self.guilds)} guilds...")
+        
+        # Limit concurrency to avoid overwhelming the database (Batching logic)
+        sem = asyncio.Semaphore(15) 
+        
+        async def _safe_ensure(guild_id):
+            async with sem:
                 try:
-                    res = await asyncio.to_thread(lambda: self.supabase_client.table('user_stats_v2')
-                            .select('user_id')
-                            .order('multi_wr', desc=True)
-                            .limit(10)
-                            .execute())
-                    if res.data:
-                        top_users = {r['user_id'] for r in res.data}
-                        self.name_cache = {uid: name for uid, name in self.name_cache.items() if uid in top_users}
-                        print(f"🧹 Name Cache Cleanup: {len(self.name_cache)} users retained")
+                    await ensure_word_cache(self, guild_id, wait=True)
                 except Exception as e:
-                    print(f"⚠️ Name Cache Cleanup Failed: {e}")
-                next_run = time.monotonic() + INTERVAL
+                    print(f"⚠️ Prefetch Error for guild {guild_id}: {e}")
 
-            remaining = next_run - time.monotonic()
-            await asyncio.sleep(min(max(remaining, 1), 3600))
+        # Dispatch all prefetches
+        tasks = [_safe_ensure(guild.id) for guild in self.guilds]
+        await asyncio.gather(*tasks)
+                
+        print(f"✅ Word Cache Prefetch completed for all guilds.")
 
 
 # Initialize Bot
 bot = WordleBot()
 
 
-def _get_announcement_channel(guild: discord.Guild):
-    """Find a suitable text channel for one-time server announcements."""
+# ========= WELCOME MESSAGE EVENT =========
+@bot.event
+async def on_guild_join(guild):
+    """Send a welcome message when the bot joins a new server."""
+    # Prefill word cache - wait=True is safe here as it's a single guild
+    try:
+        await ensure_word_cache(bot, guild.id, wait=True)
+    except Exception as e:
+        print(f"⚠️ Failed to prefill cache for new guild {guild.id}: {e}")
+
+    # Try to find the best channel to send welcome message
     target_channel = None
 
     if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:

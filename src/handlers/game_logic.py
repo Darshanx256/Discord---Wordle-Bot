@@ -271,7 +271,7 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
             if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
-        secret = get_next_word_bitset(bot, guild.id, 'classic')
+        secret = await get_next_word_bitset(bot, guild.id, 'classic')
         
         if hard_mode:
             title = "🛡️ Wordle Started! (HARD MODE)"
@@ -287,7 +287,7 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
             if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
-        secret = get_next_word_bitset(bot, guild.id, 'simple')
+        secret = await get_next_word_bitset(bot, guild.id, 'simple')
         title = "✨ Wordle Started! (Simple)"
         color = discord.Color.blue()
         desc = "A simple **5-letter word** has been chosen. **6 attempts** total.\n\n*Tip: Use `/help wordle` for detailed rules!*"

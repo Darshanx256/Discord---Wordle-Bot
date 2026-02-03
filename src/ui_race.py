@@ -84,7 +84,7 @@ class RaceLobbyView(ui.View):
         # Pick the secret from the synchronized bitset pool
         from src.database import get_next_word_bitset
         # Make this async to not block
-        secret = await asyncio.to_thread(get_next_word_bitset, self.bot, interaction.guild.id, 'simple')
+        secret = await get_next_word_bitset(self.bot, interaction.guild.id, 'simple')
         self.race_session.secret = secret
 
         # Initialize games for ALL participants
