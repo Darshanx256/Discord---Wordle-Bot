@@ -14,9 +14,7 @@ class GeneralCommands(commands.Cog):
         start_time = time.monotonic()
         
         # 2. Key Step: Send initial response (this actually triggers the API call we want to measure)
-        # We use defer? No, user wants "says pong".
-        # If we respond, that IS the API call.
-        await interaction.response.send_message("Pong... 🏓", ephemeral=True)
+        await interaction.response.send_message("ponging...", ephemeral=True)
         
         # 3. Capture end time
         end_time = time.monotonic()
@@ -29,7 +27,18 @@ class GeneralCommands(commands.Cog):
         
         # 6. Edit the original message to show stats
         # Note: interaction.edit_original_response is the way to edit the initial response.
-        await interaction.edit_original_response(content=f"Pong! 🏓\n📡 **API Latency:** `{int(api_latency_ms)}ms`\n💓 **WS Latency:** `{ws_latency_ms}ms`")
+
+        
+        # 6. Edit with Geeky Style
+        latency_text = (
+            f"```prolog\n"
+            f"API   : {int(api_latency_ms)}ms\n"
+            f"WS    : {ws_latency_ms}ms\n"
+            f"@     : {start_time:.4f}\n"
+            f"pong!\n"
+            f"```"
+        )
+        await interaction.edit_original_response(content=latency_text)
 
 async def setup(bot):
     await bot.add_cog(GeneralCommands(bot))

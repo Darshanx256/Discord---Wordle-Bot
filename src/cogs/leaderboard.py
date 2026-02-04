@@ -70,7 +70,7 @@ class LeaderboardCommands(commands.Cog):
     @commands.hybrid_command(name="leaderboard", description="Server Leaderboard (Multiplayer WR).")
     async def leaderboard(self, ctx):
         if not ctx.guild:
-            return
+            return await ctx.send("Server leaderboard only available in servers. Use `/leaderboard_global` for global rankings.", ephemeral=True)
         await ctx.defer()
 
         try:

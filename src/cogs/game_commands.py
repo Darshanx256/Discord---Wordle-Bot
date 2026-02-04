@@ -440,6 +440,8 @@ class GameCommands(commands.Cog):
     @commands.hybrid_command(name="wordle", description="Start a new game (Simple word list).")
     @commands.guild_only()
     async def start(self, ctx):
+        if not ctx.guild:
+            return await ctx.send("Only allowed in channels.", ephemeral=True)
         if not ctx.interaction:
             return # Only allow slash command, ignore prefix like -wordle
         await start_multiplayer_game(self.bot, ctx, is_classic=False)
@@ -447,6 +449,8 @@ class GameCommands(commands.Cog):
     @commands.hybrid_command(name="wordle_classic", description="Start a Classic game (Harder word list).")
     @commands.guild_only()
     async def start_classic(self, ctx):
+        if not ctx.guild:
+            return await ctx.send("Only allowed in channels.", ephemeral=True)
         if not ctx.interaction:
             return # Only allow slash command, ignore prefix like -wordle_classic
         await start_multiplayer_game(self.bot, ctx, is_classic=True)
@@ -454,6 +458,8 @@ class GameCommands(commands.Cog):
     @commands.hybrid_command(name="hard_mode", description="Start a new game with OFFICIAL HARD MODE rules.")
     @commands.guild_only()
     async def start_hard(self, ctx):
+        if not ctx.guild:
+            return await ctx.send("Only allowed in channels.", ephemeral=True)
         if not ctx.interaction: return
         await start_multiplayer_game(self.bot, ctx, is_classic=True, hard_mode=True)
 
@@ -513,6 +519,8 @@ class GameCommands(commands.Cog):
     @commands.hybrid_command(name="stop_game", description="Force stop the current game.")
     @commands.guild_only()
     async def stop_game(self, ctx):
+        if not ctx.guild:
+            return await ctx.send("Only allowed in channels.", ephemeral=True)
         if not ctx.interaction: return
         await ctx.defer()
         cid = ctx.channel.id

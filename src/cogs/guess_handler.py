@@ -59,6 +59,9 @@ class GuessHandler(commands.Cog):
             custom_game = self.bot.custom_games.get(cid)
             g_word = word.strip().lower()
 
+            if game and game.secret == "LOADING":
+                return await ctx.send("⚠️ Game was setting up, try again now..", ephemeral=True)
+
             # Check which game type is active
             is_custom = False
             if custom_game:

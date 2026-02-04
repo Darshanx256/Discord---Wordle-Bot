@@ -95,8 +95,6 @@ class WordleBot(commands.Bot):
         self._background_tasks['activity'] = asyncio.create_task(self.activity_loop_task())
         self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
         self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
-        self._background_tasks['prefetch'] = asyncio.create_task(self.prefetch_task_loop())
-        
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
 
@@ -402,26 +400,7 @@ class WordleBot(commands.Bot):
             remaining = next_run - time.monotonic()
             await asyncio.sleep(min(max(remaining, 1), 3600))
 
-    async def prefetch_task_loop(self):
-        """One-off background task to prefill word caches for all guilds with semaphored batching."""
-        await self.wait_until_ready()
-        print(f"🔄 Starting Word Cache Prefetch for {len(self.guilds)} guilds...")
-        
-        # Limit concurrency to avoid overwhelming the database (Batching logic)
-        sem = asyncio.Semaphore(15) 
-        
-        async def _safe_ensure(guild_id):
-            async with sem:
-                try:
-                    await ensure_word_cache(self, guild_id, wait=True)
-                except Exception as e:
-                    print(f"⚠️ Prefetch Error for guild {guild_id}: {e}")
 
-        # Dispatch all prefetches
-        tasks = [_safe_ensure(guild.id) for guild in self.guilds]
-        await asyncio.gather(*tasks)
-                
-        print(f"✅ Word Cache Prefetch completed for all guilds.")
 
 
 # Initialize Bot
@@ -433,11 +412,6 @@ bot = WordleBot()
 async def on_guild_join(guild):
     """Send a welcome message when the bot joins a new server."""
     # Prefill word cache - wait=True is safe here as it's a single guild
-    try:
-        await ensure_word_cache(bot, guild.id, wait=True)
-    except Exception as e:
-        print(f"⚠️ Failed to prefill cache for new guild {guild.id}: {e}")
-
     # Try to find the best channel to send welcome message
     target_channel = None
     

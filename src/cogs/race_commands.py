@@ -81,6 +81,9 @@ class RaceCommands(commands.Cog):
     @app_commands.command(name="race", description="Start a race lobby - compete to solve the same word!")
     async def race(self, interaction: discord.Interaction):
         """Start a race lobby where players compete to solve the same word."""
+        if not interaction.guild:
+            return await interaction.response.send_message("Only allowed in channels.", ephemeral=True)
+
         # Check if user is banned
         if hasattr(self.bot, 'banned_users') and interaction.user.id in self.bot.banned_users:
             return await interaction.response.send_message(
@@ -134,6 +137,9 @@ class RaceCommands(commands.Cog):
     @app_commands.command(name="show_race", description="Recover your race game if you dismissed it.")
     async def show_race(self, interaction: discord.Interaction):
         """Show the user's active race game if they dismissed it."""
+        if not interaction.guild:
+            return await interaction.response.send_message("Only allowed in channels.", ephemeral=True)
+
         # Check if user is banned
         if hasattr(self.bot, 'banned_users') and interaction.user.id in self.bot.banned_users:
             return await interaction.response.send_message(

@@ -130,6 +130,9 @@ class ConstraintMode(commands.Cog):
     @app_commands.command(name="word_rush", description="Fast-paced word hunt with linguistic constraints")
     @app_commands.guild_only()
     async def word_rush(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("Only allowed in channels.", ephemeral=True)
+            
         cid = interaction.channel_id
         if cid in self.bot.constraint_mode:
             return await interaction.response.send_message("⚠️ A Word Rush session is already active in this channel.", ephemeral=True)
@@ -179,6 +182,9 @@ class ConstraintMode(commands.Cog):
     @app_commands.command(name="stop_rush", description="Stop the active Word Rush session")
     @app_commands.guild_only()
     async def stop_rush(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            return await interaction.response.send_message("Only allowed in channels.", ephemeral=True)
+
         cid = interaction.channel_id
         if cid not in self.bot.constraint_mode:
             return await interaction.response.send_message("No active Word Rush session here.", ephemeral=True)
