@@ -39,7 +39,7 @@ class LeaderboardViewV2(ui.View):
 
             # Minimalist Line
             # Format: 🥇 🛡️ **Name** 💠 Lvl 50 | 📈 1200 WR
-            line = f"{rank_str} {icon} **{name}{badge_str}**\n   💠 Level {lvl} • 📈 **{wr}** WR"
+            line = f"{rank_str} {icon} **{name}{badge_str}**\n   **{wr}** WR • Level {lvl}"
             lines.append(line)
         
         return lines
@@ -107,5 +107,5 @@ class ProfileViewV2(ui.View):
         bar = "█" * int(10 * pct) + "░" * (10 - int(10 * pct))
         embed.add_field(name="Progression", value=f"`{bar}` {curr}/{nxt} XP", inline=False)
 
-        embed.set_footer(text="Wordle Game Bot • V2 Design Architecture")
+        embed.set_footer(text="Wordle Game Bot")
         return embed
