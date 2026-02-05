@@ -17,8 +17,10 @@ _PROFILE_CACHE = TTLCache(maxsize=1000, ttl=300)  # Much better than unbounded d
 
 # --- WORD CACHE FOR LATENCY OPTIMIZATION ---
 # { guild_id: { 'simple': [idx, ...], 'classic': [idx, ...] } }
-_GUILD_WORD_CACHE = {}
+# Use TTLCache to prevent memory leaks from inactive guilds (TTL 12 hours)
+_GUILD_WORD_CACHE = TTLCache(maxsize=5000, ttl=43200)
 _GUILD_FETCH_EVENTS = {} # { (guild_id, pool_type): asyncio.Event }
+_GLOBAL_FETCH_LOCK = asyncio.Lock() # Atomic lock for creating fetch events
 
 async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, count: int = 2):
     """
@@ -27,14 +29,34 @@ async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, co
     """
     lock_key = (guild_id, pool_type)
     
-    # If a fetch is already in progress, wait for it
+    # 1. Atomic Check-and-Set
+    async with _GLOBAL_FETCH_LOCK:
+        # If a fetch is already in progress, wait for it
+        if lock_key in _GUILD_FETCH_EVENTS:
+            event = _GUILD_FETCH_EVENTS[lock_key]
+            # Release lock before waiting!
+    
     if lock_key in _GUILD_FETCH_EVENTS:
         await _GUILD_FETCH_EVENTS[lock_key].wait()
         return
 
-    # Create and set event to "busy"
-    _GUILD_FETCH_EVENTS[lock_key] = asyncio.Event()
-    
+    # Create and set event to "busy" - THIS MUST BE DONE UNDER LOCK ideally or re-check
+    # Let's do the standard pattern:
+    async with _GLOBAL_FETCH_LOCK:
+         if lock_key in _GUILD_FETCH_EVENTS:
+             # Lost race, wait
+             do_wait = True
+             event = _GUILD_FETCH_EVENTS[lock_key]
+         else:
+             do_wait = False
+             entry_event = asyncio.Event()
+             _GUILD_FETCH_EVENTS[lock_key] = entry_event
+             
+    if do_wait:
+        await event.wait()
+        return
+
+    # We won the race, we own the fetch logic
     try:
         if pool_type == 'classic':
             pool_list = bot.hard_secrets
@@ -76,7 +98,7 @@ async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, co
         # Signal completion and cleanup
         event = _GUILD_FETCH_EVENTS.pop(lock_key, None)
         if event:
-            event.set()
+            event.set() # Awake waiters
 
 async def ensure_word_cache(bot: commands.Bot, guild_id: int, wait: bool = False):
     """
@@ -88,6 +110,10 @@ async def ensure_word_cache(bot: commands.Bot, guild_id: int, wait: bool = False
         
     tasks = []
     for p_type in ['simple', 'classic']:
+        # Ensure guild entry exists before checking length
+        if guild_id not in _GUILD_WORD_CACHE:
+            _GUILD_WORD_CACHE[guild_id] = {'simple': [], 'classic': []}
+            
         current_len = len(_GUILD_WORD_CACHE[guild_id][p_type])
         if current_len < 2:
             if wait:
@@ -103,10 +129,10 @@ async def ensure_word_cache(bot: commands.Bot, guild_id: int, wait: bool = False
 def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
     """
     Calculates total WR gained by the user today (UTC).
-    Queries 'match_history' table. Returns 0 if table not found or error.
+    Queries 'match_history' table. Returns 0 if not found or error.
     """
     try:
-        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         
         # Assumption: Table is 'match_history' and has 'user_id', 'created_at', 'wr_delta'
         # We only care about POSITIVE gains for the cap.
@@ -128,7 +154,7 @@ def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
 def get_daily_wins(bot: commands.Bot, user_id: int) -> int:
     """Calculates number of wins by the user today (UTC)."""
     try:
-        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         response = bot.supabase_client.table('match_history') \
             .select('count', count='exact') \
             .eq('user_id', user_id) \
@@ -293,14 +319,17 @@ def simulate_record_game(bot: commands.Bot, user_id: int, mode: str, outcome: st
         'tier_up': tier_up
     }
 
-def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = True):
-    """Fetches full profile V2 with optional caching."""
+async def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = True):
+    """Fetches full profile V2 with optional caching. Async to prevent blocking."""
     # TTLCache handles expiry automatically - just check if key exists
     if use_cache and user_id in _PROFILE_CACHE:
         return _PROFILE_CACHE[user_id]
             
     try:
-        response = bot.supabase_client.table('user_stats_v2').select('*').eq('user_id', user_id).execute()
+        # Wrap blocking DB call in to_thread
+        response = await asyncio.to_thread(
+            lambda: bot.supabase_client.table('user_stats_v2').select('*').eq('user_id', user_id).execute()
+        )
         if response.data:
             data = response.data[0]
             from src.utils import get_level_progress
@@ -514,7 +543,7 @@ def record_race_result(bot: commands.Bot, user_id: int, word: str, won: bool, gu
             'xp_delta': xp,
             'wr_delta': wr,
             'rank': rank,
-            'created_at': datetime.datetime.utcnow().isoformat()
+            'created_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
         }).execute()
         
         # Update user stats
@@ -544,7 +573,7 @@ def log_event_v1(bot: commands.Bot, event_type: str, user_id: int = None, guild_
             'user_id': user_id,
             'guild_id': guild_id,
             'metadata': metadata or {},
-            'created_at': datetime.datetime.utcnow().isoformat()
+            'created_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
         bot.supabase_client.table('event_logs_v1').insert(data).execute()
         return True

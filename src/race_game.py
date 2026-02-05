@@ -81,7 +81,7 @@ class RaceSession:
                  return idx
         return None
 
-    def conclude_race(self, bot):
+    async def conclude_race(self, bot):
         """
         Finalize the race, calculate rewards, and generate the results embed.
         Sort Logic:
@@ -150,7 +150,7 @@ class RaceSession:
         for idx, res in enumerate(results, 1):
              try:
                  profile = all_profiles.get(res['user_id'])
-                 rewards = calculate_race_rewards_delayed(bot, res['user_id'], res['game'], idx, pre_fetched_profile=profile)
+                 rewards = await calculate_race_rewards_delayed(bot, res['user_id'], res['game'], idx, pre_fetched_profile=profile)
                  res['rewards'] = rewards
                  res['rank'] = idx
                  final_summary.append(res)

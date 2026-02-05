@@ -144,34 +144,22 @@ def get_level_progress(total_xp: int):
 
 async def get_cached_username(bot, user_id: int) -> str:
     """
-    Get user display name from cache or fetch from Discord.
-    Prioritizes cache, local cache, bot cache, then API.
-    Returns user ID as string if all fail.
+    Get user display name from cache or return a mention string.
+    Optimized to NEVER block on API calls for random users.
     """
-    # 1. Check bot's in-memory cache
+    # 1. Check bot's in-memory cache (Populated by Smart Cache or Events)
     if user_id in bot.name_cache:
         return bot.name_cache[user_id]
     
-    # 2. Try bot's get_user (cached locally)
-    try:
-        user = bot.get_user(user_id)
-        if user:
-            bot.name_cache[user_id] = user.display_name
-            return user.display_name
-    except:
-        pass
+    # 2. Try bot's get_user (Instant local cache check)
+    user = bot.get_user(user_id)
+    if user:
+        bot.name_cache[user_id] = user.display_name
+        return user.display_name
     
-    # 3. Try to fetch from Discord API
-    try:
-        user = await bot.fetch_user(user_id)
-        if user:
-            bot.name_cache[user_id] = user.display_name
-            return user.display_name
-    except:
-        pass
-    
-    # 4. Fallback
-    return str(user_id)
+    # 3. Fallback: Return raw mention. Discord client will render this as "@Username" automatically.
+    # This avoids the slow and rate-limited `await bot.fetch_user(user_id)` call.
+    return f"<@{user_id}>"
 
 def is_user_banned(bot, user_id: int) -> bool:
     """Check if a user is banned."""

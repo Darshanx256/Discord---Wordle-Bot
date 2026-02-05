@@ -168,7 +168,7 @@ class GuessHandler(commands.Cog):
             active_badge = None
             try:
                 from src.database import fetch_user_profile_v2
-                cached_profile = fetch_user_profile_v2(self.bot, ctx.author.id, use_cache=True)
+                cached_profile = await fetch_user_profile_v2(self.bot, ctx.author.id, use_cache=True)
                 if cached_profile:
                     active_badge = cached_profile.get('active_badge')
             except:

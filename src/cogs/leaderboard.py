@@ -4,9 +4,10 @@ Leaderboard commands cog: /leaderboard, /leaderboard_global, and helpers
 import asyncio
 import discord
 from discord.ext import commands
+from discord.ext import commands
 from src.config import TIERS
-from src.ui import LeaderboardView
-from src.utils import EMOJIS
+from src.ui_v2 import LeaderboardViewV2
+from src.utils import EMOJIS, get_cached_username
 import datetime
 
 
@@ -15,49 +16,28 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None):
     Fetch and format ranking data with user names and tier icons.
     Minimizes API calls with concurrency and caching.
     """
-    sem = asyncio.Semaphore(5)
+    # Optimized: No more semaphores needed. 'get_cached_username' is now non-blocking (mentions).
+    
+    tasks = []
+    
+    async def process_row(i, row_data):
+         # Unpack flexibly: (uid, wins, xp, wr, badge)
+         uid, w, xp, wr, badge = row_data
+         
+         # 1. Get Name (Cache/Mention)
+         # Using the new safe util - no API spam
+         name = await get_cached_username(bot_instance, uid)
+                 
+         # 2. Get Tier Icon
+         tier_icon = "🛡️"
+         for t in TIERS:
+             if wr >= t['min_wr']:
+                 tier_icon = EMOJIS.get(t['icon'], t['icon'])
+                 break
+                 
+         return (i + 1, name, w, xp, wr, tier_icon, badge)
 
-    async def fetch_user_safe(row_data):
-        i, (uid, w, xp, wr, badge) = row_data
-        name = f"User {uid}"
-
-        # Determine Tier Icon based on WR
-        tier_icon = "🛡️"
-        for t in TIERS:
-            if wr >= t['min_wr']:
-                # FIX: Use EMOJIS.get to handle custom emojis like 'legend_tier'
-                tier_icon = EMOJIS.get(t['icon'], t['icon'])
-                break
-
-        # 1. Try Local Cache (FAST & SAFE)
-        if guild:
-            member = guild.get_member(uid)
-            if member:
-                return (i + 1, member.display_name, w, xp, wr, tier_icon, badge)
-
-        # 2. Try Global Bot Cache (FAST & SAFE)
-        user = bot_instance.get_user(uid)
-        if user:
-            return (i + 1, user.display_name, w, xp, wr, tier_icon, badge)
-
-        # 3. Try In-Memory Name Cache (FAST)
-        if uid in bot_instance.name_cache:
-            return (i + 1, bot_instance.name_cache[uid], w, xp, wr, tier_icon, badge)
-
-        # 4. API Call (SLOW - Needs Semaphore)
-        async with sem:
-            try:
-                u = await bot_instance.fetch_user(uid)
-                name = u.display_name
-                bot_instance.name_cache[uid] = name
-            except:
-                pass
-
-        return (i + 1, name, w, xp, wr, tier_icon, badge)
-
-    tasks = [fetch_user_safe((i, r)) for i, r in enumerate(results)]
-    formatted_data = await asyncio.gather(*tasks)
-    return formatted_data
+    return await asyncio.gather(*(process_row(i, r) for i, r in enumerate(results)))
 
 
 class LeaderboardCommands(commands.Cog):
@@ -95,9 +75,9 @@ class LeaderboardCommands(commands.Cog):
             for r in u_response.data:
                 results.append((r['user_id'], r['multi_wins'], r['xp'], r['multi_wr'], r.get('active_badge')))
 
-            # Sort by WR desc
+            # Sort by WR desc and slice Top 10
             results.sort(key=lambda x: x[3], reverse=True)
-            results = results[:50]
+            results = results[:10]
 
         except Exception as e:
             print(f"Leaderboard Error: {e}")
@@ -108,7 +88,7 @@ class LeaderboardCommands(commands.Cog):
 
         data = await fetch_and_format_rankings(results, self.bot, ctx.guild)
 
-        view = LeaderboardView(self.bot, data, f"🏆 {ctx.guild.name} Leaderboard", discord.Color.gold(), ctx.author)
+        view = LeaderboardViewV2(self.bot, data, f"🏆 {ctx.guild.name} Top 10", discord.Color.gold(), ctx.author)
         await ctx.send(embed=view.create_embed(), view=view)
 
     @commands.hybrid_command(name="leaderboard_global", description="Global Leaderboard (Multiplayer WR).")
@@ -122,7 +102,7 @@ class LeaderboardCommands(commands.Cog):
                  results, total_count = self.global_cache
                  if results:
                     data = await fetch_and_format_rankings(results, self.bot)
-                    view = LeaderboardView(self.bot, data, "🌍  Global Top 50", discord.Color.purple(), ctx.author, total_count=total_count)
+                    view = LeaderboardViewV2(self.bot, data, "🌍 Global Top 10", discord.Color.purple(), ctx.author)
                     return await ctx.send(embed=view.create_embed(), view=view)
 
         try:
@@ -137,7 +117,7 @@ class LeaderboardCommands(commands.Cog):
             response = self.bot.supabase_client.table('user_stats_v2') \
                 .select('user_id, multi_wins, xp, multi_wr, active_badge') \
                 .order('multi_wr', desc=True) \
-                .limit(50) \
+                .limit(10) \
                 .execute()
 
             if not response.data:
@@ -147,7 +127,8 @@ class LeaderboardCommands(commands.Cog):
             
             # Save to Cache
             self.global_cache = (results, total_count)
-            self.global_cache_time = datetime.datetime.utcnow()
+            # Use timezone-aware UTC
+            self.global_cache_time = datetime.datetime.now(datetime.timezone.utc)
 
         except Exception as e:
             import traceback
@@ -160,7 +141,7 @@ class LeaderboardCommands(commands.Cog):
 
         data = await fetch_and_format_rankings(results, self.bot)
 
-        view = LeaderboardView(self.bot, data, "🌍  Global Top 50", discord.Color.purple(), ctx.author, total_count=total_count)
+        view = LeaderboardViewV2(self.bot, data, "🌍 Global Top 10", discord.Color.purple(), ctx.author)
         await ctx.send(embed=view.create_embed(), view=view)
 
 

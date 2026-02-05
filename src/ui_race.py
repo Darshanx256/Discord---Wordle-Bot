@@ -269,7 +269,7 @@ async def send_race_summary(bot, channel_id, race_session):
     del bot.race_sessions[channel_id]
     
     try:
-        results = await asyncio.to_thread(race_session.conclude_race, bot)
+        results = await race_session.conclude_race(bot)
         if not results:
             # print("⚠️ No results gathered for summary.")
             return

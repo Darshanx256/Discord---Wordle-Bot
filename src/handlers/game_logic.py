@@ -16,18 +16,28 @@ async def _batch_fetch_participant_stats(bot, participant_ids: list):
         return stats_map
         
     try:
-        # 1. Fetch WR, XP and Badges
-        s_res = bot.supabase_client.table('user_stats_v2').select('user_id, multi_wr, xp, active_badge').in_('user_id', participant_ids).execute()
+        # 1. Fetch WR, XP and Badges (Async wrapper)
+        s_res = await asyncio.to_thread(lambda: bot.supabase_client.table('user_stats_v2')
+            .select('user_id, multi_wr, xp, active_badge')
+            .in_('user_id', participant_ids)
+            .execute())
+            
         for r in s_res.data:
             stats_map[r['user_id']] = {'wr': r['multi_wr'], 'xp': r['xp'], 'badge': r['active_badge'], 'daily': 0}
             
-        # 2. Fetch Daily Gains
-        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        h_res = bot.supabase_client.table('match_history').select('user_id, wr_delta').in_('user_id', participant_ids).gte('created_at', today_start.isoformat()).gt('wr_delta', 0).execute()
-        for r in h_res.data:
-            uid = r['user_id']
+        # 2. Fetch Daily Gains (Parallel Async wrapper around sync calls)
+        from src.database import get_daily_wr_gain
+        
+        async def fetch_daily(uid):
+             return uid, await asyncio.to_thread(get_daily_wr_gain, bot, uid)
+        
+        # Gather all daily fetches concurrently
+        results = await asyncio.gather(*(fetch_daily(uid) for uid in participant_ids))
+        
+        for uid, daily in results:
             if uid in stats_map:
-                stats_map[uid]['daily'] += r['wr_delta']
+                stats_map[uid]['daily'] = daily
+
     except Exception as e:
         print(f"⚠️ Batch fetch error: {e}")
     return stats_map
@@ -210,7 +220,12 @@ async def handle_game_win(bot, game, interaction, winner_user, cid, include_boar
         bot.stopped_games.discard(cid)
         return None, None, None, None, None, None, []
 
-    time_taken = final_time if final_time is not None else (datetime.datetime.now() - game.start_time).total_seconds()
+    time_taken = final_time if final_time is not None else (datetime.datetime.now() - game.start_time).total_seconds()    
+    # INSTANT NAME CACHE Update
+    # Active winner gets cached immediately.
+    if winner_user:
+        bot.name_cache[winner_user.id] = winner_user.display_name
+        
     embed, breakdown, level_ups, tier_ups, winner_res, results = await _process_game_results(
         bot, game, winner_user, interaction.guild.id, time_taken, include_board, is_win=True
     )
@@ -238,6 +253,8 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
 
     # 2. Check existence
     if cid in bot.games:
+        # Check if it implies a duplicate request for the same "Loading" slot or active game
+        # We fail fast here, but the Atomic reservation logic is below
         msg = "⚠️ A game is already active in this channel! Use `/stop_game` to end it."
         if is_interaction: 
             if not interaction_or_ctx.response.is_done():
@@ -246,6 +263,11 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
                 await interaction_or_ctx.followup.send(msg, ephemeral=True)
         else: await interaction_or_ctx.send(msg, ephemeral=True)
         return
+
+    # ATOMIC RESERVATION
+    # Immediately mark channel as loading to prevent race conditions
+    bot.games[cid] = "LOADING" 
+
     if cid in bot.custom_games:
         msg = "⚠️ A custom game is already active. Use `/stop_game` first."
         if is_interaction:

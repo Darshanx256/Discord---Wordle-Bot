@@ -117,10 +117,10 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 
                 # INSTANT FEEDBACK: Simulate rewards locally first
                 uid = interaction.user.id
-                profile = fetch_user_profile_v2(self.bot, uid, use_cache=True)
+                profile = await fetch_user_profile_v2(self.bot, uid, use_cache=True)
                 pre_wr = profile.get('solo_wr', 0) if profile else 0
                 pre_xp = profile.get('xp', 0) if profile else 0
-                pre_daily = get_daily_wr_gain(self.bot, uid)
+                pre_daily = await asyncio.to_thread(get_daily_wr_gain, self.bot, uid)
                 
                 res = simulate_record_game(
                     self.bot, uid, 'SOLO', 'win',

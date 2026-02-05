@@ -70,11 +70,36 @@ class WordleBot(commands.Bot):
         print(f"⚠️ Command Error in {ctx.command}: {error}")
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Global Ban Check for Slash Commands."""
+        """Global Ban Check & Permission Verification for Slash Commands."""
+        # 1. Global Ban Check
         if interaction.user.id in self.banned_users:
             if not interaction.response.is_done():
                 await interaction.response.send_message("⚠️ You are banned from using this bot.", ephemeral=True)
             return False
+
+        # 2. Permission Verification for Guild-Based Commands
+        # List of commands allowed in any context (including DMs/Unconfigured Guilds)
+        context_agnostic_cmds = {'help', 'about', 'solo', 'show_solo', 'cancel_solo', 'profile', 'shop', 'message', 'ping', 'leaderboard_global'}
+        
+        # Get command name flexibly
+        cmd = interaction.command
+        cmd_name = getattr(cmd, 'name', None)
+        if not cmd_name and interaction.data:
+            cmd_name = interaction.data.get('name')
+
+        if cmd_name and cmd_name not in context_agnostic_cmds:
+            if interaction.guild:
+                # app_permissions contains the permissions the bot has in the current context
+                perms = interaction.app_permissions
+                if not (perms.send_messages and perms.embed_links and perms.read_message_history):
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message(
+                            "⚠️ **Wordle Game Bot isn't properly configured in this channel.**\n"
+                            "Please ensure the bot has **Send Messages**, **Embed Links**, and **Read Message History** permissions.",
+                            ephemeral=True
+                        )
+                    return False
+        
         return True
 
     async def setup_hook(self):
@@ -338,7 +363,8 @@ class WordleBot(commands.Bot):
                         'simple_words': len(self.secrets),
                         'classic_words': len(self.hard_secrets),
                         'total_words': len(self.valid_set),
-                        'last_updated': datetime.datetime.utcnow().isoformat()
+                        'total_words': len(self.valid_set),
+                        'last_updated': datetime.datetime.now(datetime.timezone.utc).isoformat()
                     }
                     # Write to project root (static folder removed)
                     stats_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -354,45 +380,41 @@ class WordleBot(commands.Bot):
             await asyncio.sleep(min(max(remaining, 1), 600))
 
     async def smart_name_cache_loop_task(self):
-        """Background task to cache ALL player names every 48 hours."""
+        """
+        Background task to cache ONLY the Top 10 Global Players.
+        Other users are handled via mentions in V2 logic.
+        """
         await self.wait_until_ready()
-        INTERVAL = 48 * 3600 # 48 hours
+        INTERVAL = 12 * 3600 # 12 hours (Rarely changes)
         next_run = time.monotonic()
         
         while not self.is_closed():
             if time.monotonic() >= next_run:
-                print("🔄 Starting Smart Name Cache Update...")
+                print("🔄 Refreshing Top 10 Name Cache...")
                 try:
-                    all_users = []
-                    start = 0
-                    step = 1000
-                    while True:
-                        res = self.supabase_client.table('user_stats_v2').select('user_id').range(start, start + step - 1).execute()
-                        if not res.data: break
-                        all_users.extend(r['user_id'] for r in res.data)
-                        if len(res.data) < step: break
-                        start += step
+                    # 1. Fetch Top 10 IDs by XP
+                    res = await asyncio.to_thread(lambda: self.supabase_client.table('user_stats_v2')
+                            .select('user_id')
+                            .order('xp', desc=True)
+                            .limit(10)
+                            .execute())
                     
-                    new_cache = {}
-                    for uid in all_users:
-                        try:
-                            name = None
-                            for guild in self.guilds:
-                                mem = guild.get_member(uid)
-                                if mem:
-                                    name = mem.display_name
-                                    break
-                            if not name:
-                                user = self.get_user(uid)
-                                if user: name = user.display_name
-                                else:
-                                    u = await self.fetch_user(uid)
-                                    name = u.display_name
-                                    await asyncio.sleep(0.5)
-                            new_cache[uid] = name
-                        except: pass
-                    self.name_cache = new_cache
-                    print(f"✅ Smart Name Cache Updated: {len(self.name_cache)} names")
+                    if res.data:
+                        top_users = [r['user_id'] for r in res.data]
+                        
+                        # 2. Refresh Cache for these VIPs
+                        count = 0
+                        for uid in top_users:
+                            try:
+                                # Safe fetch, rate limited internally by Discord lib but okay for 10 users
+                                u = await self.fetch_user(uid)
+                                self.name_cache[uid] = u.display_name
+                                count += 1
+                            except:
+                                pass
+                                
+                        print(f"✅ Top 10 Name Cache Updated: {count} users")
+                        
                 except Exception as e:
                     print(f"❌ Smart Name Cache Failed: {e}")
                 next_run = time.monotonic() + INTERVAL
@@ -479,7 +501,8 @@ if __name__ == "__main__":
 async def shop(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     
-    p = fetch_user_profile_v2(bot, interaction.user.id)
+    # Updated to await the async call
+    p = await fetch_user_profile_v2(bot, interaction.user.id)
     if not p: return await interaction.followup.send("Play some games first!", ephemeral=True)
     
     eggs = p.get('eggs', {}) or {}
