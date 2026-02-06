@@ -214,17 +214,18 @@ class GuessHandler(commands.Cog):
                     await ctx.send(embed=embed)
 
                 else:
+                    header_text = f"`{g_word.upper()}`\n\u200b"
                     embed = self._build_game_embed(
                         title=None,
                         color=discord.Color.gold(),
                         board=board_display,
                         keypad=keypad,
                         footer=format_attempt_footer(game.attempts_used, game.max_attempts),
-                        header_text="",
+                        header_text=header_text,
                         show_keyboard=show_kb
                     )
                     embed.set_author(
-                        name=f"{ctx.author.mention} guessed {g_word.upper()}",
+                        name=f"{ctx.author.display_name}",
                         icon_url=ctx.author.display_avatar.url
                     )
                     await ctx.send(embed=embed)
@@ -326,17 +327,18 @@ class GuessHandler(commands.Cog):
 
             else:
                 # Just a turn (REGULAR GAME)
+                header_text = f"`{g_word.upper()}`\n\u200b"
                 embed = self._build_game_embed(
                     title=None,
                     color=discord.Color.gold(),
                     board=board_display,
                     keypad=keypad,
                     footer=format_attempt_footer(game.attempts_used, game.max_attempts),
-                    header_text="",
+                    header_text=header_text,
                     show_keyboard=True
                 )
                 embed.set_author(
-                    name=f"{ctx.author.mention} guessed {g_word.upper()}",
+                    name=f"{ctx.author.display_name}",
                     icon_url=ctx.author.display_avatar.url
                 )
                 await ctx.send(embed=embed)

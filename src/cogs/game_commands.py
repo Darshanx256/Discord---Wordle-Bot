@@ -492,13 +492,20 @@ class GameCommands(commands.Cog):
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id, blind_mode=getattr(game, 'blind_mode', False))
 
         embed = discord.Embed(color=discord.Color.gold())
-        embed.description = f"{board_display}\n\n{keypad}"
+        if game.history:
+            last_guess = (game.history[-1].get('word') or '').upper()
+            if last_guess:
+                embed.description = f"`{last_guess}`\n\u200b\n{board_display}\n\n{keypad}"
+            else:
+                embed.description = f"{board_display}\n\n{keypad}"
+        else:
+            embed.description = f"{board_display}\n\n{keypad}"
         embed.set_footer(text=format_attempt_footer(game.attempts_used, 6))
         if game.history:
             last_guess = (game.history[-1].get('word') or '').upper()
             if last_guess:
                 embed.set_author(
-                    name=f"{ctx.author.mention} guessed {last_guess}",
+                    name=f"{ctx.author.display_name}",
                     icon_url=ctx.author.display_avatar.url
                 )
 

@@ -187,25 +187,25 @@ class RaceCommands(commands.Cog):
         embed = discord.Embed(color=discord.Color.gold())
         timer_label = "Ended" if is_ended else "Ends"
         
+        last_guess = (game.history[-1].get('word') or '').upper() if game.history else ""
+        guess_line = f"`{last_guess}`\n\u200b\n" if last_guess else ""
         embed.description = (
             f"{timer_label} <t:{end_ts}:R>\n\n"
-            f"{board_display}\n\n"
+            f"{guess_line}{board_display}\n\n"
             f"{keypad}"
         )
         used = max(0, min(game.attempts_used, game.max_attempts))
-        filled = "•" * used
+        filled = "●" * used
         empty = "○" * (game.max_attempts - used)
         bar = f"[{filled}{empty}]"
         time_text = f"<t:{end_ts}:R>" if end_ts else "N/A"
-        footer = f"{bar} • Players: {user_race_session.participant_count} • Time: {time_text}"
+        footer = f"**{bar} • Players: {user_race_session.participant_count} • Time: {time_text}**"
         embed.set_footer(text=footer)
-        if game.history:
-            last_guess = (game.history[-1].get('word') or '').upper()
-            if last_guess:
-                embed.set_author(
-                    name=f"{interaction.user.mention} guessed {last_guess}",
-                    icon_url=interaction.user.display_avatar.url
-                )
+        if game.history and last_guess:
+            embed.set_author(
+                name=f"{interaction.user.display_name}",
+                icon_url=interaction.user.display_avatar.url
+            )
 
         await interaction.response.send_message(
             embed=embed,
