@@ -7,13 +7,14 @@ class LeaderboardViewV2(ui.View):
     Component V2: Minimalist Leaderboard View.
     Modular, efficient, and designed for clean data presentation.
     """
-    def __init__(self, bot, data, title, color, interaction_user):
+    def __init__(self, bot, data, title, color, interaction_user, footer_text: str = None):
         super().__init__(timeout=60)
         self.bot = bot
-        self.data = data  
+        self.data = data
         self.title = title
         self.color = color
         self.user = interaction_user
+        self.footer_text = footer_text
 
     def _render_chart(self, data):
         """Generates the text chart for the current page."""
@@ -47,7 +48,8 @@ class LeaderboardViewV2(ui.View):
     def create_embed(self):
         chart_lines = self._render_chart(self.data)
         embed = discord.Embed(title=self.title, description="\n".join(chart_lines), color=self.color)
-        embed.set_footer(text=f"Total: {len(self.data)} Players Displayed")
+        footer_text = self.footer_text or f"Total: {len(self.data)} Players Displayed"
+        embed.set_footer(text=footer_text)
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:

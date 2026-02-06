@@ -142,7 +142,7 @@ def get_level_progress(total_xp: int):
     return lvl + l_gain, curr % 500, 500
 
 
-async def get_cached_username(bot, user_id: int) -> str:
+async def get_cached_username(bot, user_id: int, *, allow_cache_write: bool = True) -> str:
     """
     Get user display name from cache or return a mention string.
     Optimized to NEVER block on API calls for random users.
@@ -154,7 +154,8 @@ async def get_cached_username(bot, user_id: int) -> str:
     # 2. Try bot's get_user (Instant local cache check)
     user = bot.get_user(user_id)
     if user:
-        bot.name_cache[user_id] = user.display_name
+        if allow_cache_write:
+            bot.name_cache[user_id] = user.display_name
         return user.display_name
     
     # 3. Fallback: Return raw mention. Discord client will render this as "@Username" automatically.

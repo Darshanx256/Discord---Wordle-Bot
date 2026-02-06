@@ -221,11 +221,6 @@ async def handle_game_win(bot, game, interaction, winner_user, cid, include_boar
         return None, None, None, None, None, None, []
 
     time_taken = final_time if final_time is not None else (datetime.datetime.now() - game.start_time).total_seconds()    
-    # INSTANT NAME CACHE Update
-    # Active winner gets cached immediately.
-    if winner_user:
-        bot.name_cache[winner_user.id] = winner_user.display_name
-        
     embed, breakdown, level_ups, tier_ups, winner_res, results = await _process_game_results(
         bot, game, winner_user, interaction.guild.id, time_taken, include_board, is_win=True
     )
