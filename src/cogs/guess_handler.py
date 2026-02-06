@@ -214,7 +214,7 @@ class GuessHandler(commands.Cog):
                     await ctx.send(embed=embed)
 
                 else:
-                    header_text = f"`{g_word.upper()}`\n\u200b"
+                    header_text = f"Guessed `{g_word.upper()}`"
                     embed = self._build_game_embed(
                         title=None,
                         color=discord.Color.gold(),
@@ -327,7 +327,7 @@ class GuessHandler(commands.Cog):
 
             else:
                 # Just a turn (REGULAR GAME)
-                header_text = f"`{g_word.upper()}`\n\u200b"
+                header_text = f"Guessed `{g_word.upper()}`"
                 embed = self._build_game_embed(
                     title=None,
                     color=discord.Color.gold(),

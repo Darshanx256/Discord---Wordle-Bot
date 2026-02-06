@@ -133,7 +133,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 # Ongoing game - board + keyboard in embed description
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=self.game.blind_mode)
                 embed = discord.Embed(color=discord.Color.gold())
-                embed.description = f"`{guess.upper()}`\n\u200b\n{board_display}\n\n{keypad}"
+                embed.description = f"Guessed `{guess.upper()}`\n{board_display}\n\n{keypad}"
                 embed.set_footer(text=format_attempt_footer(self.game.attempts_used, self.game.max_attempts))
                 embed.set_author(
                     name=f"{interaction.user.display_name}",

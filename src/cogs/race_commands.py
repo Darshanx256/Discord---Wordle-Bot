@@ -188,7 +188,7 @@ class RaceCommands(commands.Cog):
         timer_label = "Ended" if is_ended else "Ends"
         
         last_guess = (game.history[-1].get('word') or '').upper() if game.history else ""
-        guess_line = f"`{last_guess}`\n\u200b\n" if last_guess else ""
+        guess_line = f"Guessed `{last_guess}`\n" if last_guess else ""
         embed.description = (
             f"{timer_label} <t:{end_ts}:R>\n\n"
             f"{guess_line}{board_display}\n\n"
@@ -199,7 +199,7 @@ class RaceCommands(commands.Cog):
         empty = "○" * (game.max_attempts - used)
         bar = f"[{filled}{empty}]"
         time_text = f"<t:{end_ts}:R>" if end_ts else "N/A"
-        footer = f"**{bar} • Players: {user_race_session.participant_count} • Time: {time_text}**"
+        footer = f"{bar} • Players: {user_race_session.participant_count} • Time: {time_text}"
         embed.set_footer(text=footer)
         if game.history and last_guess:
             embed.set_author(

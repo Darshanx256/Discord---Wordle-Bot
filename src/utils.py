@@ -135,7 +135,7 @@ def format_attempt_footer(attempts_used: int, max_attempts: int) -> str:
     used = max(0, min(attempts_used, max_attempts))
     filled = "●" * used
     empty = "○" * (max_attempts - used)
-    return f"**Attempt {used}/{max_attempts} [{filled}{empty}]**"
+    return f"Attempt {used}/{max_attempts} [{filled}{empty}]"
 
 def calculate_level(xp: int) -> int:
     """Calculates level from total XP. Legacy simple return."""

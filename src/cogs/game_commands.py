@@ -495,7 +495,7 @@ class GameCommands(commands.Cog):
         if game.history:
             last_guess = (game.history[-1].get('word') or '').upper()
             if last_guess:
-                embed.description = f"`{last_guess}`\n\u200b\n{board_display}\n\n{keypad}"
+                embed.description = f"Guessed `{last_guess}`\n{board_display}\n\n{keypad}"
             else:
                 embed.description = f"{board_display}\n\n{keypad}"
         else:
