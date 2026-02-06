@@ -258,7 +258,7 @@ class ConstraintMode(commands.Cog):
                 try:
                     is_victory = (game.round_number >= 100)
                     
-                    self.bot.supabase_client.rpc('record_game_result_v4', {
+                    await asyncio.to_thread(lambda: self.bot.supabase_client.rpc('record_game_result_v4', {
                         'p_user_id': uid,
                         'p_guild_id': channel.guild.id if channel.guild else None,
                         'p_mode': 'MULTI',
@@ -266,7 +266,7 @@ class ConstraintMode(commands.Cog):
                         'p_wr_delta': 0,    # Already awarded
                         'p_is_win': is_victory,
                         'p_egg_trigger': None
-                    }).execute()
+                    }).execute())
                     
                 except Exception as e:
                     print(f"Error finalizing stats for {uid}: {e}")

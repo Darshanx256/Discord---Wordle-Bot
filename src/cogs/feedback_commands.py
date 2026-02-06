@@ -1,6 +1,7 @@
 """
 Feedback commands: /message for user feedback submission
 """
+import asyncio
 import discord
 from discord.ext import commands
 from discord import app_commands, ui
@@ -45,7 +46,9 @@ class FeedbackModal(ui.Modal, title="📨 Send Feedback"):
                 'user_id': interaction.user.id # This is the 'id' column requested
             }
             
-            interaction.client.supabase_client.table('feedback').insert(feedback_data).execute()
+            await asyncio.to_thread(
+                lambda: interaction.client.supabase_client.table('feedback').insert(feedback_data).execute()
+            )
             
             await interaction.response.send_message(
                 "✅ **Feedback submitted successfully!**\n"

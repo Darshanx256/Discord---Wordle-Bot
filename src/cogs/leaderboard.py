@@ -7,10 +7,12 @@ import discord
 from discord.ext import commands, tasks
 from src.config import TIERS
 from src.ui_v2 import LeaderboardViewV2
-from src.utils import EMOJIS, get_cached_username
+from src.utils import EMOJIS, get_cached_username, get_display_name_no_ping
 
 
 GLOBAL_CACHE_TTL_SECONDS = 5 * 60
+GUILD_CACHE_TTL_SECONDS = 5 * 60
+GUILD_CACHE_EVICT_SECONDS = 6 * 3600
 
 
 async def fetch_and_format_rankings(results, bot_instance, guild=None, *, allow_cache_write: bool = True, force_mentions: bool = False):
@@ -28,6 +30,8 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None, *, allow_
         # Using the new safe util - no API spam
         if force_mentions:
             name = f"<@{uid}>"
+        elif guild is not None:
+            name = get_display_name_no_ping(bot_instance, uid, guild=guild)
         else:
             name = await get_cached_username(bot_instance, uid, allow_cache_write=allow_cache_write)
 
@@ -48,6 +52,9 @@ class LeaderboardCommands(commands.Cog):
         self.bot = bot
         self.global_cache = []
         self.global_cache_time = None
+        self.guild_cache = {}  # guild_id -> {'data': list, 'time': dt, 'last_access': dt}
+        self._guild_refresh_inflight = set()
+        self._guild_refresh_lock = asyncio.Lock()
 
     async def cog_load(self):
         # Seed once at startup, then continue on interval.
@@ -85,6 +92,46 @@ class LeaderboardCommands(commands.Cog):
                 self.global_cache_time = datetime.datetime.now(datetime.timezone.utc)
         except Exception as e:
             print(f"Global Cache Refresh Error: {e}")
+
+    async def _refresh_guild_cache(self, guild_id: int):
+        try:
+            g_response = await asyncio.to_thread(
+                lambda: self.bot.supabase_client.table('guild_stats_v2')
+                .select('user_id')
+                .eq('guild_id', guild_id)
+                .execute()
+            )
+
+            if not g_response.data:
+                self.guild_cache[guild_id] = {
+                    'data': [],
+                    'time': datetime.datetime.now(datetime.timezone.utc),
+                    'last_access': datetime.datetime.now(datetime.timezone.utc),
+                }
+                return
+
+            guild_user_ids = [r['user_id'] for r in g_response.data]
+
+            u_response = await asyncio.to_thread(
+                lambda: self.bot.supabase_client.table('user_stats_v2')
+                .select('user_id, multi_wins, xp, multi_wr, active_badge')
+                .in_('user_id', guild_user_ids)
+                .execute()
+            )
+
+            results = []
+            for r in u_response.data:
+                results.append((r['user_id'], r['multi_wins'], r['xp'], r['multi_wr'], r.get('active_badge')))
+            results.sort(key=lambda x: x[3], reverse=True)
+            results = results[:10]
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+            self.guild_cache[guild_id] = {'data': results, 'time': now, 'last_access': now}
+        except Exception as e:
+            print(f"Guild Cache Refresh Error: {e}")
+        finally:
+            async with self._guild_refresh_lock:
+                self._guild_refresh_inflight.discard(guild_id)
 
     async def _fetch_user_rank_and_total(self, user_id: int):
         """
@@ -150,44 +197,43 @@ class LeaderboardCommands(commands.Cog):
             return await ctx.send("Server leaderboard only available in servers. Use `/leaderboard_global` for global rankings.", ephemeral=True)
         await ctx.defer()
 
-        try:
-            # Step 1: Get User IDs in this guild
-            g_response = await asyncio.to_thread(
-                lambda: self.bot.supabase_client.table('guild_stats_v2')
-                .select('user_id')
-                .eq('guild_id', ctx.guild.id)
-                .execute()
-            )
+        guild_id = ctx.guild.id
+        now = datetime.datetime.now(datetime.timezone.utc)
 
-            if not g_response.data:
-                return await ctx.send("No ranked players in this server yet!", ephemeral=True)
+        # Lazy evict inactive guilds
+        stale_guilds = [
+            gid for gid, entry in self.guild_cache.items()
+            if (now - entry.get('last_access', now)).total_seconds() > GUILD_CACHE_EVICT_SECONDS
+        ]
+        for gid in stale_guilds:
+            self.guild_cache.pop(gid, None)
 
-            guild_user_ids = [r['user_id'] for r in g_response.data]
+        entry = self.guild_cache.get(guild_id)
+        results = []
+        if entry:
+            entry['last_access'] = now
+            age = (now - entry['time']).total_seconds()
+            results = entry['data']
+            if age > GUILD_CACHE_TTL_SECONDS:
+                async with self._guild_refresh_lock:
+                    if guild_id not in self._guild_refresh_inflight:
+                        self._guild_refresh_inflight.add(guild_id)
+                        asyncio.create_task(self._refresh_guild_cache(guild_id))
 
-            # Step 2: Fetch Stats for these users
-            u_response = await asyncio.to_thread(
-                lambda: self.bot.supabase_client.table('user_stats_v2')
-                .select('user_id, multi_wins, xp, multi_wr, active_badge')
-                .in_('user_id', guild_user_ids)
-                .execute()
-            )
-
-            results = []
-            for r in u_response.data:
-                results.append((r['user_id'], r['multi_wins'], r['xp'], r['multi_wr'], r.get('active_badge')))
-
-            # Sort by WR desc and slice Top 10
-            results.sort(key=lambda x: x[3], reverse=True)
-            results = results[:10]
-
-        except Exception as e:
-            print(f"Leaderboard Error: {e}")
-            return await ctx.send("❌ Error fetching leaderboard. Please try again later.", ephemeral=True)
+        # No cache yet: fetch once (on-demand) then cache.
+        if not entry:
+            try:
+                await self._refresh_guild_cache(guild_id)
+                entry = self.guild_cache.get(guild_id, {})
+                results = entry.get('data', [])
+            except Exception as e:
+                print(f"Leaderboard Error: {e}")
+                return await ctx.send("❌ Error fetching leaderboard. Please try again later.", ephemeral=True)
 
         if not results:
             return await ctx.send("No ranked players yet!", ephemeral=True)
 
-        data = await fetch_and_format_rankings(results, self.bot, ctx.guild, allow_cache_write=False, force_mentions=True)
+        data = await fetch_and_format_rankings(results, self.bot, ctx.guild, allow_cache_write=False, force_mentions=False)
 
         view = LeaderboardViewV2(self.bot, data, f"🏆 {ctx.guild.name} Top 10", discord.Color.gold(), ctx.author)
         await ctx.send(embed=view.create_embed(), view=view)

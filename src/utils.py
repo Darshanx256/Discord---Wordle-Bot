@@ -196,6 +196,20 @@ async def get_cached_username(bot, user_id: int, *, allow_cache_write: bool = Tr
     # This avoids the slow and rate-limited `await bot.fetch_user(user_id)` call.
     return f"<@{user_id}>"
 
+def get_display_name_no_ping(bot, user_id: int, guild=None) -> str:
+    """
+    Return a display name without pinging. Uses in-memory caches only.
+    Falls back to a neutral placeholder if not found.
+    """
+    if guild:
+        member = guild.get_member(user_id)
+        if member:
+            return member.display_name
+    user = bot.get_user(user_id)
+    if user:
+        return user.display_name
+    return "Unknown"
+
 def is_user_banned(bot, user_id: int) -> bool:
     """Check if a user is banned."""
     return hasattr(bot, 'banned_users') and user_id in bot.banned_users
