@@ -210,7 +210,7 @@ async def handle_game_win(bot, game, interaction, winner_user, cid, include_boar
         bot.stopped_games.discard(cid)
         return None, None, None, None, None, None, []
 
-    time_taken = final_time if final_time is not None else (datetime.datetime.now() - game.start_time).total_seconds()
+    time_taken = final_time if final_time is not None else (datetime.datetime.now() - game.start_time).total_seconds()    
     embed, breakdown, level_ups, tier_ups, winner_res, results = await _process_game_results(
         bot, game, winner_user, interaction.guild.id, time_taken, include_board, is_win=True
     )

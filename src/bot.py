@@ -97,7 +97,7 @@ class WordleBot(commands.Bot):
         self._background_tasks['activity'] = asyncio.create_task(self.activity_loop_task())
         self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
         self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
-        
+        self._background_tasks['name_cache_cleanup'] = asyncio.create_task(self.name_cache_cleanup_task_loop())
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
 
@@ -357,49 +357,74 @@ class WordleBot(commands.Bot):
             await asyncio.sleep(min(max(remaining, 1), 600))
 
     async def smart_name_cache_loop_task(self):
-        """Background task to cache ALL player names every 48 hours."""
+        """
+        Background task to cache ONLY the Top 10 Global Players (by WR).
+        Other users are handled via mentions in V2 logic.
+        """
         await self.wait_until_ready()
-        INTERVAL = 48 * 3600 # 48 hours
+        INTERVAL = 5 * 60 # 5 minutes
         next_run = time.monotonic()
         
         while not self.is_closed():
             if time.monotonic() >= next_run:
                 print("🔄 Starting Smart Name Cache Update...")
                 try:
-                    all_users = []
-                    start = 0
-                    step = 1000
-                    while True:
-                        res = self.supabase_client.table('user_stats_v2').select('user_id').range(start, start + step - 1).execute()
-                        if not res.data: break
-                        all_users.extend(r['user_id'] for r in res.data)
-                        if len(res.data) < step: break
-                        start += step
+                    # 1. Fetch Top 10 IDs by WR
+                    res = await asyncio.to_thread(lambda: self.supabase_client.table('user_stats_v2')
+                            .select('user_id')
+                            .order('multi_wr', desc=True)
+                            .limit(10)
+                            .execute())
                     
-                    new_cache = {}
-                    for uid in all_users:
-                        try:
-                            name = None
-                            for guild in self.guilds:
-                                mem = guild.get_member(uid)
-                                if mem:
-                                    name = mem.display_name
-                                    break
-                            if not name:
-                                user = self.get_user(uid)
-                                if user: name = user.display_name
-                                else:
-                                    u = await self.fetch_user(uid)
-                                    name = u.display_name
-                                    await asyncio.sleep(0.5)
-                            new_cache[uid] = name
-                        except: pass
-                    self.name_cache = new_cache
-                    print(f"✅ Smart Name Cache Updated: {len(self.name_cache)} names")
+                    if res.data:
+                        top_users = [r['user_id'] for r in res.data]
+
+                        # 2. Refresh Cache ONLY for these VIPs
+                        new_cache = {}
+                        count = 0
+                        for uid in top_users:
+                            try:
+                                # Safe fetch, rate limited internally by Discord lib but okay for 10 users
+                                u = await self.fetch_user(uid)
+                                new_cache[uid] = u.display_name
+                                count += 1
+                            except:
+                                pass
+
+                        self.name_cache = new_cache
+                        print(f"✅ Top 10 Name Cache Updated: {count} users")
+                        
                 except Exception as e:
                     print(f"❌ Smart Name Cache Failed: {e}")
                 next_run = time.monotonic() + INTERVAL
                 
+            remaining = next_run - time.monotonic()
+            await asyncio.sleep(min(max(remaining, 1), 3600))
+
+    async def name_cache_cleanup_task_loop(self):
+        """
+        Daily cleanup to remove any cached names beyond the current Top 10 by WR.
+        """
+        await self.wait_until_ready()
+        INTERVAL = 24 * 3600 # 24 hours
+        next_run = time.monotonic()
+
+        while not self.is_closed():
+            if time.monotonic() >= next_run:
+                try:
+                    res = await asyncio.to_thread(lambda: self.supabase_client.table('user_stats_v2')
+                            .select('user_id')
+                            .order('multi_wr', desc=True)
+                            .limit(10)
+                            .execute())
+                    if res.data:
+                        top_users = {r['user_id'] for r in res.data}
+                        self.name_cache = {uid: name for uid, name in self.name_cache.items() if uid in top_users}
+                        print(f"🧹 Name Cache Cleanup: {len(self.name_cache)} users retained")
+                except Exception as e:
+                    print(f"⚠️ Name Cache Cleanup Failed: {e}")
+                next_run = time.monotonic() + INTERVAL
+
             remaining = next_run - time.monotonic()
             await asyncio.sleep(min(max(remaining, 1), 3600))
 

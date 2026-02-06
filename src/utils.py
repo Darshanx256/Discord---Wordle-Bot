@@ -142,7 +142,7 @@ def get_level_progress(total_xp: int):
     return lvl + l_gain, curr % 500, 500
 
 
-async def get_cached_username(bot, user_id: int) -> str:
+async def get_cached_username(bot, user_id: int, *, allow_cache_write: bool = True) -> str:
     """
     Get user display name from cache or fetch from Discord.
     Prioritizes cache, local cache, bot cache, then API.
@@ -152,14 +152,12 @@ async def get_cached_username(bot, user_id: int) -> str:
     if user_id in bot.name_cache:
         return bot.name_cache[user_id]
     
-    # 2. Try bot's get_user (cached locally)
-    try:
-        user = bot.get_user(user_id)
-        if user:
+    # 2. Try bot's get_user (Instant local cache check)
+    user = bot.get_user(user_id)
+    if user:
+        if allow_cache_write:
             bot.name_cache[user_id] = user.display_name
-            return user.display_name
-    except:
-        pass
+        return user.display_name
     
     # 3. Try to fetch from Discord API
     try:
