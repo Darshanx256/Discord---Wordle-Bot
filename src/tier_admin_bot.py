@@ -325,6 +325,10 @@ TIER_ROLE_ORDER: List[TierRole] = [
     TierRole(name="Challenger", min_wr=0, color=discord.Color.from_rgb(96, 125, 139)),
 ]
 
+LEVEL_ROLE_PREFIX = "wordle level "
+LEVEL_BUCKET_STEP = 10
+LEVEL_MIN_BUCKET = 10
+
 
 def tier_from_wr(wr: int) -> Optional[str]:
     for t in TIERS:
@@ -338,6 +342,18 @@ def parse_hex_color(hex_color: str) -> discord.Color:
     if len(cleaned) != 6:
         raise ValueError("Color must be a 6-digit hex value like #22aa88")
     return discord.Color(int(cleaned, 16))
+
+
+def level_color_for_bucket(bucket: int) -> discord.Color:
+    if bucket >= 100:
+        return discord.Color.from_rgb(241, 196, 15)
+    if bucket >= 70:
+        return discord.Color.from_rgb(155, 89, 182)
+    if bucket >= 50:
+        return discord.Color.from_rgb(230, 126, 34)
+    if bucket >= 30:
+        return discord.Color.from_rgb(52, 152, 219)
+    return discord.Color.from_rgb(46, 204, 113)
 
 
 class TierAdminBot(commands.Bot):
@@ -446,6 +462,67 @@ class TierAdminBot(commands.Bot):
             wr_map[uid] = int(row.get("multi_wr", 0))
         return wr_map
 
+    async def _fetch_member_stats_map(self, member_ids: List[int]) -> Dict[int, dict]:
+        if not member_ids:
+            return {}
+        assert self.supabase_client is not None
+
+        response = (
+            self.supabase_client.table("user_stats_v2")
+            .select("user_id,multi_wr,xp")
+            .in_("user_id", member_ids)
+            .execute()
+        )
+
+        stats: Dict[int, dict] = {}
+        for row in response.data or []:
+            uid = int(row["user_id"])
+            stats[uid] = {
+                "wr": int(row.get("multi_wr", 0) or 0),
+                "xp": int(row.get("xp", 0) or 0),
+            }
+        return stats
+
+    def _get_level_from_xp(self, total_xp: int) -> int:
+        lvl = 1
+        curr = int(total_xp or 0)
+        if curr < 0:
+            curr = 0
+
+        if curr >= 1000:
+            lvl += 10
+            curr -= 1000
+        else:
+            return lvl + (curr // 100)
+
+        if curr >= 4000:
+            lvl += 20
+            curr -= 4000
+        else:
+            return lvl + (curr // 200)
+
+        if curr >= 10500:
+            lvl += 30
+            curr -= 10500
+        else:
+            return lvl + (curr // 350)
+
+        return lvl + (curr // 500)
+
+    def _level_bucket_for_level(self, level: int) -> Optional[int]:
+        if level < LEVEL_MIN_BUCKET:
+            return None
+        return (level // LEVEL_BUCKET_STEP) * LEVEL_BUCKET_STEP
+
+    def _parse_level_bucket_from_role_name(self, role_name: str) -> Optional[int]:
+        name = (role_name or "").strip().lower()
+        if not name.startswith(LEVEL_ROLE_PREFIX):
+            return None
+        tail = role_name[len(LEVEL_ROLE_PREFIX):].strip()
+        if tail.isdigit():
+            return int(tail)
+        return None
+
     async def run_tier_sync_once(self) -> dict:
         guild = await self.get_target_guild()
         if not guild.chunked:
@@ -455,12 +532,43 @@ class TierAdminBot(commands.Bot):
 
         members = [m for m in guild.members if not m.bot]
         member_ids = [m.id for m in members]
-        wr_map = await self._fetch_member_wr_map(member_ids)
+        stats_map = await self._fetch_member_stats_map(member_ids)
+
+        # Ensure level roles for currently required buckets exist.
+        level_buckets = set()
+        for member in members:
+            stat = stats_map.get(member.id)
+            if not stat:
+                continue
+            level = self._get_level_from_xp(stat.get("xp", 0))
+            bucket = self._level_bucket_for_level(level)
+            if bucket is not None:
+                level_buckets.add(bucket)
+
+        by_name = {r.name.lower(): r for r in guild.roles}
+        level_role_by_bucket: Dict[int, discord.Role] = {}
+        for bucket in sorted(level_buckets):
+            role_name = f"{LEVEL_ROLE_PREFIX}{bucket}"
+            role = by_name.get(role_name)
+            if role is None:
+                role = await guild.create_role(
+                    name=role_name,
+                    color=level_color_for_bucket(bucket),
+                    reason="Create level role for automated level sync",
+                )
+            level_role_by_bucket[bucket] = role
+
+        existing_level_role_ids = {
+            r.id for r in guild.roles if self._parse_level_bucket_from_role_name(r.name) is not None
+        }
 
         changes = 0
         skipped = 0
+        level_changes = 0
+        level_skipped = 0
         for member in members:
-            wr = wr_map.get(member.id, 0)
+            stat = stats_map.get(member.id, {"wr": 0, "xp": 0})
+            wr = int(stat.get("wr", 0))
             tier_name = tier_from_wr(wr)
             target_role = tier_roles.get(tier_name) if tier_name else None
             current_tier_roles = [r for r in member.roles if r.id in tier_role_ids]
@@ -483,13 +591,39 @@ class TierAdminBot(commands.Bot):
             except discord.HTTPException:
                 pass
 
+            level = self._get_level_from_xp(int(stat.get("xp", 0)))
+            target_bucket = self._level_bucket_for_level(level)
+            target_level_role = level_role_by_bucket.get(target_bucket) if target_bucket is not None else None
+            current_level_roles = [r for r in member.roles if r.id in existing_level_role_ids]
+
+            has_level_target = target_level_role is not None and target_level_role in current_level_roles
+            only_level_target = has_level_target and len(current_level_roles) == 1
+            if only_level_target:
+                level_skipped += 1
+            else:
+                try:
+                    remove_level = [
+                        r for r in current_level_roles if target_level_role is None or r.id != target_level_role.id
+                    ]
+                    if remove_level:
+                        await member.remove_roles(*remove_level, reason="Level sync update")
+                    if target_level_role and target_level_role not in member.roles:
+                        await member.add_roles(target_level_role, reason="Level sync update")
+                    level_changes += 1
+                except discord.Forbidden:
+                    pass
+                except discord.HTTPException:
+                    pass
+
             await asyncio.sleep(max(0.2, self.member_update_delay))
 
         return {
             "members_scanned": len(members),
-            "db_rows": len(wr_map),
+            "db_rows": len(stats_map),
             "changes": changes,
             "unchanged": skipped,
+            "level_changes": level_changes,
+            "level_unchanged": level_skipped,
         }
 
     async def hourly_tier_sync_loop(self):
@@ -499,14 +633,16 @@ class TierAdminBot(commands.Bot):
             try:
                 result = await self.run_tier_sync_once()
                 print(
-                    "✅ Tier sync done",
+                    "✅ Tier + level sync done",
                     f"at={started.isoformat()}",
                     f"scanned={result['members_scanned']}",
-                    f"changes={result['changes']}",
-                    f"unchanged={result['unchanged']}",
+                    f"tier_changes={result['changes']}",
+                    f"tier_unchanged={result['unchanged']}",
+                    f"level_changes={result['level_changes']}",
+                    f"level_unchanged={result['level_unchanged']}",
                 )
             except Exception as exc:
-                print(f"❌ Tier sync error: {exc}")
+                print(f"❌ Tier/level sync error: {exc}")
 
             await asyncio.sleep(self.sync_interval_seconds)
 
@@ -1495,8 +1631,12 @@ def create_admin_app(bot: TierAdminBot) -> Flask:
         if not _is_authed():
             return redirect(url_for("login"))
         try:
-            res = asyncio.run_coroutine_threadsafe(bot.run_tier_sync_once(), bot.loop).result(timeout=120)
-            message = f"Sync done: scanned={res['members_scanned']} changes={res['changes']} unchanged={res['unchanged']}"
+            res = asyncio.run_coroutine_threadsafe(bot.run_tier_sync_once(), bot.loop).result(timeout=180)
+            message = (
+                f"Sync done: scanned={res['members_scanned']} "
+                f"tier_changes={res['changes']} tier_unchanged={res['unchanged']} "
+                f"level_changes={res['level_changes']} level_unchanged={res['level_unchanged']}"
+            )
             return redirect(url_for("index", message=message))
         except Exception as exc:
             return redirect(url_for("index", error=f"Manual sync failed: {exc}"))
