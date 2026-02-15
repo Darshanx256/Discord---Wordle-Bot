@@ -281,22 +281,7 @@ class TierAdminBot(commands.Bot):
         self._channel_cache = (now, channels)
         return channels
 
-    async def relay_message(self, channel_id: int, content: str, sender_user_id: int) -> str:
-        guild = await self.get_target_guild()
-        channel = guild.get_channel(channel_id)
-        if channel is None or not isinstance(channel, discord.TextChannel):
-            raise ValueError("Invalid text channel.")
-
-        member = guild.get_member(sender_user_id)
-        if member is None:
-            try:
-                member = await guild.fetch_member(sender_user_id)
-            except discord.HTTPException:
-                member = None
-
-        sender_name = member.display_name if member else "Relay"
-        sender_avatar = member.display_avatar.url if member else None
-
+    async def _get_or_create_webhook(self, channel: discord.TextChannel) -> discord.Webhook:
         webhook: Optional[discord.Webhook] = None
         cached_id = self._webhook_cache.get(channel.id)
         if cached_id:
@@ -309,6 +294,48 @@ class TierAdminBot(commands.Bot):
             if webhook is None:
                 webhook = await channel.create_webhook(name="TierRelay")
             self._webhook_cache[channel.id] = webhook.id
+
+        return webhook
+
+    async def relay_message(
+        self,
+        channel_id: int,
+        content: str,
+        sender_mode: str,
+        sender_user_id: int,
+        custom_name: str = "",
+        custom_avatar_url: str = "",
+    ) -> str:
+        guild = await self.get_target_guild()
+        channel = guild.get_channel(channel_id)
+        if channel is None or not isinstance(channel, discord.TextChannel):
+            raise ValueError("Invalid text channel.")
+
+        mode = (sender_mode or "").strip().lower()
+        if mode not in {"me", "bot", "custom"}:
+            raise ValueError("Invalid sender mode.")
+
+        if mode == "bot":
+            await channel.send(content=content, allowed_mentions=self.allowed_mentions)
+            return f"Message sent to #{channel.name} as bot."
+
+        member = guild.get_member(sender_user_id)
+        if member is None:
+            try:
+                member = await guild.fetch_member(sender_user_id)
+            except discord.HTTPException:
+                member = None
+
+        if mode == "me":
+            sender_name = member.display_name if member else "Relay"
+            sender_avatar = member.display_avatar.url if member else None
+        else:
+            sender_name = (custom_name or "").strip()
+            if not sender_name:
+                raise ValueError("Custom profile name is required for custom mode.")
+            sender_avatar = (custom_avatar_url or "").strip() or None
+
+        webhook = await self._get_or_create_webhook(channel)
 
         await webhook.send(
             content=content,
@@ -408,6 +435,19 @@ ADMIN_HTML = """
               <option value="{{ ch.id }}">#{{ ch.name }}</option>
             {% endfor %}
           </select>
+        </label>
+        <label>Sender Mode
+          <select name="sender_mode" required>
+            <option value="me">As Me</option>
+            <option value="bot">As Bot</option>
+            <option value="custom">Custom Profile</option>
+          </select>
+        </label>
+        <label>Custom Profile Name (only for Custom Profile)
+          <input type="text" name="custom_name" placeholder="Optional unless Custom Profile mode">
+        </label>
+        <label>Custom Avatar URL (optional)
+          <input type="text" name="custom_avatar_url" placeholder="https://...">
         </label>
         <label>Content
           <textarea name="content" rows="5" required></textarea>
@@ -603,13 +643,25 @@ def create_admin_app(bot: TierAdminBot) -> Flask:
         if not _is_authed():
             return redirect(url_for("login"))
         channel_id = request.form.get("channel_id", "").strip()
+        sender_mode = request.form.get("sender_mode", "me").strip().lower()
+        custom_name = request.form.get("custom_name", "").strip()
+        custom_avatar_url = request.form.get("custom_avatar_url", "").strip()
         content = request.form.get("content", "").strip()
         if not channel_id.isdigit() or not content:
             return redirect(url_for("index", error="Channel and content are required."))
+        if sender_mode not in {"me", "bot", "custom"}:
+            return redirect(url_for("index", error="Invalid sender mode."))
 
         try:
             message = asyncio.run_coroutine_threadsafe(
-                bot.relay_message(int(channel_id), content, int(session["uid"])),
+                bot.relay_message(
+                    int(channel_id),
+                    content,
+                    sender_mode,
+                    int(session["uid"]),
+                    custom_name,
+                    custom_avatar_url,
+                ),
                 bot.loop,
             ).result(timeout=15)
             return redirect(url_for("index", message=message))
