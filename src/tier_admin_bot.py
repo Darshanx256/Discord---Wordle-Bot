@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import hashlib
 import inspect
 import json
 import os
@@ -345,15 +346,34 @@ def parse_hex_color(hex_color: str) -> discord.Color:
 
 
 def level_color_for_bucket(bucket: int) -> discord.Color:
-    if bucket >= 100:
-        return discord.Color.from_rgb(241, 196, 15)
-    if bucket >= 70:
-        return discord.Color.from_rgb(155, 89, 182)
-    if bucket >= 50:
-        return discord.Color.from_rgb(230, 126, 34)
-    if bucket >= 30:
-        return discord.Color.from_rgb(52, 152, 219)
-    return discord.Color.from_rgb(46, 204, 113)
+    # Deterministic "random fixed" color per bucket: same bucket => same color everywhere.
+    digest = hashlib.sha256(f"wordle-level-{bucket}".encode("utf-8")).hexdigest()
+    hue = int(digest[:8], 16) % 360
+    sat = 72
+    val = 88
+
+    h = hue / 60.0
+    c = (val / 100.0) * (sat / 100.0)
+    x = c * (1 - abs((h % 2) - 1))
+    m = (val / 100.0) - c
+
+    if 0 <= h < 1:
+        rp, gp, bp = c, x, 0
+    elif 1 <= h < 2:
+        rp, gp, bp = x, c, 0
+    elif 2 <= h < 3:
+        rp, gp, bp = 0, c, x
+    elif 3 <= h < 4:
+        rp, gp, bp = 0, x, c
+    elif 4 <= h < 5:
+        rp, gp, bp = x, 0, c
+    else:
+        rp, gp, bp = c, 0, x
+
+    r = int((rp + m) * 255)
+    g = int((gp + m) * 255)
+    b = int((bp + m) * 255)
+    return discord.Color.from_rgb(r, g, b)
 
 
 class TierAdminBot(commands.Bot):
@@ -534,7 +554,7 @@ class TierAdminBot(commands.Bot):
         member_ids = [m.id for m in members]
         stats_map = await self._fetch_member_stats_map(member_ids)
 
-        # Ensure level roles for currently required buckets exist.
+        # Ensure level roles for all required cumulative buckets exist.
         level_buckets = set()
         for member in members:
             stat = stats_map.get(member.id)
@@ -543,7 +563,8 @@ class TierAdminBot(commands.Bot):
             level = self._get_level_from_xp(stat.get("xp", 0))
             bucket = self._level_bucket_for_level(level)
             if bucket is not None:
-                level_buckets.add(bucket)
+                for b in range(LEVEL_MIN_BUCKET, bucket + 1, LEVEL_BUCKET_STEP):
+                    level_buckets.add(b)
 
         by_name = {r.name.lower(): r for r in guild.roles}
         level_role_by_bucket: Dict[int, discord.Role] = {}
@@ -555,6 +576,11 @@ class TierAdminBot(commands.Bot):
                     name=role_name,
                     color=level_color_for_bucket(bucket),
                     reason="Create level role for automated level sync",
+                )
+            elif role.color.value != level_color_for_bucket(bucket).value:
+                await role.edit(
+                    color=level_color_for_bucket(bucket),
+                    reason="Normalize deterministic level role color",
                 )
             level_role_by_bucket[bucket] = role
 
@@ -593,23 +619,26 @@ class TierAdminBot(commands.Bot):
 
             level = self._get_level_from_xp(int(stat.get("xp", 0)))
             target_bucket = self._level_bucket_for_level(level)
-            target_level_role = level_role_by_bucket.get(target_bucket) if target_bucket is not None else None
-            current_level_roles = [r for r in member.roles if r.id in existing_level_role_ids]
+            current_level_buckets = set()
+            for role in member.roles:
+                b = self._parse_level_bucket_from_role_name(role.name)
+                if b is not None:
+                    current_level_buckets.add(b)
 
-            has_level_target = target_level_role is not None and target_level_role in current_level_roles
-            only_level_target = has_level_target and len(current_level_roles) == 1
-            if only_level_target:
+            desired_buckets = set()
+            if target_bucket is not None:
+                for b in range(LEVEL_MIN_BUCKET, target_bucket + 1, LEVEL_BUCKET_STEP):
+                    desired_buckets.add(b)
+
+            missing_buckets = sorted(desired_buckets - current_level_buckets)
+            if not missing_buckets:
                 level_skipped += 1
             else:
                 try:
-                    remove_level = [
-                        r for r in current_level_roles if target_level_role is None or r.id != target_level_role.id
-                    ]
-                    if remove_level:
-                        await member.remove_roles(*remove_level, reason="Level sync update")
-                    if target_level_role and target_level_role not in member.roles:
-                        await member.add_roles(target_level_role, reason="Level sync update")
-                    level_changes += 1
+                    add_roles = [level_role_by_bucket[b] for b in missing_buckets if b in level_role_by_bucket]
+                    if add_roles:
+                        await member.add_roles(*add_roles, reason="Cumulative level sync update")
+                        level_changes += 1
                 except discord.Forbidden:
                     pass
                 except discord.HTTPException:
