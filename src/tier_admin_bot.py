@@ -603,19 +603,18 @@ class TierAdminBot(commands.Bot):
             only_target = has_target and len(current_tier_roles) == 1
             if only_target:
                 skipped += 1
-                continue
-
-            try:
-                remove_list = [r for r in current_tier_roles if target_role is None or r.id != target_role.id]
-                if remove_list:
-                    await member.remove_roles(*remove_list, reason="Tier sync update")
-                if target_role and target_role not in member.roles:
-                    await member.add_roles(target_role, reason="Tier sync update")
-                changes += 1
-            except discord.Forbidden:
-                pass
-            except discord.HTTPException:
-                pass
+            else:
+                try:
+                    remove_list = [r for r in current_tier_roles if target_role is None or r.id != target_role.id]
+                    if remove_list:
+                        await member.remove_roles(*remove_list, reason="Tier sync update")
+                    if target_role and target_role not in member.roles:
+                        await member.add_roles(target_role, reason="Tier sync update")
+                    changes += 1
+                except discord.Forbidden:
+                    pass
+                except discord.HTTPException:
+                    pass
 
             level = self._get_level_from_xp(int(stat.get("xp", 0)))
             target_bucket = self._level_bucket_for_level(level)
