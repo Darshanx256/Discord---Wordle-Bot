@@ -725,6 +725,25 @@ class HelpView(discord.ui.View):
                 "*Custom Mode lets you craft unique Wordle experiences for any occasion!*"
             )
         
+        elif feature == "integrations":
+            embed = discord.Embed(title="Setup: Discord Integrations", color=discord.Color.blue())
+            embed.description = (
+                "Use Discord Integrations to control where Wordle slash commands are available.\n\n"
+                "**Where to Configure:**\n"
+                "`Server Settings -> Integrations -> Wordle Game Bot`\n\n"
+                "**What to Do Next:**\n"
+                "• Open **Channels** and allow only your preferred game channels\n"
+                "• Optionally adjust **Roles and Members** access\n"
+                "• Test `/wordle` in an allowed and blocked channel\n\n"
+                "**Why use this setup:**\n"
+                "• Keeps large servers cleaner\n"
+                "• Limits bot command usage to selected channels\n"
+                "• Requires no extra bot permissions\n\n"
+                "**Important:**\n"
+                "• This setup is optional; the bot works normally without it\n"
+                "• `-g` only works when a game is active in that same channel"
+            )
+
         elif feature == "progression":
             embed = discord.Embed(title="Progression & Tiers", color=discord.Color.purple())
             

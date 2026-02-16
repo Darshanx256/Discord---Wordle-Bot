@@ -37,6 +37,8 @@ class WordleBot(commands.Bot):
         self.supabase_client: Client = None
         self.banned_users = set()  # Banned user IDs
         self._background_tasks = {} # Name: Task
+        self.send_integration_update_on_boot = False
+        self._boot_notice_dispatched = False
 
     def get_custom_prefix(self, bot, message):
         """Only allow '-' as a prefix if it's followed by 'g' (the guess shortcut)."""
@@ -402,14 +404,10 @@ class WordleBot(commands.Bot):
 bot = WordleBot()
 
 
-# ========= WELCOME MESSAGE EVENT =========
-@bot.event
-async def on_guild_join(guild):
-    """Send a welcome message when the bot joins a new server."""
-    # Try to find the best channel to send welcome message
+def _get_announcement_channel(guild: discord.Guild):
+    """Find a suitable text channel for one-time server announcements."""
     target_channel = None
-    
-    # Priority: System channel > first channel with 'general'/'announce' in name > first text channel
+
     if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
         target_channel = guild.system_channel
     else:
@@ -419,41 +417,130 @@ async def on_guild_join(guild):
                 if 'general' in name_lower or 'announce' in name_lower or 'welcome' in name_lower:
                     target_channel = channel
                     break
-        
-        # Fallback: first available text channel
+
         if not target_channel:
             for channel in guild.text_channels:
                 if channel.permissions_for(guild.me).send_messages:
                     target_channel = channel
                     break
-    
-    if target_channel:
-        embed = discord.Embed(
-            title="🎉 Thank you for adding Wordle Game Bot!",
-            color=discord.Color.green()
-        )
-        embed.description = (
-            "An engaging Wordle experience with various different game modes, level-up system and leaderboards!\n\n"
-            "**Getting Started:**\n"
-            "• Use `/help` for full command list and how to play\n"
-            "• Start a game with `/wordle` (Simple) or `/wordle_classic` (Hard)\n"
-            "• Make guesses with `/guess word:xxxxx` or `-g xxxxx`"
-        )
-        embed.add_field(
-            name="📌 Channel Setup",
-            value=(
-                "The bot can play in **any channel** it has access to.\n"
-                "Simply use commands in your desired channel. No additional setup required!\n"
-                "*Tip: Create a `#wordle` channel for dedicated games.*"
-            ),
-            inline=False
-        )
-        embed.set_footer(text="🔇 This is the only server message • Minimal spam, minimal permissions")
-        
+
+    return target_channel
+
+
+def _build_welcome_embed():
+    embed = discord.Embed(
+        title="🎉 Thank you for adding Wordle Game Bot!",
+        color=discord.Color.green()
+    )
+    embed.description = (
+        "An engaging Wordle experience with various different game modes, level-up system and leaderboards!\n\n"
+        "**Getting Started:**\n"
+        "• Use `/help` for full command list and how to play\n"
+        "• Start a game with `/wordle`\n"
+        "• Make guesses with `/guess word:xxxxx` or `-g xxxxx`"
+    )
+    embed.add_field(
+        name="📌 Channel Setup (Optional)",
+        value=(
+            "To limit slash commands to specific channels, use Discord Integrations:\n"
+            "`Server Settings -> Integrations -> Wordle Game Bot`\n"
+            "No extra bot permissions are required.\n"
+            "If not configured, the bot still works normally."
+        ),
+        inline=False
+    )
+    embed.set_footer(text="🔇 Minimal server messages • setup is optional")
+    return embed
+
+
+def _build_boot_integration_embed():
+    embed = discord.Embed(
+        title="🧩 Setup Update",
+        color=discord.Color.blue()
+    )
+    embed.description = (
+        "A recent update was released based on users feedbacks to make setup easier in large servers.\n\n"
+        "If you want to keep gameplay limited to a few channels, configure Discord Integrations:\n"
+        "`Server Settings -> Integrations -> Wordle Game Bot`\n\n"
+        "This setup is optional and does not require extra bot permissions.\n"
+        "If you skip this setup, the bot will continue working normally."
+    )
+    embed.set_footer(text="🔇 One-time reminder for this restart")
+    return embed
+
+
+async def _safe_send_embed(channel: discord.abc.Messageable, embed: discord.Embed, max_attempts: int = 3) -> bool:
+    """
+    Send helper with explicit retry/backoff for transient Discord HTTP failures.
+    discord.py already rate-limits per route; this adds a defensive fallback.
+    """
+    for attempt in range(max_attempts):
         try:
-            await target_channel.send(embed=embed)
+            await channel.send(embed=embed)
+            return True
+        except discord.HTTPException as e:
+            # Respect retry_after when available, otherwise back off incrementally.
+            retry_after = getattr(e, "retry_after", None)
+            wait_s = float(retry_after) if retry_after else (1.0 + attempt)
+            await asyncio.sleep(min(max(wait_s, 0.5), 10.0))
+        except:
+            return False
+    return False
+
+
+# ========= WELCOME MESSAGE EVENT =========
+@bot.event
+async def on_guild_join(guild):
+    """Send a welcome message when the bot joins a new server."""
+    target_channel = _get_announcement_channel(guild)
+    if target_channel:
+        try:
+            await target_channel.send(embed=_build_welcome_embed())
         except:
             pass  # Silently fail if we can't send
+
+
+@bot.event
+async def on_ready():
+    """Optional one-time startup reminder for integration setup."""
+    if not bot.send_integration_update_on_boot or bot._boot_notice_dispatched:
+        return
+
+    bot._boot_notice_dispatched = True
+    notice_embed = _build_boot_integration_embed()
+    sent_count = 0
+
+    print("📣 Sending one-time integration setup reminder to all servers...")
+    for guild in bot.guilds:
+        target_channel = _get_announcement_channel(guild)
+        if not target_channel:
+            continue
+        try:
+            sent = await _safe_send_embed(target_channel, notice_embed, max_attempts=4)
+            if sent:
+                sent_count += 1
+            # Soft pacing to reduce burst pressure in large deployments.
+            await asyncio.sleep(0.35)
+        except:
+            pass
+    print(f"✅ Startup reminder sent to {sent_count}/{len(bot.guilds)} servers.")
+
+
+def _ask_skip_integration_message() -> bool:
+    """
+    Ask at startup whether to skip the post-boot integration reminder.
+    Returns True when reminder should be skipped.
+    """
+    prompt = "Skip one-time integration setup reminder broadcast after boot? (y/n): "
+    try:
+        answer = input(prompt).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print("\n⚠️ No interactive input detected. Defaulting to skip reminder.")
+        return True
+
+    if answer in {"n", "no"}:
+        return False
+    return True
 
 
 # Run bot
@@ -462,6 +549,11 @@ def main():
     if not TOKEN:
         print("❌ DISCORD_TOKEN not set in environment variables.")
         sys.exit(1)
+
+    skip_notice = _ask_skip_integration_message()
+    bot.send_integration_update_on_boot = not skip_notice
+    print(f"ℹ️ Integration reminder broadcast: {'enabled' if not skip_notice else 'skipped'}")
+
     bot.run(TOKEN)
 
 

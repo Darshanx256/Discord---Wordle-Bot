@@ -18,6 +18,7 @@ class HelpCommands(commands.Cog):
         app_commands.Choice(name="Race Mode", value="race"),
         app_commands.Choice(name="Solo Mode", value="solo"),
         app_commands.Choice(name="Custom Games", value="custom"),
+        app_commands.Choice(name="Setup (Integrations)", value="integrations"),
         app_commands.Choice(name="Progression & Tiers", value="progression")
     ])
     async def help_cmd(self, interaction: discord.Interaction, feature: str = None):
