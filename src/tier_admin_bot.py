@@ -1330,6 +1330,82 @@ class TierAdminBot(commands.Bot):
             member = await guild.fetch_member(user_id)
         return [r for r in member.roles if r != guild.default_role]
 
+    async def clear_text_channels(self, channel_ids: List[int]) -> Dict[str, Any]:
+        guild = await self.get_target_guild()
+        me = guild.me or guild.get_member(self.user.id if self.user else 0)
+        if not me or not me.guild_permissions.manage_channels:
+            raise ValueError("Bot lacks Manage Channels permission.")
+
+        results = []
+        for cid in channel_ids:
+            channel = guild.get_channel(cid)
+            if channel is None:
+                try:
+                    channel = await guild.fetch_channel(cid)
+                except discord.HTTPException:
+                    channel = None
+            if channel is None or not isinstance(channel, discord.TextChannel):
+                results.append({"channel_id": cid, "status": "skipped", "reason": "Not a text channel."})
+                continue
+
+            overwrites = channel.overwrites
+            topic = channel.topic
+            nsfw = channel.nsfw
+            slowmode_delay = channel.slowmode_delay
+            category = channel.category
+            position = channel.position
+            default_auto_archive_duration = channel.default_auto_archive_duration
+            is_news = channel.is_news()
+            name = channel.name
+
+            try:
+                await channel.delete(reason="Clear text channel (recreate)")
+            except discord.Forbidden:
+                results.append({"channel_id": cid, "status": "failed", "reason": "Forbidden to delete channel."})
+                continue
+            except discord.HTTPException as exc:
+                results.append({"channel_id": cid, "status": "failed", "reason": f"Delete failed: {exc}"})
+                continue
+
+            try:
+                if is_news and hasattr(guild, "create_news_channel"):
+                    new_channel = await guild.create_news_channel(
+                        name=name,
+                        category=category,
+                        topic=topic,
+                        overwrites=overwrites,
+                        nsfw=nsfw,
+                        slowmode_delay=slowmode_delay,
+                        default_auto_archive_duration=default_auto_archive_duration,
+                        reason="Clear text channel (recreate)",
+                    )
+                else:
+                    new_channel = await guild.create_text_channel(
+                        name=name,
+                        category=category,
+                        topic=topic,
+                        overwrites=overwrites,
+                        nsfw=nsfw,
+                        slowmode_delay=slowmode_delay,
+                        default_auto_archive_duration=default_auto_archive_duration,
+                        reason="Clear text channel (recreate)",
+                    )
+                await new_channel.edit(position=position, reason="Restore channel position")
+                results.append(
+                    {
+                        "channel_id": cid,
+                        "status": "ok",
+                        "new_channel_id": new_channel.id,
+                        "name": name,
+                    }
+                )
+            except discord.Forbidden:
+                results.append({"channel_id": cid, "status": "failed", "reason": "Forbidden to recreate channel."})
+            except discord.HTTPException as exc:
+                results.append({"channel_id": cid, "status": "failed", "reason": f"Create failed: {exc}"})
+
+        return {"results": results}
+
     async def remove_member_roles(self, user_id: int, role_ids: List[int]) -> str:
         guild = await self.get_target_guild()
         member = guild.get_member(user_id)
@@ -1635,6 +1711,23 @@ ADMIN_HTML = """
       <form method="post" action="{{ url_for('run_sync') }}">
         <button type="submit">Run Now</button>
       </form>
+    </div>
+    <div class="box">
+      <h3>Clear Text Channels</h3>
+      <form method="post" action="{{ url_for('clear_channels') }}">
+        <label>Channels (multi-select)
+          <select name="clear_channel_ids" multiple size="8" required>
+            {% for ch in channels %}
+              <option value="{{ ch.id }}">#{{ ch.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Type <code>CLEAR</code> to confirm
+          <input type="text" name="confirm_text" placeholder="CLEAR" required>
+        </label>
+        <button type="submit">Clear Selected Channels</button>
+      </form>
+      <p class="muted">This deletes and recreates the channel(s) with the same name, topic, permissions, and position.</p>
     </div>
   </div>
 </body>
@@ -2090,6 +2183,32 @@ def create_admin_app(bot: TierAdminBot) -> Flask:
             return redirect(url_for("index", error="Script name and code are required."))
         bot.storage.save_script(name, code)
         return redirect(url_for("index", message=f"Script `{name}` saved."))
+
+    @app.post("/clear-channels")
+    def clear_channels():
+        if not _is_authed():
+            return redirect(url_for("login"))
+        channel_ids = request.form.getlist("clear_channel_ids")
+        confirm_text = request.form.get("confirm_text", "").strip()
+        if confirm_text != "CLEAR":
+            return redirect(url_for("index", error="Confirmation text must be CLEAR."))
+        parsed_ids = [int(cid) for cid in channel_ids if str(cid).isdigit()]
+        if not parsed_ids:
+            return redirect(url_for("index", error="Select at least one channel."))
+
+        try:
+            res = asyncio.run_coroutine_threadsafe(
+                bot.clear_text_channels(parsed_ids),
+                bot.loop,
+            ).result(timeout=120)
+            ok = [r for r in res.get("results", []) if r.get("status") == "ok"]
+            failed = [r for r in res.get("results", []) if r.get("status") != "ok"]
+            msg = f"Clear channels done. ok={len(ok)} failed={len(failed)}"
+            if failed:
+                msg += f" failed={failed[:5]}"
+            return redirect(url_for("index", message=msg))
+        except Exception as exc:
+            return redirect(url_for("index", error=f"Clear channels failed: {exc}"))
 
     @app.post("/delete-script")
     def delete_script():
