@@ -442,6 +442,8 @@ class TierAdminBot(commands.Bot):
         self._webhook_cache: Dict[int, int] = {}
         self.storage = AdminStorage(os.getenv("TIER_BOT_STORAGE_PATH", "admin_panel.db"))
         self.last_schedule_run_info = "No schedule runs yet."
+        self._report_user_events: Dict[int, List[float]] = {}
+        self._report_message_events: Dict[int, float] = {}
 
     async def setup_hook(self):
         if not self.guild_id:
@@ -785,6 +787,9 @@ class TierAdminBot(commands.Bot):
         include_reported_message = _env_bool("TIER_BOT_REPORT_INCLUDE_REPORTED_MESSAGE", True)
         include_context_block = _env_bool("TIER_BOT_REPORT_INCLUDE_CONTEXT_BLOCK", True)
         reported_first = _env_bool("TIER_BOT_REPORT_REPORTED_FIRST", False)
+        max_reports_per_hour = _env_int("TIER_BOT_REPORT_MAX_PER_HOUR", 3) or 3
+        cooldown_seconds = _env_int("TIER_BOT_REPORT_COOLDOWN_SECONDS", 10) or 10
+        dedupe_window_seconds = _env_int("TIER_BOT_REPORT_DEDUPE_WINDOW_SECONDS", 3600) or 3600
         return {
             "mod_channel_id": mod_channel_id,
             "allowed_channel_ids": allowed_channel_ids,
@@ -792,6 +797,9 @@ class TierAdminBot(commands.Bot):
             "include_reported_message": include_reported_message,
             "include_context_block": include_context_block,
             "reported_first": reported_first,
+            "max_reports_per_hour": max(1, min(int(max_reports_per_hour), 20)),
+            "cooldown_seconds": max(0, min(int(cooldown_seconds), 300)),
+            "dedupe_window_seconds": max(60, min(int(dedupe_window_seconds), 86400)),
         }
 
     def get_report_config(self) -> Dict[str, Any]:
@@ -828,6 +836,21 @@ class TierAdminBot(commands.Bot):
         include_reported_message = parsed.get("include_reported_message", defaults.get("include_reported_message", True))
         include_context_block = parsed.get("include_context_block", defaults.get("include_context_block", True))
         reported_first = parsed.get("reported_first", defaults.get("reported_first", False))
+        max_reports_per_hour = parsed.get("max_reports_per_hour", defaults.get("max_reports_per_hour", 3))
+        cooldown_seconds = parsed.get("cooldown_seconds", defaults.get("cooldown_seconds", 10))
+        dedupe_window_seconds = parsed.get("dedupe_window_seconds", defaults.get("dedupe_window_seconds", 3600))
+        try:
+            max_reports_per_hour = int(max_reports_per_hour)
+        except Exception:
+            max_reports_per_hour = defaults.get("max_reports_per_hour", 3)
+        try:
+            cooldown_seconds = int(cooldown_seconds)
+        except Exception:
+            cooldown_seconds = defaults.get("cooldown_seconds", 10)
+        try:
+            dedupe_window_seconds = int(dedupe_window_seconds)
+        except Exception:
+            dedupe_window_seconds = defaults.get("dedupe_window_seconds", 3600)
 
         return {
             "mod_channel_id": mod_channel_id,
@@ -836,6 +859,9 @@ class TierAdminBot(commands.Bot):
             "include_reported_message": bool(include_reported_message),
             "include_context_block": bool(include_context_block),
             "reported_first": bool(reported_first),
+            "max_reports_per_hour": max(1, min(int(max_reports_per_hour), 20)),
+            "cooldown_seconds": max(0, min(int(cooldown_seconds), 300)),
+            "dedupe_window_seconds": max(60, min(int(dedupe_window_seconds), 86400)),
         }
 
     def save_report_config(self, config: Dict[str, Any]):
@@ -846,6 +872,9 @@ class TierAdminBot(commands.Bot):
             "include_reported_message": bool(config.get("include_reported_message", True)),
             "include_context_block": bool(config.get("include_context_block", True)),
             "reported_first": bool(config.get("reported_first", False)),
+            "max_reports_per_hour": config.get("max_reports_per_hour", 3),
+            "cooldown_seconds": config.get("cooldown_seconds", 10),
+            "dedupe_window_seconds": config.get("dedupe_window_seconds", 3600),
         }
         self.storage.set_setting("report_config", json.dumps(payload))
 
@@ -958,6 +987,20 @@ class TierAdminBot(commands.Bot):
             chunks.append("\n".join(current))
         return chunks
 
+    def _prune_report_events(self, now_ts: float, window_seconds: int, dedupe_window_seconds: int):
+        cutoff = now_ts - window_seconds
+        for uid, events in list(self._report_user_events.items()):
+            trimmed = [ts for ts in events if ts >= cutoff]
+            if trimmed:
+                self._report_user_events[uid] = trimmed
+            else:
+                self._report_user_events.pop(uid, None)
+
+        dedupe_cutoff = now_ts - dedupe_window_seconds
+        for mid, ts in list(self._report_message_events.items()):
+            if ts < dedupe_cutoff:
+                self._report_message_events.pop(mid, None)
+
     def _format_report_line(self, msg: discord.Message) -> str:
         ts = msg.created_at.strftime("%Y-%m-%d %H:%M UTC")
         author = f"{msg.author} ({msg.author.id})"
@@ -1017,6 +1060,30 @@ class TierAdminBot(commands.Bot):
             await message.reply("Report system is not configured. Ask a mod to set it up.")
             return
 
+        now_ts = time.time()
+        window_seconds = 3600
+        max_reports_per_hour = int(config.get("max_reports_per_hour") or 3)
+        cooldown_seconds = int(config.get("cooldown_seconds") or 0)
+        dedupe_window_seconds = int(config.get("dedupe_window_seconds") or 3600)
+        self._prune_report_events(now_ts, window_seconds, dedupe_window_seconds)
+
+        user_events = self._report_user_events.get(message.author.id, [])
+        if user_events:
+            last_ts = user_events[-1]
+            since_last = now_ts - last_ts
+            if cooldown_seconds > 0 and since_last < cooldown_seconds:
+                wait_s = int(cooldown_seconds - since_last)
+                await message.reply(f"Please wait {wait_s}s before sending another report.")
+                return
+
+        if len(user_events) >= max_reports_per_hour:
+            await message.reply("You’ve reached the report limit for now. Please try again later.")
+            return
+
+        if target.id in self._report_message_events:
+            await message.reply("That message has already been reported. Thank you for looking out.")
+            return
+
         guild = await self.get_target_guild()
         mod_channel = guild.get_channel(mod_channel_id)
         if mod_channel is None:
@@ -1046,11 +1113,13 @@ class TierAdminBot(commands.Bot):
             mention_token = message.mentions[0].mention
             report_reason = report_reason.replace(mention_token, "").strip()
         header = [
-            "New report received",
+            "Report received",
+            f"Time: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
             f"Reporter: {message.author} ({message.author.id})",
             f"Reported user: {target.author} ({target.author.id})",
             f"Channel: {message.channel.mention}",
             f"Message link: {target.jump_url}",
+            f"Message ID: {target.id}",
         ]
         if report_reason:
             header.append(f"Reason: {report_reason}")
@@ -1061,8 +1130,11 @@ class TierAdminBot(commands.Bot):
                 reported_content = "<no content>"
             reported_attachments = "\n".join(a.url for a in (target.attachments or []) if a.url)
             reported_block = (
-                f"Reported message from {target.author} ({target.author.id}):\n"
-                f"{reported_content}\n"
+                "Reported message:\n"
+                f"Author: {target.author} ({target.author.id})\n"
+                f"Time: {target.created_at.strftime('%Y-%m-%d %H:%M UTC')}\n"
+                f"Link: {target.jump_url}\n"
+                f"Content: {reported_content}\n"
                 f"{reported_attachments}".rstrip()
             )
             return [reported_block]
@@ -1092,7 +1164,16 @@ class TierAdminBot(commands.Bot):
             for chunk in self._chunk_text(block, 1800):
                 await mod_channel.send(chunk)
 
-        await message.reply("Report sent to moderators. Thank you.")
+        user_events.append(now_ts)
+        self._report_user_events[message.author.id] = user_events
+        self._report_message_events[target.id] = now_ts
+        remaining = max(0, max_reports_per_hour - len(user_events))
+
+        gentle_note = (
+            "Thanks for helping keep the community safe. "
+            "Please use reports thoughtfully so moderators can focus on urgent issues."
+        )
+        await message.reply(f"Report sent to moderators. {gentle_note} You have {remaining} report(s) left this hour.")
 
     async def on_message(self, message: discord.Message):
         if message.author.bot:
@@ -1494,6 +1575,15 @@ ADMIN_HTML = """
         </label>
         <label>Context Messages (0-20)
           <input type="number" name="report_context_count" min="0" max="20" value="{{ report_config.context_count }}">
+        </label>
+        <label>Reports Per User / Hour (1-20)
+          <input type="number" name="report_max_per_hour" min="1" max="20" value="{{ report_config.max_reports_per_hour }}">
+        </label>
+        <label>Cooldown Between Reports (seconds, 0-300)
+          <input type="number" name="report_cooldown_seconds" min="0" max="300" value="{{ report_config.cooldown_seconds }}">
+        </label>
+        <label>Dedupe Window (seconds, 60-86400)
+          <input type="number" name="report_dedupe_window_seconds" min="60" max="86400" value="{{ report_config.dedupe_window_seconds }}">
         </label>
         <label><input type="checkbox" name="report_include_context_block" value="1" {% if report_config.include_context_block %}checked{% endif %}> Include Context Block</label>
         <label><input type="checkbox" name="report_include_reported_message" value="1" {% if report_config.include_reported_message %}checked{% endif %}> Include Reported Message</label>
@@ -1937,6 +2027,9 @@ def create_admin_app(bot: TierAdminBot) -> Flask:
         mod_channel_id = request.form.get("report_mod_channel_id", "").strip()
         allowed_ids = request.form.getlist("report_channel_ids")
         context_count = request.form.get("report_context_count", "5").strip()
+        max_per_hour = request.form.get("report_max_per_hour", "3").strip()
+        cooldown_seconds = request.form.get("report_cooldown_seconds", "10").strip()
+        dedupe_window_seconds = request.form.get("report_dedupe_window_seconds", "3600").strip()
         include_context_block = request.form.get("report_include_context_block") == "1"
         include_reported_message = request.form.get("report_include_reported_message") == "1"
         reported_first = request.form.get("report_reported_first") == "1"
@@ -1956,12 +2049,30 @@ def create_admin_app(bot: TierAdminBot) -> Flask:
         except Exception:
             context_val = 5
         context_val = max(0, min(context_val, 20))
+        try:
+            max_per_hour_val = int(max_per_hour)
+        except Exception:
+            max_per_hour_val = 3
+        max_per_hour_val = max(1, min(max_per_hour_val, 20))
+        try:
+            cooldown_val = int(cooldown_seconds)
+        except Exception:
+            cooldown_val = 10
+        cooldown_val = max(0, min(cooldown_val, 300))
+        try:
+            dedupe_val = int(dedupe_window_seconds)
+        except Exception:
+            dedupe_val = 3600
+        dedupe_val = max(60, min(dedupe_val, 86400))
 
         bot.save_report_config(
             {
                 "mod_channel_id": int(mod_channel_id),
                 "allowed_channel_ids": parsed_allowed,
                 "context_count": context_val,
+                "max_reports_per_hour": max_per_hour_val,
+                "cooldown_seconds": cooldown_val,
+                "dedupe_window_seconds": dedupe_val,
                 "include_context_block": include_context_block,
                 "include_reported_message": include_reported_message,
                 "reported_first": reported_first,
