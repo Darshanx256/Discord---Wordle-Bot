@@ -101,6 +101,15 @@ class AdminStorage:
                     )
                     """
                 )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
+                )
                 conn.commit()
             finally:
                 conn.close()
@@ -310,6 +319,34 @@ class AdminStorage:
             finally:
                 conn.close()
 
+    def get_setting(self, key: str) -> Optional[str]:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+                return str(row["value"]) if row else None
+            finally:
+                conn.close()
+
+    def set_setting(self, key: str, value: str):
+        now = datetime.datetime.utcnow().isoformat()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO settings(key, value, updated_at)
+                    VALUES(?, ?, ?)
+                    ON CONFLICT(key) DO UPDATE SET
+                        value=excluded.value,
+                        updated_at=excluded.updated_at
+                    """,
+                    (key, value, now),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
 
 @dataclass(frozen=True)
 class TierRole:
@@ -381,6 +418,7 @@ class TierAdminBot(commands.Bot):
         intents = discord.Intents.default()
         intents.guilds = True
         intents.members = True
+        intents.message_content = True
 
         super().__init__(command_prefix=[], intents=intents, max_messages=25)
 
@@ -729,6 +767,88 @@ class TierAdminBot(commands.Bot):
         for uid in expired:
             self.pending_login_codes.pop(uid, None)
 
+    def _parse_csv_ids(self, raw: str) -> List[int]:
+        if not raw:
+            return []
+        ids: List[int] = []
+        for part in raw.split(","):
+            value = part.strip()
+            if value.isdigit():
+                ids.append(int(value))
+        return ids
+
+    def _default_report_config(self) -> Dict[str, Any]:
+        mod_channel_id = _env_int("TIER_BOT_REPORT_MOD_CHANNEL_ID")
+        allowed_raw = os.getenv("TIER_BOT_REPORT_ALLOWED_CHANNEL_IDS", "")
+        allowed_channel_ids = self._parse_csv_ids(allowed_raw)
+        context_count = _env_int("TIER_BOT_REPORT_CONTEXT_COUNT", 5) or 5
+        include_reported_message = _env_bool("TIER_BOT_REPORT_INCLUDE_REPORTED_MESSAGE", True)
+        include_context_block = _env_bool("TIER_BOT_REPORT_INCLUDE_CONTEXT_BLOCK", True)
+        reported_first = _env_bool("TIER_BOT_REPORT_REPORTED_FIRST", False)
+        return {
+            "mod_channel_id": mod_channel_id,
+            "allowed_channel_ids": allowed_channel_ids,
+            "context_count": max(0, min(int(context_count), 20)),
+            "include_reported_message": include_reported_message,
+            "include_context_block": include_context_block,
+            "reported_first": reported_first,
+        }
+
+    def get_report_config(self) -> Dict[str, Any]:
+        raw = self.storage.get_setting("report_config")
+        if not raw:
+            return self._default_report_config()
+        try:
+            parsed = json.loads(raw)
+            if not isinstance(parsed, dict):
+                return self._default_report_config()
+        except Exception:
+            return self._default_report_config()
+
+        defaults = self._default_report_config()
+        mod_channel_id = parsed.get("mod_channel_id")
+        if isinstance(mod_channel_id, str) and mod_channel_id.isdigit():
+            mod_channel_id = int(mod_channel_id)
+        if not isinstance(mod_channel_id, int):
+            mod_channel_id = defaults.get("mod_channel_id")
+
+        allowed_channel_ids = parsed.get("allowed_channel_ids", defaults.get("allowed_channel_ids", []))
+        if isinstance(allowed_channel_ids, str):
+            allowed_channel_ids = self._parse_csv_ids(allowed_channel_ids)
+        if not isinstance(allowed_channel_ids, list):
+            allowed_channel_ids = defaults.get("allowed_channel_ids", [])
+        allowed_channel_ids = [int(cid) for cid in allowed_channel_ids if isinstance(cid, int) or str(cid).isdigit()]
+
+        context_count = parsed.get("context_count", defaults.get("context_count", 5))
+        try:
+            context_count = int(context_count)
+        except Exception:
+            context_count = defaults.get("context_count", 5)
+
+        include_reported_message = parsed.get("include_reported_message", defaults.get("include_reported_message", True))
+        include_context_block = parsed.get("include_context_block", defaults.get("include_context_block", True))
+        reported_first = parsed.get("reported_first", defaults.get("reported_first", False))
+
+        return {
+            "mod_channel_id": mod_channel_id,
+            "allowed_channel_ids": allowed_channel_ids,
+            "context_count": max(0, min(int(context_count), 20)),
+            "include_reported_message": bool(include_reported_message),
+            "include_context_block": bool(include_context_block),
+            "reported_first": bool(reported_first),
+        }
+
+    def save_report_config(self, config: Dict[str, Any]):
+        payload = {
+            "mod_channel_id": config.get("mod_channel_id"),
+            "allowed_channel_ids": config.get("allowed_channel_ids", []),
+            "context_count": config.get("context_count", 5),
+            "include_reported_message": bool(config.get("include_reported_message", True)),
+            "include_context_block": bool(config.get("include_context_block", True)),
+            "reported_first": bool(config.get("reported_first", False)),
+        }
+        self.storage.set_setting("report_config", json.dumps(payload))
+
     async def list_text_channels(self) -> List[discord.TextChannel]:
         now = time.time()
         ts, cached = self._channel_cache
@@ -737,7 +857,13 @@ class TierAdminBot(commands.Bot):
 
         guild = await self.get_target_guild()
         me = guild.me or guild.get_member(self.user.id if self.user else 0)
-        channels = [c for c in guild.text_channels if me and c.permissions_for(me).send_messages]
+        channels = [c for c in guild.text_channels if me and c.permissions_for(me).view_channel]
+        rules_channel = getattr(guild, "rules_channel", None)
+        if rules_channel and rules_channel not in channels and me and rules_channel.permissions_for(me).view_channel:
+            channels.append(rules_channel)
+        updates_channel = getattr(guild, "public_updates_channel", None)
+        if updates_channel and updates_channel not in channels and me and updates_channel.permissions_for(me).view_channel:
+            channels.append(updates_channel)
         channels.sort(key=lambda c: c.position)
         self._channel_cache = (now, channels)
         return channels
@@ -772,6 +898,9 @@ class TierAdminBot(commands.Bot):
         channel = guild.get_channel(channel_id)
         if channel is None or not isinstance(channel, discord.TextChannel):
             raise ValueError("Invalid text channel.")
+        me = guild.me or guild.get_member(self.user.id if self.user else 0)
+        if me and not channel.permissions_for(me).send_messages:
+            raise ValueError(f"Bot lacks send_messages in #{channel.name}.")
 
         mode = (sender_mode or "").strip().lower()
         if mode not in {"me", "bot", "custom"}:
@@ -809,6 +938,167 @@ class TierAdminBot(commands.Bot):
             wait=True,
         )
         return f"Message relayed to #{channel.name} as {sender_name}."
+
+    def _chunk_text(self, text: str, limit: int = 1800) -> List[str]:
+        if len(text) <= limit:
+            return [text]
+        chunks: List[str] = []
+        current: List[str] = []
+        size = 0
+        for line in text.splitlines():
+            line_len = len(line) + 1
+            if size + line_len > limit and current:
+                chunks.append("\n".join(current))
+                current = [line]
+                size = len(line)
+            else:
+                current.append(line)
+                size += line_len
+        if current:
+            chunks.append("\n".join(current))
+        return chunks
+
+    def _format_report_line(self, msg: discord.Message) -> str:
+        ts = msg.created_at.strftime("%Y-%m-%d %H:%M UTC")
+        author = f"{msg.author} ({msg.author.id})"
+        content = (msg.content or "").strip().replace("\n", " ")
+        if not content:
+            content = "<no content>"
+        if len(content) > 400:
+            content = f"{content[:400]}…"
+        attachments = ", ".join(a.url for a in (msg.attachments or []) if a.url)
+        line = f"[{ts}] {author}: {content}"
+        if attachments:
+            line += f" | attachments: {attachments}"
+        return line
+
+    async def _handle_report(self, message: discord.Message):
+        content = (message.content or "").strip()
+        if not content.lower().startswith("-report"):
+            return
+
+        config = self.get_report_config()
+        allowed = set(int(cid) for cid in config.get("allowed_channel_ids", []) if isinstance(cid, int))
+        if not allowed or message.channel.id not in allowed:
+            return
+
+        target = None
+        if message.reference and message.reference.message_id:
+            if isinstance(message.reference.resolved, discord.Message):
+                target = message.reference.resolved
+            if target is None:
+                try:
+                    target = await message.channel.fetch_message(message.reference.message_id)
+                except discord.HTTPException:
+                    target = None
+        else:
+            mentioned = message.mentions[0] if message.mentions else None
+            if mentioned is not None:
+                try:
+                    async for msg in message.channel.history(limit=50):
+                        if msg.author.id == mentioned.id and msg.id != message.id:
+                            target = msg
+                            break
+                except discord.Forbidden:
+                    target = None
+                except discord.HTTPException:
+                    target = None
+
+        if target is None:
+            await message.reply("Reply to the message you want to report or mention a user after `-report`.")
+            return
+
+        if target is None:
+            await message.reply("Unable to fetch the message being reported.")
+            return
+
+        mod_channel_id = config.get("mod_channel_id")
+        if not isinstance(mod_channel_id, int):
+            await message.reply("Report system is not configured. Ask a mod to set it up.")
+            return
+
+        guild = await self.get_target_guild()
+        mod_channel = guild.get_channel(mod_channel_id)
+        if mod_channel is None:
+            try:
+                mod_channel = await guild.fetch_channel(mod_channel_id)
+            except discord.HTTPException:
+                mod_channel = None
+        if mod_channel is None or not isinstance(mod_channel, discord.abc.Messageable):
+            await message.reply("Report mod channel is invalid or not accessible.")
+            return
+
+        context_count = int(config.get("context_count") or 0)
+        context_count = max(0, min(context_count, 20))
+
+        history: List[discord.Message] = []
+        if context_count > 0:
+            try:
+                async for msg in message.channel.history(limit=context_count, before=target, oldest_first=True):
+                    history.append(msg)
+            except discord.Forbidden:
+                pass
+            except discord.HTTPException:
+                pass
+
+        report_reason = content[len("-report"):].strip()
+        if message.mentions:
+            mention_token = message.mentions[0].mention
+            report_reason = report_reason.replace(mention_token, "").strip()
+        header = [
+            "New report received",
+            f"Reporter: {message.author} ({message.author.id})",
+            f"Reported user: {target.author} ({target.author.id})",
+            f"Channel: {message.channel.mention}",
+            f"Message link: {target.jump_url}",
+        ]
+        if report_reason:
+            header.append(f"Reason: {report_reason}")
+
+        def send_reported_message():
+            reported_content = (target.content or "").strip()
+            if not reported_content:
+                reported_content = "<no content>"
+            reported_attachments = "\n".join(a.url for a in (target.attachments or []) if a.url)
+            reported_block = (
+                f"Reported message from {target.author} ({target.author.id}):\n"
+                f"{reported_content}\n"
+                f"{reported_attachments}".rstrip()
+            )
+            return [reported_block]
+
+        def send_context_block():
+            lines = [self._format_report_line(m) for m in history + [target]]
+            body = "\n".join(header + ["", "Context:", *lines])
+            return [body]
+
+        include_reported_message = bool(config.get("include_reported_message", True))
+        include_context_block = bool(config.get("include_context_block", True))
+        reported_first = bool(config.get("reported_first", False))
+
+        blocks: List[str] = []
+        if reported_first:
+            if include_reported_message:
+                blocks.extend(send_reported_message())
+            if include_context_block:
+                blocks.extend(send_context_block())
+        else:
+            if include_context_block:
+                blocks.extend(send_context_block())
+            if include_reported_message:
+                blocks.extend(send_reported_message())
+
+        for block in blocks:
+            for chunk in self._chunk_text(block, 1800):
+                await mod_channel.send(chunk)
+
+        await message.reply("Report sent to moderators. Thank you.")
+
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+        await self._handle_report(message)
+        await self.process_commands(message)
 
     async def bulk_equip_badge(self, user_ids: List[int], badge_name: str, delay_seconds: float = 0.35) -> dict:
         assert self.supabase_client is not None
@@ -1185,6 +1475,34 @@ ADMIN_HTML = """
       </form>
     </div>
     <div class="box">
+      <h3>Reports</h3>
+      <form method="post" action="{{ url_for('save_report_config') }}">
+        <label>Mod Channel
+          <select name="report_mod_channel_id" required>
+            <option value="">(select)</option>
+            {% for ch in channels %}
+              <option value="{{ ch.id }}" {% if report_config.mod_channel_id == ch.id %}selected{% endif %}>#{{ ch.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Allowed Channels (multi-select)
+          <select name="report_channel_ids" multiple size="8">
+            {% for ch in channels %}
+              <option value="{{ ch.id }}" {% if ch.id in report_config.allowed_channel_ids %}selected{% endif %}>#{{ ch.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Context Messages (0-20)
+          <input type="number" name="report_context_count" min="0" max="20" value="{{ report_config.context_count }}">
+        </label>
+        <label><input type="checkbox" name="report_include_context_block" value="1" {% if report_config.include_context_block %}checked{% endif %}> Include Context Block</label>
+        <label><input type="checkbox" name="report_include_reported_message" value="1" {% if report_config.include_reported_message %}checked{% endif %}> Include Reported Message</label>
+        <label><input type="checkbox" name="report_reported_first" value="1" {% if report_config.reported_first %}checked{% endif %}> Reported Message First</label>
+        <button type="submit">Save Report Settings</button>
+      </form>
+      <p class="muted">Users can reply with <code>-report</code> in allowed channels.</p>
+    </div>
+    <div class="box">
       <h3>Task Scripts</h3>
       <form method="post" action="{{ url_for('save_script') }}">
         <label>Script Name <input type="text" name="name" required></label>
@@ -1336,12 +1654,14 @@ def create_admin_app(bot: TierAdminBot) -> Flask:
         templates = bot.storage.list_templates()
         schedules = bot.storage.list_schedules()
         scripts = bot.storage.list_scripts()
+        report_config = bot.get_report_config()
         return render_template_string(
             ADMIN_HTML,
             channels=channels,
             templates=templates,
             schedules=schedules,
             scripts=scripts,
+            report_config=report_config,
             message=message,
             error=error,
             lookup_user_id=lookup_user_id,
@@ -1609,6 +1929,45 @@ def create_admin_app(bot: TierAdminBot) -> Flask:
             return redirect(url_for("index", message=msg))
         except Exception as exc:
             return redirect(url_for("index", error=f"Bulk badge failed: {exc}"))
+
+    @app.post("/report-config")
+    def save_report_config():
+        if not _is_authed():
+            return redirect(url_for("login"))
+        mod_channel_id = request.form.get("report_mod_channel_id", "").strip()
+        allowed_ids = request.form.getlist("report_channel_ids")
+        context_count = request.form.get("report_context_count", "5").strip()
+        include_context_block = request.form.get("report_include_context_block") == "1"
+        include_reported_message = request.form.get("report_include_reported_message") == "1"
+        reported_first = request.form.get("report_reported_first") == "1"
+
+        if not mod_channel_id.isdigit():
+            return redirect(url_for("index", error="Report mod channel is required."))
+
+        parsed_allowed: List[int] = []
+        for cid in allowed_ids:
+            if str(cid).isdigit():
+                parsed_allowed.append(int(cid))
+        if not parsed_allowed:
+            return redirect(url_for("index", error="Select at least one allowed report channel."))
+
+        try:
+            context_val = int(context_count)
+        except Exception:
+            context_val = 5
+        context_val = max(0, min(context_val, 20))
+
+        bot.save_report_config(
+            {
+                "mod_channel_id": int(mod_channel_id),
+                "allowed_channel_ids": parsed_allowed,
+                "context_count": context_val,
+                "include_context_block": include_context_block,
+                "include_reported_message": include_reported_message,
+                "reported_first": reported_first,
+            }
+        )
+        return redirect(url_for("index", message="Report settings saved."))
 
     @app.post("/save-script")
     def save_script():
