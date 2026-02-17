@@ -264,14 +264,16 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
         # For hybrid/prefix commands
         await interaction_or_ctx.defer()
 
-    # 3. Secret Selection
+    # 3. Initialize Game with "LOADING" state
     if is_classic:
         if not bot.hard_secrets:
             msg = "❌ Classic word list missing."
             if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
-        secret = await get_next_word_bitset(bot, guild.id, 'classic')
+
+        # LOADING STATE
+        secret = "LOADING"
         
         if hard_mode:
             title = "🛡️ Wordle Started! (HARD MODE)"
@@ -287,12 +289,14 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
             if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
-        secret = await get_next_word_bitset(bot, guild.id, 'simple')
+
+        # LOADING STATE
+        secret = "LOADING"
         title = "✨ Wordle Started! (Simple)"
         color = discord.Color.blue()
         desc = "A simple **5-letter word** has been chosen. **6 attempts** total.\n\n*Tip: Use `/help wordle` for detailed rules!*"
 
-    # 4. Announcement - Add participation line
+    # 4. Announcement
     embed = discord.Embed(title=title, color=color, description=desc)
     embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
     embed.set_footer(text="Everyone in this channel can participate.")
@@ -302,17 +306,36 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
             await interaction_or_ctx.response.send_message(embed=embed)
             msg = await interaction_or_ctx.original_response()
         else:
-            # Button click (already deferred) - send to channel directly (no reply)
             msg = await channel.send(embed=embed)
     else:
         msg = await interaction_or_ctx.send(embed=embed)
 
-    # 5. Initialize
+    # 5. Initialize Game Object
     bot.games[cid] = WordleGame(secret, cid, author, msg.id)
-    bot.games[cid].difficulty = 1 if is_classic else 0 # 0=Simple, 1=Classic
+    bot.games[cid].difficulty = 1 if is_classic else 0
     bot.games[cid].hard_mode = hard_mode
     bot.stopped_games.discard(cid)
-    # print(f"DEBUG: {'Classic ' if is_classic else ''}Game STARTED in {cid}.")
+
+    # 6. Background Validation (Fetch actual word)
+    async def _resolve_secret():
+        try:
+            pool = 'classic' if is_classic else 'simple'
+            # This handles the "1 + 1 extra" logic or "cache hit"
+            real_secret = await get_next_word_bitset(bot, guild.id, pool)
+
+            # Update the existing game object in-place
+            if cid in bot.games:
+                bot.games[cid].secret = real_secret
+                bot.games[cid].secret_set = set(real_secret)
+        except Exception as e:
+            print(f"❌ Failed to resolve secret for {cid}: {e}")
+            # Cleanup if failed
+            if cid in bot.games:
+                bot.games.pop(cid, None)
+                await channel.send("⚠️ Failed to start game (Database Error). Please try again.")
+
+    asyncio.create_task(_resolve_secret())
+
     return bot.games[cid]
 
 
