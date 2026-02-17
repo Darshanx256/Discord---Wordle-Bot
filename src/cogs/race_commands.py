@@ -169,6 +169,8 @@ class RaceCommands(commands.Cog):
         
         # Timer check
         end_desc = ""
+        end_ts = None
+        is_ended = (user_race_session.status == 'finished')
         if user_race_session.end_time:
              end_ts = int(user_race_session.end_time.timestamp())
              is_ended = int(time.time()) >= end_ts or user_race_session.status == 'finished'
