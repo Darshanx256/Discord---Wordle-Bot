@@ -190,7 +190,7 @@ class WordleBot(commands.Bot):
         print("Connecting to Supabase client...")
         try:
             self.supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-            response = self.supabase_client.from_('scores').select('count', count='exact').limit(0).execute()
+            response = self.supabase_client.table('user_stats_v2').select('count', count='exact').limit(0).execute()
             
             if response.data is not None:
                 print("✅ Supabase client ready and tables accessible.")
@@ -316,7 +316,7 @@ class WordleBot(commands.Bot):
                 if self.supabase_client:
                     try:
                         def ping_db_sync():
-                            self.supabase_client.table('scores').select('count', count='exact').limit(0).execute()
+                            self.supabase_client.table('user_stats_v2').select('count', count='exact').limit(0).execute()
                         await asyncio.to_thread(ping_db_sync)
                         print(f"✅ DB Ping Task: Successfully pinged Supabase at {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                     except Exception as e:
