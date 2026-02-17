@@ -41,10 +41,10 @@ class GuessHandler(commands.Cog):
         if header_text:
             desc_parts.append(header_text)
         
-        desc_parts.append(f"**Board:**\n{board}")
+        desc_parts.append(board)
         
         if show_keyboard and keypad:
-            desc_parts.append(f"**Keyboard:**\n{keypad}")
+            desc_parts.append(keypad)
         
         embed.description = "\n\n".join(desc_parts)
         embed.set_footer(text=footer)
@@ -217,11 +217,11 @@ class GuessHandler(commands.Cog):
                         board=board_display,
                         keypad=keypad,
                         footer=format_attempt_footer(game.attempts_used, game.max_attempts),
-                        header_text="",
+                        header_text=f"Guessed `{g_word.upper()}`",
                         show_keyboard=show_kb
                     )
                     embed.set_author(
-                        name=f"{ctx.author.mention} guessed {g_word.upper()}",
+                        name=f"{ctx.author.display_name}",
                         icon_url=ctx.author.display_avatar.url
                     )
                     await ctx.send(embed=embed)
@@ -329,11 +329,11 @@ class GuessHandler(commands.Cog):
                     board=board_display,
                     keypad=keypad,
                     footer=format_attempt_footer(game.attempts_used, game.max_attempts),
-                    header_text="",
+                    header_text=f"Guessed `{g_word.upper()}`",
                     show_keyboard=True
                 )
                 embed.set_author(
-                    name=f"{ctx.author.mention} guessed {g_word.upper()}",
+                    name=f"{ctx.author.display_name}",
                     icon_url=ctx.author.display_avatar.url
                 )
                 await ctx.send(embed=embed)

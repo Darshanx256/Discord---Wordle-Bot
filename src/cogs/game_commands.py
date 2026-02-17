@@ -491,8 +491,9 @@ class GameCommands(commands.Cog):
         if game.history:
             last_guess = (game.history[-1].get('word') or '').upper()
             if last_guess:
+                embed.description = f"Guessed `{last_guess}`\n{board_display}\n\n{keypad}"
                 embed.set_author(
-                    name=f"{ctx.author.mention} guessed {last_guess}",
+                    name=f"{ctx.author.display_name}",
                     icon_url=ctx.author.display_avatar.url
                 )
 

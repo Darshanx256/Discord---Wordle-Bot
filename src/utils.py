@@ -133,7 +133,7 @@ def format_egg_message(egg: str, display_name: str, emojis: dict) -> str:
 
 def format_attempt_footer(attempts_used: int, max_attempts: int) -> str:
     used = max(0, min(attempts_used, max_attempts))
-    filled = "•" * used
+    filled = "●" * used
     empty = "○" * (max_attempts - used)
     return f"Attempt {used}/{max_attempts} [{filled}{empty}]"
 

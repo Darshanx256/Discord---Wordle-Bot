@@ -153,11 +153,11 @@ class RaceLobbyView(ui.View):
         )
         if game.history:
              board_display = "\n".join([f"{h['pattern']}" for h in game.history])
-             embed.description += f"\n\n**Board:**\n{board_display}"
+             embed.description += f"\n\n{board_display}"
              
              # Keypad
              keypad = view.get_markdown_keypad(game.used_letters, interaction.user.id)
-             embed.description += f"\n\n**Keyboard:**\n{keypad}"
+             embed.description += f"\n\n{keypad}"
 
         embed.set_footer(text=f"{game.max_attempts} tries left {progress_bar}")
         
@@ -431,9 +431,10 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
                 color=discord.Color.gold()
             )
             embed.description = (
+                f"{interaction.user.mention} • Guessed - `{guess.upper()}`\n\n"
                 f"{timer_label} <t:{end_ts}:R>\n\n"
-                f"**Board:**\n{board_display}\n\n"
-                f"**Keyboard:**\n{keypad}"
+                f"{board_display}\n\n"
+                f"{keypad}"
             )
             embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
             
