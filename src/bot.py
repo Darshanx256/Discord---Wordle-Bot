@@ -186,7 +186,6 @@ class WordleBot(commands.Bot):
         self._background_tasks['activity'] = asyncio.create_task(self.activity_loop_task())
         self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
         self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
-        self._background_tasks['prefetch'] = asyncio.create_task(self.prefetch_task_loop())
         self._background_tasks['channel_access_cache'] = asyncio.create_task(self.channel_access_cache_task_loop())
         
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
