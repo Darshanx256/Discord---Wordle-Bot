@@ -620,8 +620,8 @@ class HelpView(discord.ui.View):
                 "*Custom Mode lets you craft unique Wordle experiences for any occasion!*"
             )
         
-        elif feature == "integrations":
-            embed = discord.Embed(title="Setup: Discord Integrations", color=discord.Color.blue())
+        elif feature in ("integrations", "Channel Set Up", "channel_setup"):
+            embed = discord.Embed(title="Channel Setup: Discord Integrations", color=discord.Color.blue())
             embed.description = (
                 "Use Discord Integrations to control where Wordle slash commands are available.\n\n"
                 "**Where to Configure:**\n"
@@ -636,7 +636,7 @@ class HelpView(discord.ui.View):
                 "• Requires no extra bot permissions\n\n"
                 "**Important:**\n"
                 "• This setup is optional; the bot works normally without it\n"
-                "• `-g` only works when a game is active in that same channel"
+                "• `-g` works only when a game is active in that same channel"
             )
 
         elif feature == "progression":
@@ -685,5 +685,5 @@ class HelpView(discord.ui.View):
         else:
             embed = discord.Embed(title="❓ Unknown Feature", description="Feature not found.", color=discord.Color.red())
 
-        embed.set_footer(text="Use 'Basic' or 'Show More' to navigate back.")
+        embed.set_footer(text="Use /message to contact the developer")
         return embed
