@@ -620,7 +620,7 @@ class HelpView(discord.ui.View):
                 "*Custom Mode lets you craft unique Wordle experiences for any occasion!*"
             )
         
-        elif feature in ("integrations", "Channel Set Up", "channel_setup"):
+        elif feature == "channel set up":
             embed = discord.Embed(title="Channel Setup: Discord Integrations", color=discord.Color.blue())
             embed.description = (
                 "Use Discord Integrations to control where Wordle slash commands are available.\n\n"
