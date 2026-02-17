@@ -36,7 +36,7 @@ def get_daily_wr_gain(bot: commands.Bot, user_id: int) -> int:
             return total
         return 0
     except Exception as e:
-        # print(f"⚠️ Could not fetch daily WR stats: {e}")
+        print(f"⚠️ DB Error [get_daily_wr_gain] user_id={user_id}: {e}")
         return 0
 
 def get_daily_wins(bot: commands.Bot, user_id: int) -> int:
@@ -54,6 +54,7 @@ def get_daily_wins(bot: commands.Bot, user_id: int) -> int:
             return response.count
         return 0
     except Exception as e:
+        print(f"⚠️ DB Error [get_daily_wins] user_id={user_id}: {e}")
         return 0
 
 def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str, 
@@ -162,7 +163,9 @@ def record_game_v2(bot: commands.Bot, user_id: int, guild_id: int, mode: str,
         return None
         
     except Exception as e:
-        print(f"DB ERROR in record_game_v2: {e}")
+        print(f"❌ DB Error [record_game_v2] user_id={user_id}, mode={mode}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def simulate_record_game(bot: commands.Bot, user_id: int, mode: str, outcome: str, guesses: int, time_taken: float, pre_wr: int, pre_xp: int, pre_daily: int):
@@ -233,7 +236,7 @@ def fetch_user_profile_v2(bot: commands.Bot, user_id: int, use_cache: bool = Tru
             return data
         return None
     except Exception as e:
-        print(f"DB ERROR in fetch_user_profile_v2: {e}")
+        print(f"❌ DB Error [fetch_user_profile_v2] user_id={user_id}: {e}")
         return None
 
 def update_user_stats_manual(bot: commands.Bot, user_id: int, xp_gain: int, wr_delta: int, mode: str = 'MULTI'):
@@ -288,7 +291,7 @@ def update_user_stats_manual(bot: commands.Bot, user_id: int, xp_gain: int, wr_d
         return {'xp': new_xp, 'wr': new_wr}
             
     except Exception as e:
-        print(f"DB ERROR in update_user_stats_manual: {e}")
+        print(f"❌ DB Error [update_user_stats_manual] user_id={user_id}: {e}")
         return None
 
 def fetch_user_profiles_batched(bot: commands.Bot, user_ids: list):
@@ -326,7 +329,7 @@ def fetch_user_profiles_batched(bot: commands.Bot, user_ids: list):
             
         return results
     except Exception as e:
-        print(f"DB ERROR in fetch_user_profiles_batched: {e}")
+        print(f"❌ DB Error [fetch_user_profiles_batched] count={len(user_ids)}: {e}")
         return {}
 
 def trigger_egg(bot: commands.Bot, user_id: int, egg_name: str):
@@ -352,7 +355,7 @@ def trigger_egg(bot: commands.Bot, user_id: int, egg_name: str):
         bot.supabase_client.rpc('record_game_result_v4', params).execute()
         return True
     except Exception as e:
-        print(f"Egg Error: {e}")
+        print(f"❌ DB Error [trigger_egg] user_id={user_id}, egg={egg_name}: {e}")
         return False
 
 # --- BITSET WORD POOL OPTIMIZATION ---
@@ -390,7 +393,7 @@ def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str = 'sim
         return random.choice(pool_list)
         
     except Exception as e:
-        print(f"DB ERROR in get_next_word_bitset: {e}")
+        print(f"❌ DB Error [get_next_word_bitset] guild_id={guild_id}, pool={pool_type}: {e}")
         # Final fallback
         pool = bot.hard_secrets if pool_type == 'classic' else bot.secrets
         return random.choice(pool) if pool else "PANIC"

@@ -157,9 +157,9 @@ class GuessHandler(commands.Cog):
                             else:
                                 masked += EMOJIS.get(f"block_{char_low}_absent", "⬜")
                     lines.append(masked)
-                board_display = "\n".join(lines)
+                board_display = "\n".join([f"{line}" for line in lines])
             else:
-                board_display = "\n".join([h['pattern'] for h in game.history])
+                board_display = "\n".join([f"{h['pattern']}" for h in game.history])
 
             # Fetch player badge (use cached profile - avoids DB hit on every guess)
             active_badge = None
@@ -178,7 +178,7 @@ class GuessHandler(commands.Cog):
             if is_custom:
                 # ========= CUSTOM GAME =========
                 if win:
-                    board_display = "\n".join([h['pattern'] for h in game.history])
+                    board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                     embed = self._build_game_embed(
                         title="🏆 VICTORY!",
                         color=discord.Color.green(),
@@ -192,7 +192,7 @@ class GuessHandler(commands.Cog):
                     await ctx.send(embed=embed)
 
                 elif game_over:
-                    board_display = "\n".join([h['pattern'] for h in game.history])
+                    board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                     reveal_text = f"The word was **{game.secret.upper()}**." if game.reveal_on_loss else "Better luck next time!"
                     embed = self._build_game_embed(
                         title="💀 GAME OVER",
@@ -230,6 +230,9 @@ class GuessHandler(commands.Cog):
                     winner_user = ctx.author
 
                 # 1. Pop from games immediately to prevent double-processing
+                # Use atomic check-and-remove to prevent race conditions
+                if cid not in self.bot.games:
+                    return  # Game already processed by another guess
                 self.bot.games.pop(cid, None)
 
                 # 2. Build and send INSTANT board embed
@@ -250,13 +253,31 @@ class GuessHandler(commands.Cog):
                 )
                 
                 view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False), is_win=True) if game.difficulty in [0, 1] else None
-                await ctx.send(embed=instant_embed, view=view)
+                
+                # Send with retry logic for Discord API resilience
+                for attempt in range(3):
+                    try:
+                        await ctx.send(embed=instant_embed, view=view)
+                        break
+                    except discord.HTTPException as e:
+                        if e.status == 429 and attempt < 2:  # Rate limited
+                            await asyncio.sleep(0.5 * (attempt + 1))
+                        elif attempt == 2:
+                            # Final attempt failed, log and continue
+                            print(f"Failed to send win embed after 3 attempts: {e}")
+                        else:
+                            break
+                    except Exception as e:
+                        print(f"Error sending win embed: {e}")
+                        break
 
                 # 3. Launch background task for rewards/progression
                 asyncio.create_task(self._finish_game_sequence(ctx, game, winner_user, cid, is_win=True, final_time=final_time))
 
             elif game_over:
-                # 1. Pop from games immediately
+                # 1. Pop from games immediately with race condition check
+                if cid not in self.bot.games:
+                    return  # Game already processed
                 self.bot.games.pop(cid, None)
 
                 # 2. Build and send INSTANT board embed
@@ -272,7 +293,22 @@ class GuessHandler(commands.Cog):
                 )
                 
                 view = PlayAgainView(self.bot, is_classic=(game.difficulty == 1), hard_mode=getattr(game, 'hard_mode', False), is_win=False) if game.difficulty in [0, 1] else None
-                await ctx.send(embed=instant_embed, view=view)
+                
+                # Send with retry logic for Discord API resilience
+                for attempt in range(3):
+                    try:
+                        await ctx.send(embed=instant_embed, view=view)
+                        break
+                    except discord.HTTPException as e:
+                        if e.status == 429 and attempt < 2:  # Rate limited
+                            await asyncio.sleep(0.5 * (attempt + 1))
+                        elif attempt == 2:
+                            print(f"Failed to send loss embed after 3 attempts: {e}")
+                        else:
+                            break
+                    except Exception as e:
+                        print(f"Error sending loss embed: {e}")
+                        break
 
                 # 3. Launch background task for rewards/progression
                 asyncio.create_task(self._finish_game_sequence(ctx, game, None, cid, is_win=False))

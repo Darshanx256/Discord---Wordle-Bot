@@ -43,9 +43,9 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="🔗 Important Links",
             value=(
-                "• **Website** — [bit.ly/wordlegamebot](https://bit.ly/wordlegamebot)\n"
-                "• **Privacy Policy** — [Click Here](https://wordle-new.onrender.com/privacy)\n"
-                "• **Terms of Service** — [Click Here](https://wordle-new.onrender.com/tos)\n"
+                "• **Website** -> [bit.ly/wordlegamebot](https://bit.ly/wordlegamebot)\n"
+                "• **Privacy Policy** -> [Click Here](https://wordle-new.onrender.com/privacy)\n"
+                "• **Terms of Service** -> [Click Here](https://wordle-new.onrender.com/tos)\n"
             ),
             inline=False
         )
@@ -53,8 +53,9 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="👨‍💻 Development & Maintenance",
             value=(
-                "• **Oretsu** — Lead Developer & Maintainer\n"
-                "• Inquiries may be directed via `/message` or to `Ortsx256@proton.me`."
+                "• **Oretsu** -> Lead Developer & Maintainer\n"
+                "• Inquiries may be directed via `/message` or to `Ortsx256@proton.me`.\n"
+                "• **Ko-Fi** -> [Click Here](https://ko-fi.com/wordlegamebot)\n"
             ),
             inline=False
         )
@@ -62,9 +63,9 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="🎨 Visual Assets",
             value=(
-                "• **Icons** — Octopus Icon by Whitevector (Flaticon)\n"
-                "• **Easter Egg Assets** — Iconduck; custom badges created via Adobe Photoshop\n"
-                "• **Typography** — Letter icons generated with Python PIL using standardized Unix fonts"
+                "• **Icons** -> Octopus Icon by Whitevector (Flaticon)\n"
+                "• **Easter Egg Assets** -> Iconduck; custom badges created via Adobe Photoshop\n"
+                "• **Typography** -> Letter icons generated with Python PIL using standardized Unix fonts"
             ),
             inline=False
         )
@@ -72,9 +73,9 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="🙏 Data Sources & Inspiration",
             value=(
-                "• **Word Lists** — Contributors at `github.com/dracos` and `github.com/cfreshman`\n"
-                "• **Inspirations** — Wordler Infinity by gherkin21, Mudae tea game\n"
-                "• **Community** — My sincere thanks to all players for your continued support"
+                "• **Word Lists** -> Contributors at `github.com/dracos` and `github.com/cfreshman`\n"
+                "• **Inspirations** -> Wordler Infinity by gherkin21, Mudae tea game\n"
+                "• **Community** -> My sincere thanks to all players for your continued support"
             ),
             inline=False
         )
@@ -82,7 +83,7 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="📖 Linguistic Data",
             value=(
-                "• **British National Corpus (BNC)** — Comprehensive lemma collection provided by `github.com/skywind3000/lemma.en`"
+                "• **British National Corpus (BNC)** -> Comprehensive lemma collection provided by `github.com/skywind3000/lemma.en`"
             ),
             inline=False
         )
@@ -90,14 +91,14 @@ class HelpCommands(commands.Cog):
         embed.add_field(
             name="🛠️ Infrastructure & Technologies",
             value=(
-                "• **discord.py** — API Integration\n"
-                "• **Supabase** — Database Management\n"
-                "• **Assisted Development** — Utilized for code optimization and grammatical refinement"
+                "• **discord.py** -> API Integration\n"
+                "• **Supabase** -> Database Management\n"
+                "• **Assisted Development** -> Utilized for code optimization and grammatical refinement"
             ),
             inline=False
         )
         
-        embed.set_footer(text="Wordle Game Bot - v4.2 • Feature requests are welcomed via the /message command.")
+        embed.set_footer(text="Wordle Game Bot - v4.3 • Feature requests are welcomed via the /message command.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):

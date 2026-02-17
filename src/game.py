@@ -98,19 +98,11 @@ class WordleGame:
         # Ensuring that letters marked 'correct' or 'present' are not in 'absent' 
         self.used_letters['absent'] -= (self.used_letters['correct'] | self.used_letters['present'])
 
-
         # --- Phase 4: Construct the final emoji pattern string ---
         emoji_tags = [""] * 5
         for i in range(5):
             char = guess[i].lower()
             state = state_list[i]
-            
-        # --- Phase 4: Construct the final emoji pattern string ---
-        emoji_tags = [""] * 5
-        for i in range(5):
-            char = guess[i].lower()
-            state = state_list[i]
-            
             emoji_key = f"block_{char}_{state}"
             emoji_tags[i] = EMOJIS.get(emoji_key, char.upper())
 

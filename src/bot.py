@@ -22,6 +22,7 @@ class WordleBot(commands.Bot):
         intents.members = True
 
         super().__init__(command_prefix=self.get_custom_prefix, intents=intents, max_messages=10)
+        self.help_command = None
         self.games = {}
         self.solo_games = {}
         self.custom_games = {}  # Custom mode games
@@ -110,6 +111,8 @@ class WordleBot(commands.Bot):
                     await self.load_extension(f"src.cogs.{cog_name}")
                     print(f"✅ Loaded cog: {cog_name}")
                 except Exception as e:
+                    import traceback
+                    traceback.print_exc()
                     print(f"❌ Failed to load cog {cog_name}: {e}")
 
     async def close(self):
@@ -340,8 +343,9 @@ class WordleBot(commands.Bot):
                         'total_words': len(self.valid_set),
                         'last_updated': datetime.datetime.utcnow().isoformat()
                     }
+                    # Write to project root (static folder removed)
                     stats_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    stats_file = os.path.join(stats_dir, 'static', 'bot_stats.json')
+                    stats_file = os.path.join(stats_dir, 'bot_stats.json')
                     with open(stats_file, 'w') as f:
                         json.dump(stats, f)
                     print(f"📊 Stats updated: {stats['server_count']} servers")
