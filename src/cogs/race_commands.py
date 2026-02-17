@@ -6,6 +6,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import datetime
 import time
+from src.utils import format_attempt_footer
 import asyncio
 from src.race_game import RaceSession
 from src.ui_race import RaceLobbyView, RaceGameView
@@ -159,10 +160,6 @@ class RaceCommands(commands.Cog):
         
         # Recreate the game display
         game = user_race_game
-        filled = "●" * game.attempts_used
-        empty = "○" * (game.max_attempts - game.attempts_used)
-        progress_bar = f"[{filled}{empty}]"
-        
         board_display = "\n".join([f"{h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
         
         # Generate keypad
@@ -181,20 +178,29 @@ class RaceCommands(commands.Cog):
              else:
                  end_desc = f"\nEnds <t:{end_ts}:R>!"
 
-        embed = discord.Embed(
-            title=f"🏁 Race Mode | Attempt {game.attempts_used}/{game.max_attempts}",
-            color=discord.Color.gold()
-        )
+        embed = discord.Embed(color=discord.Color.gold())
         timer_label = "Ended" if is_ended else "Ends"
         
         embed.description = (
-            f"**Racing against {user_race_session.participant_count} players!**\n"
             f"{timer_label} <t:{end_ts}:R>\n\n"
-            f"**Board:**\n{board_display}\n\n"
-            f"**Keyboard:**\n{keypad}"
+            f"{board_display}\n\n"
+            f"{keypad}"
         )
-        embed.set_footer(text=f"{game.max_attempts - game.attempts_used} tries left {progress_bar}")
-        
+        used = max(0, min(game.attempts_used, game.max_attempts))
+        filled = "•" * used
+        empty = "○" * (game.max_attempts - used)
+        bar = f"[{filled}{empty}]"
+        time_text = f"<t:{end_ts}:R>" if end_ts else "N/A"
+        footer = f"{bar} • Players: {user_race_session.participant_count} • Time: {time_text}"
+        embed.set_footer(text=footer)
+        if game.history:
+            last_guess = (game.history[-1].get('word') or '').upper()
+            if last_guess:
+                embed.set_author(
+                    name=f"{interaction.user.mention} guessed {last_guess}",
+                    icon_url=interaction.user.display_avatar.url
+                )
+
         await interaction.response.send_message(
             embed=embed,
             view=view,

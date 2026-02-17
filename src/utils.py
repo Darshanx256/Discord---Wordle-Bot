@@ -103,6 +103,40 @@ def get_win_flavor(attempts):
     }
     return flavors.get(attempts, "")
 
+# --- EASTER EGG DROPS (UNIFORM) ---
+EGG_COOLDOWN_SECONDS = 600
+EGG_ROLL_MAX = 10000
+
+def roll_easter_egg(is_classic: bool, roll: int | None = None) -> str | None:
+    """
+    Uniform egg drop logic with a single roll.
+    Classic: dragon 0.75% (75/10000), candy 1% (100/10000)
+    Simple:  duck   1% (100/10000), candy 1% (100/10000)
+    """
+    r = roll if roll is not None else random.randint(1, EGG_ROLL_MAX)
+    if is_classic:
+        if 1 <= r <= 75:
+            return "dragon"
+        if 76 <= r <= 175:
+            return "candy"
+        return None
+    # Simple pool
+    if 1 <= r <= 100:
+        return "duck"
+    if 101 <= r <= 200:
+        return "candy"
+    return None
+
+def format_egg_message(egg: str, display_name: str, emojis: dict) -> str:
+    egg_emoji = emojis.get(egg, "🎉")
+    return f"{egg_emoji} {display_name} • {egg.title()} found • Added to collection"
+
+def format_attempt_footer(attempts_used: int, max_attempts: int) -> str:
+    used = max(0, min(attempts_used, max_attempts))
+    filled = "•" * used
+    empty = "○" * (max_attempts - used)
+    return f"Attempt {used}/{max_attempts} [{filled}{empty}]"
+
 def calculate_level(xp: int) -> int:
     """Calculates level from total XP. Legacy simple return."""
     lvl, _, _ = get_level_progress(xp)

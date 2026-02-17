@@ -1,41 +1,12 @@
 import discord
-import random
 import datetime # Added for time calc
 from discord import ui
 from src.config import KEYBOARD_LAYOUT, TOP_GG_LINK, TIERS
-from src.utils import EMOJIS, get_win_flavor, get_badge_emoji
+from src.utils import EMOJIS, get_win_flavor, get_badge_emoji, format_attempt_footer
 
 
 def get_markdown_keypad_status(used_letters: dict, bot=None, user_id: int=None, blind_mode=False) -> str:
-    #egg start
     extra_line = ""
-    rng = random.randint(1, 100)
-    if rng == 1:
-        egg = 'duck'
-        egg_emoji = EMOJIS.get('duck', '🦆')
-        extra_line = (
-            f"\n> **{egg_emoji} RARE DUCK OF LUCK SUMMONED! {egg_emoji}**\n"
-            f"> You summoned a RARE Duck of Luck!"
-        )
-        if bot and user_id:
-            import threading
-            from src.database import trigger_egg
-            # Fire-and-forget: run in background thread to avoid blocking
-            threading.Thread(target=lambda: trigger_egg(bot, user_id, egg), daemon=True).start()
-            
-    elif rng <= 2:  
-        eye_emoji = EMOJIS.get('eyes', '👁️') if 'eyes' in EMOJIS else '👁️'
-        extra_line = f"\n> *The letters are watching you...* {eye_emoji}"
-    elif rng <= 3:
-        egg = 'candy'
-        egg_emoji = EMOJIS.get('candy', '🍬')
-        extra_line = f"\n> *Does this keyboard feel sticky to you?* {egg_emoji}"
-        if bot and user_id:
-            import threading
-            from src.database import trigger_egg
-            # Fire-and-forget: run in background thread to avoid blocking
-            threading.Thread(target=lambda: trigger_egg(bot, user_id, egg), daemon=True).start()
-    #egg end
 
     """Generates the stylized keypad using Discord Markdown."""
     output_lines = []
@@ -161,9 +132,13 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
             else:
                 # Ongoing game - board + keyboard in embed description
                 keypad = get_markdown_keypad_status(self.game.used_letters, self.bot, interaction.user.id, blind_mode=self.game.blind_mode)
-                embed = discord.Embed(title=f"Solo Wordle | Attempt {self.game.attempts_used}/{self.game.max_attempts}", color=discord.Color.gold())
-                embed.description = f"**Board:**\n{board_display}\n\n**Keyboard:**\n{keypad}"
-                embed.set_footer(text=f"{self.game.max_attempts - self.game.attempts_used} tries left {progress_bar}")
+                embed = discord.Embed(color=discord.Color.gold())
+                embed.description = f"{board_display}\n\n{keypad}"
+                embed.set_footer(text=format_attempt_footer(self.game.attempts_used, self.game.max_attempts))
+                embed.set_author(
+                    name=f"{interaction.user.mention} guessed {guess.upper()}",
+                    icon_url=interaction.user.display_avatar.url
+                )
                 await interaction.response.edit_message(content="", embed=embed, view=self.view_ref)
             
         except Exception as e:

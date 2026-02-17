@@ -10,7 +10,7 @@ import datetime
 import time
 from src.game import WordleGame
 from src.database import fetch_user_profile_v2
-from src.utils import EMOJIS
+from src.utils import EMOJIS, format_attempt_footer
 from src.ui import SoloView, get_markdown_keypad_status
 from src.handlers.game_logic import start_multiplayer_game
 
@@ -468,11 +468,9 @@ class GameCommands(commands.Cog):
         game = WordleGame(secret, 0, ctx.author, 0)
         self.bot.solo_games[ctx.author.id] = game
 
-        progress_bar = f"[{'○' * game.max_attempts}]"
-
-        embed = discord.Embed(title=f"Solo Wordle | Attempt 0/{game.max_attempts}", color=discord.Color.gold())
+        embed = discord.Embed(color=discord.Color.gold())
         embed.description = "This game is **private**. Only you can see it.\nUse the button below to guess."
-        embed.set_footer(text=f"{game.max_attempts} tries left {progress_bar}")
+        embed.set_footer(text=format_attempt_footer(0, game.max_attempts))
 
         view = SoloView(self.bot, game, ctx.author)
         await ctx.send(embed=embed, view=view, ephemeral=True)
@@ -484,21 +482,22 @@ class GameCommands(commands.Cog):
 
         game = self.bot.solo_games[ctx.author.id]
 
-        filled = "●" * game.attempts_used
-        empty = "○" * (6 - game.attempts_used)
-        progress_bar = f"[{filled}{empty}]"
-
         board_display = "\n".join([f"{h['pattern']}" for h in game.history]) if game.history else "No guesses yet."
         keypad = get_markdown_keypad_status(game.used_letters, self.bot, ctx.author.id, blind_mode=getattr(game, 'blind_mode', False))
 
-        embed = discord.Embed(title=f"Solo Wordle | Attempt {game.attempts_used}/6", color=discord.Color.gold())
-        embed.add_field(name="\u200b", value=board_display, inline=False)
-        embed.set_footer(text=f"{6 - game.attempts_used} tries left {progress_bar}")
-
-        message_content = f"**Keyboard Status:**\n{keypad}"
+        embed = discord.Embed(color=discord.Color.gold())
+        embed.description = f"{board_display}\n\n{keypad}"
+        embed.set_footer(text=format_attempt_footer(game.attempts_used, 6))
+        if game.history:
+            last_guess = (game.history[-1].get('word') or '').upper()
+            if last_guess:
+                embed.set_author(
+                    name=f"{ctx.author.mention} guessed {last_guess}",
+                    icon_url=ctx.author.display_avatar.url
+                )
 
         view = SoloView(self.bot, game, ctx.author)
-        await ctx.send(content=message_content, embed=embed, view=view, ephemeral=True)
+        await ctx.send(embed=embed, view=view, ephemeral=True)
 
     @commands.hybrid_command(name="cancel_solo", description="Cancel your active solo game.")
     async def cancel_solo(self, ctx):

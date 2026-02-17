@@ -8,7 +8,15 @@ import random
 import traceback
 import discord
 from discord.ext import commands
-from src.utils import get_badge_emoji, get_cached_username, EMOJIS
+from src.utils import (
+    get_badge_emoji,
+    get_cached_username,
+    EMOJIS,
+    EGG_COOLDOWN_SECONDS,
+    roll_easter_egg,
+    format_egg_message,
+    format_attempt_footer,
+)
 from src.ui import get_markdown_keypad_status
 from src.handlers.game_logic import handle_game_win, handle_game_loss, PlayAgainView
 from src.database import trigger_egg
@@ -18,13 +26,15 @@ class GuessHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def _build_game_embed(self, title: str, color, board: str, keypad: str, footer: str, 
+    def _build_game_embed(self, title: str | None, color, board: str, keypad: str, footer: str,
                           header_text: str = "", show_keyboard: bool = True) -> discord.Embed:
         """
         Build a unified game embed with board and keyboard in description.
         4096 char limit for description should handle 10 tries + keyboard easily.
         """
-        embed = discord.Embed(title=title, color=color)
+        embed = discord.Embed(color=color)
+        if title:
+            embed.title = title
         
         # Build description with visual separators
         desc_parts = []
@@ -103,32 +113,26 @@ class GuessHandler(commands.Cog):
 
             pat, win, game_over = game.process_turn(g_word, ctx.author)
 
-            # Easter Egg trigger (rate-limited)
+            # Easter Egg trigger (rate-limited, uniform)
             try:
                 now_ts = datetime.datetime.now().timestamp()
                 last = self.bot.egg_cooldowns.get(ctx.author.id, 0)
-                COOLDOWN = 600
-                if now_ts - last >= COOLDOWN:
+                if now_ts - last >= EGG_COOLDOWN_SECONDS:
                     self.bot.egg_cooldowns[ctx.author.id] = now_ts
-                    egg = None
                     is_classic = game.secret in getattr(self.bot, 'hard_secrets', [])
-
-                    if is_classic:
-                        if random.randint(1, 1000) == 1: egg = 'dragon'
-                        elif random.randint(1, 100) == 1: egg = 'candy'
-                    else:
-                        if random.randint(1, 100) == 1: egg = 'duck'
-                        elif random.randint(1, 100) == 1: egg = 'candy'
-
+                    egg = roll_easter_egg(is_classic)
                     if egg:
-                        egg_emoji = EMOJIS.get(egg, '🎉')
                         try:
                             asyncio.create_task(asyncio.to_thread(trigger_egg, self.bot, ctx.author.id, egg))
-                        except: pass
+                        except:
+                            pass
                         try:
-                            await ctx.channel.send(f"{egg_emoji} **{ctx.author.display_name}** found a **{egg.title()}**! Added to collection.")
-                        except: pass
-            except: pass
+                            msg = format_egg_message(egg, ctx.author.display_name, EMOJIS)
+                            await ctx.channel.send(msg)
+                        except:
+                            pass
+            except:
+                pass
 
             # Get keyboard status
             key_blind = game.blind_mode if not (win or game_over) else False
@@ -208,13 +212,17 @@ class GuessHandler(commands.Cog):
 
                 else:
                     embed = self._build_game_embed(
-                        title=f"Attempt {game.attempts_used}/{game.max_attempts}",
+                        title=None,
                         color=discord.Color.gold(),
                         board=board_display,
                         keypad=keypad,
-                        footer=f"{game.max_attempts - game.attempts_used} tries left {progress}",
-                        header_text=f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`",
+                        footer=format_attempt_footer(game.attempts_used, game.max_attempts),
+                        header_text="",
                         show_keyboard=show_kb
+                    )
+                    embed.set_author(
+                        name=f"{ctx.author.mention} guessed {g_word.upper()}",
+                        icon_url=ctx.author.display_avatar.url
                     )
                     await ctx.send(embed=embed)
                 return
@@ -316,13 +324,17 @@ class GuessHandler(commands.Cog):
             else:
                 # Just a turn (REGULAR GAME)
                 embed = self._build_game_embed(
-                    title=f"Attempt {game.attempts_used}/{game.max_attempts}",
+                    title=None,
                     color=discord.Color.gold(),
                     board=board_display,
                     keypad=keypad,
-                    footer=f"{game.max_attempts - game.attempts_used} tries left {progress}",
-                    header_text=f"**{ctx.author.display_name}{badge_str}** guessed: `{g_word.upper()}`",
+                    footer=format_attempt_footer(game.attempts_used, game.max_attempts),
+                    header_text="",
                     show_keyboard=True
+                )
+                embed.set_author(
+                    name=f"{ctx.author.mention} guessed {g_word.upper()}",
+                    icon_url=ctx.author.display_avatar.url
                 )
                 await ctx.send(embed=embed)
                 

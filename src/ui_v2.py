@@ -74,30 +74,28 @@ class ProfileViewV2(ui.View):
         lvl = p.get('level', 1)
         tier = p.get('tier', {})
         tier_name = tier.get('name', 'Unranked')
-        tier_icon = tier.get('icon', '🛡️')
-        
-        # Determine Badge
+        # Determine Badge (minimal)
         badge_prefix = ""
         if p.get('active_badge'):
             badge_full = get_badge_full_display(p['active_badge'])
-            badge_prefix = f"**{badge_full}** • " if badge_full else ""
+            badge_prefix = f"{badge_full} • " if badge_full else ""
 
         embed = discord.Embed(color=discord.Color.dark_theme())
         embed.set_author(name=f"{self.user.display_name}", icon_url=self.user.display_avatar.url)
         
         # Main Header: Badge + Level + Tier
-        embed.description = f"{badge_prefix}**Level {lvl}** • {tier_icon} **{tier_name}**"
+        embed.description = f"{badge_prefix}Level {lvl} • {tier_name}"
 
         # Statistics Section
-        multi_stats = f"📈 WR: **{p['multi_wr']}**\n🏆 Wins: {p['multi_wins']}"
-        solo_stats = f"📈 WR: **{p['solo_wr']}**\n🏆 Wins: {p['solo_wins']}"
+        multi_stats = f"WR: {p['multi_wr']}\nWins: {p['multi_wins']}"
+        solo_stats = f"WR: {p['solo_wr']}\nWins: {p['solo_wins']}"
         embed.add_field(name="Multiplayer", value=multi_stats, inline=True)
         embed.add_field(name="Solo Play", value=solo_stats, inline=True)
 
         # Collection Section
         eggs = p.get('eggs', {})
         if eggs:
-            egg_lines = [f"{k.capitalize()}: {v}x" for k, v in eggs.items()]
+            egg_lines = [f"{k.capitalize()} {v}x" for k, v in eggs.items()]
             embed.add_field(name="Collection", value="\n".join(egg_lines), inline=False)
         else:
             embed.add_field(name="Collection", value="No items found.", inline=False)
