@@ -9,8 +9,26 @@ from discord.ext import commands, tasks
 from supabase import create_client, Client
 
 from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, FULL_WORDS, CLASSIC_FILE, ROTATING_ACTIVITIES
-from src.database import fetch_user_profile_v2, ensure_word_cache
+from src.database import fetch_user_profile_v2, ensure_word_cache, fetch_guild_allowed_channels
 from src.utils import EMOJIS, get_badge_emoji
+
+CHANNEL_ACCESS_CACHE_TTL_SECONDS = 300
+CHANNEL_ACCESS_CACHE_SWEEP_INTERVAL = 24 * 3600
+CHANNEL_ACCESS_INACTIVE_EVICT_SECONDS = 4 * 24 * 3600
+
+# Commands that should be restricted when guild channel setup is configured.
+GAMEPLAY_COMMANDS = {
+    "wordle", "wordle_classic", "hard_mode", "guess", "race", "show_race",
+    "word_rush", "stop_rush", "custom", "stop_game",
+}
+
+# Commands that should always work regardless of channel setup.
+ALWAYS_ALLOWED_COMMANDS = {
+    "help", "about", "profile", "leaderboard", "leaderboard_global",
+    "solo", "show_solo", "cancel_solo",
+    "message", "ping", "shop",
+    "channel_setup",
+}
 
 # ========= BOT SETUP =========
 class WordleBot(commands.Bot):
@@ -40,6 +58,51 @@ class WordleBot(commands.Bot):
         self._background_tasks = {} # Name: Task
         self.send_integration_update_on_boot = False
         self._boot_notice_dispatched = False
+        self.channel_access_cache = {}  # guild_id -> {'channels': set[int], 'configured': bool, 'loaded_at': float, 'last_access': float}
+        self.channel_access_locks = {}  # guild_id -> asyncio.Lock
+
+    def _get_interaction_command_name(self, interaction: discord.Interaction) -> str:
+        cmd = interaction.command
+        cmd_name = getattr(cmd, "name", None)
+        if not cmd_name and interaction.data:
+            cmd_name = interaction.data.get("name")
+        return (cmd_name or "").lower()
+
+    def _touch_channel_access_cache(self, guild_id: int):
+        entry = self.channel_access_cache.get(guild_id)
+        if entry:
+            entry["last_access"] = time.monotonic()
+
+    def _set_channel_access_cache(self, guild_id: int, channels):
+        now = time.monotonic()
+        configured = channels is not None
+        self.channel_access_cache[guild_id] = {
+            "channels": set(channels or []),
+            "configured": configured,
+            "loaded_at": now,
+            "last_access": now,
+        }
+
+    async def _refresh_channel_access_cache(self, guild_id: int):
+        lock = self.channel_access_locks.setdefault(guild_id, asyncio.Lock())
+        async with lock:
+            channels = await fetch_guild_allowed_channels(self, guild_id)
+            self._set_channel_access_cache(guild_id, channels)
+            return self.channel_access_cache[guild_id]
+
+    async def _get_channel_access_entry(self, guild_id: int):
+        now = time.monotonic()
+        entry = self.channel_access_cache.get(guild_id)
+        if entry:
+            self._touch_channel_access_cache(guild_id)
+            # Keep checks fast; refresh stale entries asynchronously.
+            age = now - entry["loaded_at"]
+            if age > CHANNEL_ACCESS_CACHE_TTL_SECONDS:
+                asyncio.create_task(self._refresh_channel_access_cache(guild_id))
+            return entry
+
+        # First interaction for this guild: load once from DB.
+        return await self._refresh_channel_access_cache(guild_id)
 
     def get_custom_prefix(self, bot, message):
         """Only allow '-' as a prefix if it's followed by 'g' (the guess shortcut)."""
@@ -72,12 +135,37 @@ class WordleBot(commands.Bot):
         print(f"⚠️ Command Error in {ctx.command}: {error}")
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Global Ban Check for Slash Commands."""
+        """Global command guard: bans + optional guild channel restrictions for gameplay commands."""
         if interaction.user.id in self.banned_users:
             if not interaction.response.is_done():
                 await interaction.response.send_message("⚠️ You are banned from using this bot.", ephemeral=True)
             return False
-        return True
+
+        if not interaction.guild:
+            return True
+
+        cmd_name = self._get_interaction_command_name(interaction)
+        if not cmd_name or cmd_name in ALWAYS_ALLOWED_COMMANDS:
+            return True
+        if cmd_name not in GAMEPLAY_COMMANDS:
+            return True
+
+        entry = await self._get_channel_access_entry(interaction.guild.id)
+        configured = entry.get("configured", False)
+        if not configured:
+            return True
+
+        allowed_channels = entry.get("channels", set())
+        if interaction.channel_id in allowed_channels:
+            return True
+
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Checking channel setup... this gameplay command is not enabled here.\n"
+                "Use `/channel_setup add #channel` in an allowed admin channel.",
+                ephemeral=True
+            )
+        return False
 
     async def setup_hook(self):
         self.load_local_data()
@@ -98,6 +186,7 @@ class WordleBot(commands.Bot):
         self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
         self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
         self._background_tasks['prefetch'] = asyncio.create_task(self.prefetch_task_loop())
+        self._background_tasks['channel_access_cache'] = asyncio.create_task(self.channel_access_cache_task_loop())
         
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
@@ -423,22 +512,41 @@ class WordleBot(commands.Bot):
                 
         print(f"✅ Word Cache Prefetch completed for all guilds.")
 
+    async def channel_access_cache_task_loop(self):
+        """
+        Every 24 hours, evict channel access cache entries that were inactive for 4 days.
+        """
+        await self.wait_until_ready()
+        interval = CHANNEL_ACCESS_CACHE_SWEEP_INTERVAL
+        next_run = time.monotonic()
+
+        while not self.is_closed():
+            if time.monotonic() >= next_run:
+                now = time.monotonic()
+                stale = []
+                for guild_id, entry in self.channel_access_cache.items():
+                    last_access = entry.get("last_access", entry.get("loaded_at", now))
+                    if now - last_access >= CHANNEL_ACCESS_INACTIVE_EVICT_SECONDS:
+                        stale.append(guild_id)
+
+                for guild_id in stale:
+                    self.channel_access_cache.pop(guild_id, None)
+                    self.channel_access_locks.pop(guild_id, None)
+
+                if stale:
+                    print(f"🧹 Channel access cache evicted {len(stale)} inactive guild entries.")
+                next_run = time.monotonic() + interval
+
+            remaining = next_run - time.monotonic()
+            await asyncio.sleep(min(max(remaining, 1), 3600))
+
 
 # Initialize Bot
 bot = WordleBot()
 
 
-# ========= WELCOME MESSAGE EVENT =========
-@bot.event
-async def on_guild_join(guild):
-    """Send a welcome message when the bot joins a new server."""
-    # Prefill word cache - wait=True is safe here as it's a single guild
-    try:
-        await ensure_word_cache(bot, guild.id, wait=True)
-    except Exception as e:
-        print(f"⚠️ Failed to prefill cache for new guild {guild.id}: {e}")
-
-    # Try to find the best channel to send welcome message
+def _get_announcement_channel(guild: discord.Guild):
+    """Find a suitable channel for optional one-time setup notices."""
     target_channel = None
 
     if guild.system_channel and guild.system_channel.permissions_for(guild.me).send_messages:
@@ -475,10 +583,11 @@ def _build_welcome_embed():
     embed.add_field(
         name="📌 Channel Setup (Optional)",
         value=(
-            "To limit slash commands to specific channels, use Discord Integrations:\n"
-            "`Server Settings -> Integrations -> Wordle Game Bot`\n"
-            "No extra bot permissions are required.\n"
-            "If not configured, the bot still works normally."
+            "No setup is required. The bot works in all channels by default.\n"
+            "Optional setup methods:\n"
+            "• Use `/channel_setup` commands to allow gameplay in specific channels\n"
+            "• Or configure Discord Integrations if that menu is available\n"
+            "`Server Settings -> Integrations -> Wordle Game Bot`"
         ),
         inline=False
     )
@@ -492,11 +601,13 @@ def _build_boot_integration_embed():
         color=discord.Color.blue()
     )
     embed.description = (
-        "A recent update was released based on users feedbacks to make setup easier in large servers.\n\n"
-        "If you want to keep gameplay limited to a few channels, configure Discord Integrations:\n"
-        "`Server Settings -> Integrations -> Wordle Game Bot`\n\n"
-        "This setup is optional and does not require extra bot permissions.\n"
-        "If you skip this setup, the bot will continue working normally."
+        "A recent update made channel control simpler for large servers.\n\n"
+        "Setup is optional. If you skip it, the bot keeps working in all channels.\n\n"
+        "If you want restrictions, use:\n"
+        "• `/channel_setup add #channel`\n"
+        "• `/channel_setup list` and `/channel_setup clear`\n\n"
+        "You can also use Discord Integrations if visible:\n"
+        "`Server Settings -> Integrations -> Wordle Game Bot`"
     )
     embed.set_footer(text="🔇 One-time reminder for this restart")
     return embed
@@ -525,6 +636,11 @@ async def _safe_send_embed(channel: discord.abc.Messageable, embed: discord.Embe
 @bot.event
 async def on_guild_join(guild):
     """Send a welcome message when the bot joins a new server."""
+    try:
+        await ensure_word_cache(bot, guild.id, wait=True)
+    except Exception as e:
+        print(f"⚠️ Failed to prefill cache for new guild {guild.id}: {e}")
+
     target_channel = _get_announcement_channel(guild)
     if target_channel:
         try:

@@ -310,6 +310,7 @@ class HelpView(discord.ui.View):
             "• **Race Mode Guide** -> `/help feature:race`\n"
             "• **Solo Mode Guide** -> `/help feature:solo`\n"
             "• **Custom Mode Guide** -> `/help feature:custom`\n"
+            "• **Bot Setup Guide** -> `/help feature:bot_setup`\n"
             "• **Tiers & Progression** -> `/help feature:progression`"
         ), inline=False)
         
@@ -595,20 +596,22 @@ class HelpView(discord.ui.View):
                 "*Custom Mode lets you craft unique Wordle experiences for any occasion!*"
             )
         
-        elif feature == "channel set up":
-            embed = discord.Embed(title="Channel Setup: Discord Integrations", color=discord.Color.blue())
+        elif feature in {"bot_setup", "integrations", "channel set up"}:
+            embed = discord.Embed(title="Bot Setup (Optional Channel Control)", color=discord.Color.blue())
             embed.description = (
-                "Use Discord Integrations to control where Wordle slash commands are available.\n\n"
-                "**Where to Configure:**\n"
+                "No setup is required. By default, gameplay commands work everywhere.\n\n"
+                "If you want channel restrictions, use `/channel_setup`:\n"
+                "• `/channel_setup add #channel`\n"
+                "• `/channel_setup remove #channel`\n"
+                "• `/channel_setup list`\n"
+                "• `/channel_setup clear`\n\n"
+                "Only admins with **Manage Server** can use these commands.\n\n"
+                "Optional alternative:\n"
+                "You can also configure Discord Integrations when available:\n"
                 "`Server Settings -> Integrations -> Wordle Game Bot`\n\n"
                 "**What to Do Next:**\n"
                 "• Open **Channels** and allow only your preferred game channels\n"
-                "• Optionally adjust **Roles and Members** access\n"
-                "• Test `/wordle` in an allowed and blocked channel\n\n"
-                "**Why use this setup:**\n"
-                "• Keeps large servers cleaner\n"
-                "• Limits bot command usage to selected channels\n"
-                "• Requires no extra bot permissions\n\n"
+                "• Test `/wordle` in allowed and blocked channels\n\n"
                 "**Important:**\n"
                 "• This setup is optional; the bot works normally without it\n"
                 "• `-g` works only when a game is active in that same channel"

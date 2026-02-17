@@ -1,6 +1,7 @@
 import random
 import asyncio
 from discord.ext import commands
+from typing import Optional, Set
 
 from src.config import TIERS, XP_GAINS, XP_LEVELS, MPS_BASE, MPS_EFFICIENCY, MPS_SPEED
 
@@ -14,11 +15,83 @@ import time
 # Bounded cache with auto-eviction: max 1000 profiles, 5-min TTL
 from cachetools import TTLCache
 _PROFILE_CACHE = TTLCache(maxsize=1000, ttl=300)  # Much better than unbounded dict
+_CHANNEL_ACCESS_TABLE = 'guild_channel_access_v1'
 
 # --- WORD CACHE FOR LATENCY OPTIMIZATION ---
 # { guild_id: { 'simple': [idx, ...], 'classic': [idx, ...] } }
 _GUILD_WORD_CACHE = {}
 _GUILD_FETCH_EVENTS = {} # { (guild_id, pool_type): asyncio.Event }
+
+
+async def fetch_guild_allowed_channels(bot: commands.Bot, guild_id: int) -> Optional[Set[int]]:
+    """
+    Returns configured channel IDs for a guild, or None when no explicit setup exists.
+    """
+    try:
+        def _query():
+            return bot.supabase_client.table(_CHANNEL_ACCESS_TABLE) \
+                .select('allowed_channel_ids') \
+                .eq('guild_id', guild_id) \
+                .limit(1) \
+                .execute()
+
+        response = await asyncio.to_thread(_query)
+        if not response.data:
+            return None
+
+        raw_ids = response.data[0].get('allowed_channel_ids') or []
+        parsed = set()
+        for cid in raw_ids:
+            try:
+                parsed.add(int(cid))
+            except Exception:
+                continue
+        return parsed
+    except Exception as e:
+        print(f"⚠️ Channel setup fetch failed [guild={guild_id}]: {e}")
+        return None
+
+
+async def upsert_guild_allowed_channels(bot: commands.Bot, guild_id: int, channel_ids: Set[int]) -> bool:
+    """
+    Upserts guild channel setup. Empty set removes explicit setup row.
+    """
+    try:
+        if not channel_ids:
+            return await clear_guild_allowed_channels(bot, guild_id)
+
+        payload = {
+            'guild_id': guild_id,
+            'allowed_channel_ids': sorted(int(c) for c in channel_ids),
+            'updated_at': datetime.datetime.utcnow().isoformat(),
+        }
+
+        def _upsert():
+            bot.supabase_client.table(_CHANNEL_ACCESS_TABLE).upsert(
+                payload,
+                on_conflict='guild_id'
+            ).execute()
+
+        await asyncio.to_thread(_upsert)
+        return True
+    except Exception as e:
+        print(f"⚠️ Channel setup upsert failed [guild={guild_id}]: {e}")
+        return False
+
+
+async def clear_guild_allowed_channels(bot: commands.Bot, guild_id: int) -> bool:
+    """
+    Deletes explicit setup row so guild falls back to open mode.
+    """
+    try:
+        def _delete():
+            bot.supabase_client.table(_CHANNEL_ACCESS_TABLE).delete().eq('guild_id', guild_id).execute()
+
+        await asyncio.to_thread(_delete)
+        return True
+    except Exception as e:
+        print(f"⚠️ Channel setup clear failed [guild={guild_id}]: {e}")
+        return False
 
 async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, count: int = 2):
     """

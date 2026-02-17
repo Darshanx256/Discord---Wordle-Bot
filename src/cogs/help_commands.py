@@ -18,6 +18,7 @@ class HelpCommands(commands.Cog):
         app_commands.Choice(name="Race Mode", value="race"),
         app_commands.Choice(name="Solo Mode", value="solo"),
         app_commands.Choice(name="Custom Games", value="custom"),
+        app_commands.Choice(name="Bot Setup", value="bot_setup"),
         app_commands.Choice(name="Setup (Integrations)", value="integrations"),
         app_commands.Choice(name="Progression & Tiers", value="progression")
     ])
