@@ -114,39 +114,50 @@ class LeaderboardCommands(commands.Cog):
     @commands.hybrid_command(name="leaderboard_global", description="Global Leaderboard (Multiplayer WR).")
     async def leaderboard_global(self, ctx):
         await ctx.defer()
-        
-        # 1. OPTIMIZATION: Check Cache (1 minute TTL)
+
+        def build_global_top10_embed(results):
+            embed = discord.Embed(title="🌍 Global Top 10", color=discord.Color.purple())
+            lines = []
+            for i, row in enumerate(results, start=1):
+                uid, wins, xp, wr, badge = row
+                tier_icon = "🛡️"
+                for t in TIERS:
+                    if wr >= t['min_wr']:
+                        tier_icon = EMOJIS.get(t['icon'], t['icon'])
+                        break
+                badge_icon = f" {EMOJIS.get(badge, '')}" if badge else ""
+                lines.append(
+                    f"`#{i:02d}` {tier_icon} <@{uid}>{badge_icon} • WR `{wr}` • W `{wins}` • XP `{xp}`"
+                )
+            embed.description = "\n".join(lines) if lines else "No records found."
+            embed.set_footer(text="Cached for 60s")
+            return embed
+
+        # Cache check (60s TTL)
         if self.global_cache and self.global_cache_time:
-             if (datetime.datetime.utcnow() - self.global_cache_time).total_seconds() < 60:
-                 # Verify cache isn't empty
-                 results, total_count = self.global_cache
-                 if results:
-                    data = await fetch_and_format_rankings(results, self.bot)
-                    view = LeaderboardView(self.bot, data, "🌍  Global Top 50", discord.Color.purple(), ctx.author, total_count=total_count)
-                    return await ctx.send(embed=view.create_embed(), view=view)
+            if (datetime.datetime.utcnow() - self.global_cache_time).total_seconds() < 60:
+                cached_results = self.global_cache
+                if cached_results:
+                    return await ctx.send(
+                        embed=build_global_top10_embed(cached_results),
+                        allowed_mentions=discord.AllowedMentions.none()
+                    )
 
         try:
-             # OPTIMIZATION: Fetch Total Count Efficiently
-             # Use a simple count query. explicit select of 1 column + limit 1 is safest.
-            count_res = self.bot.supabase_client.table('user_stats_v2') \
-                .select('user_id', count='exact') \
-                .limit(1) \
-                .execute()
-            total_count = count_res.count if count_res.count is not None else 0
-
+            # Fetch only top 10 for faster response and cleaner output.
             response = self.bot.supabase_client.table('user_stats_v2') \
                 .select('user_id, multi_wins, xp, multi_wr, active_badge') \
                 .order('multi_wr', desc=True) \
-                .limit(50) \
+                .limit(10) \
                 .execute()
 
             if not response.data:
                 return await ctx.send("No records found in global leaderboard.", ephemeral=True)
 
             results = [(r['user_id'], r['multi_wins'], r['xp'], r['multi_wr'], r.get('active_badge')) for r in response.data]
-            
-            # Save to Cache
-            self.global_cache = (results, total_count)
+
+            # Save to cache
+            self.global_cache = results
             self.global_cache_time = datetime.datetime.utcnow()
 
         except Exception as e:
@@ -158,10 +169,10 @@ class LeaderboardCommands(commands.Cog):
         if not results:
             return await ctx.send("No players yet!", ephemeral=True)
 
-        data = await fetch_and_format_rankings(results, self.bot)
-
-        view = LeaderboardView(self.bot, data, "🌍  Global Top 50", discord.Color.purple(), ctx.author, total_count=total_count)
-        await ctx.send(embed=view.create_embed(), view=view)
+        await ctx.send(
+            embed=build_global_top10_embed(results),
+            allowed_mentions=discord.AllowedMentions.none()
+        )
 
 
 async def setup(bot):
