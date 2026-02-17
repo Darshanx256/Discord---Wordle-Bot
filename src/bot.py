@@ -10,6 +10,7 @@ from supabase import create_client, Client
 
 from src.config import SUPABASE_URL, SUPABASE_KEY, SECRET_FILE, VALID_FILE, FULL_WORDS, CLASSIC_FILE, ROTATING_ACTIVITIES
 from src.database import fetch_user_profile_v2, ensure_word_cache, fetch_guild_allowed_channels
+from src.setup_wizard import SetupLauncherView
 from src.utils import EMOJIS, get_badge_emoji
 
 CHANNEL_ACCESS_CACHE_TTL_SECONDS = 300
@@ -56,7 +57,7 @@ class WordleBot(commands.Bot):
         self.supabase_client: Client = None
         self.banned_users = set()  # Banned user IDs
         self._background_tasks = {} # Name: Task
-        self.send_integration_update_on_boot = False
+        self.send_setup_update_on_boot = False
         self._boot_notice_dispatched = False
         self.channel_access_cache = {}  # guild_id -> {'channels': set[int], 'configured': bool, 'loaded_at': float, 'last_access': float}
         self.channel_access_locks = {}  # guild_id -> asyncio.Lock
@@ -585,9 +586,8 @@ def _build_welcome_embed():
         value=(
             "No setup is required. The bot works in all channels by default.\n"
             "Optional setup methods:\n"
-            "• Use `/channel_setup` commands to allow gameplay in specific channels\n"
-            "• Or configure Discord Integrations if that menu is available\n"
-            "`Server Settings -> Integrations -> Wordle Game Bot`"
+            "• Click **Open Setup Wizard** below (interactive multi-channel select)\n"
+            "• Or run `/setup`"
         ),
         inline=False
     )
@@ -595,7 +595,7 @@ def _build_welcome_embed():
     return embed
 
 
-def _build_boot_integration_embed():
+def _build_boot_setup_embed():
     embed = discord.Embed(
         title="🧩 Setup Update",
         color=discord.Color.blue()
@@ -603,11 +603,13 @@ def _build_boot_integration_embed():
     embed.description = (
         "A recent update made channel control simpler for large servers.\n\n"
         "Setup is optional. If you skip it, the bot keeps working in all channels.\n\n"
-        "If you want restrictions, use:\n"
+        "If you want restrictions, use the setup wizard:\n"
+        "• `/setup` (interactive multi-channel select)\n\n"
+        "Command-based fallback:\n"
         "• `/channel_setup add #channel`\n"
-        "• `/channel_setup list` and `/channel_setup clear`\n\n"
-        "You can also use Discord Integrations if visible:\n"
-        "`Server Settings -> Integrations -> Wordle Game Bot`"
+        "• `/channel_setup remove #channel`\n"
+        "• `/channel_setup list`\n"
+        "• `/channel_setup clear`"
     )
     embed.set_footer(text="🔇 One-time reminder for this restart")
     return embed
@@ -644,22 +646,22 @@ async def on_guild_join(guild):
     target_channel = _get_announcement_channel(guild)
     if target_channel:
         try:
-            await target_channel.send(embed=_build_welcome_embed())
+            await target_channel.send(embed=_build_welcome_embed(), view=SetupLauncherView(bot))
         except:
             pass  # Silently fail if we can't send
 
 
 @bot.event
 async def on_ready():
-    """Optional one-time startup reminder for integration setup."""
-    if not bot.send_integration_update_on_boot or bot._boot_notice_dispatched:
+    """Optional one-time startup reminder for bot setup."""
+    if not bot.send_setup_update_on_boot or bot._boot_notice_dispatched:
         return
 
     bot._boot_notice_dispatched = True
-    notice_embed = _build_boot_integration_embed()
+    notice_embed = _build_boot_setup_embed()
     sent_count = 0
 
-    print("📣 Sending one-time integration setup reminder to all servers...")
+    print("📣 Sending one-time setup reminder to all servers...")
     for guild in bot.guilds:
         target_channel = _get_announcement_channel(guild)
         if not target_channel:
@@ -675,12 +677,12 @@ async def on_ready():
     print(f"✅ Startup reminder sent to {sent_count}/{len(bot.guilds)} servers.")
 
 
-def _ask_skip_integration_message() -> bool:
+def _ask_skip_setup_message() -> bool:
     """
-    Ask at startup whether to skip the post-boot integration reminder.
+    Ask at startup whether to skip the post-boot setup reminder.
     Returns True when reminder should be skipped.
     """
-    prompt = "Skip one-time integration setup reminder broadcast after boot? (y/n): "
+    prompt = "Skip one-time setup reminder broadcast after boot? (y/n): "
     try:
         answer = input(prompt).strip().lower()
     except (EOFError, KeyboardInterrupt):
@@ -699,9 +701,9 @@ def main():
         print("❌ DISCORD_TOKEN not set in environment variables.")
         sys.exit(1)
 
-    skip_notice = _ask_skip_integration_message()
-    bot.send_integration_update_on_boot = not skip_notice
-    print(f"ℹ️ Integration reminder broadcast: {'enabled' if not skip_notice else 'skipped'}")
+    skip_notice = _ask_skip_setup_message()
+    bot.send_setup_update_on_boot = not skip_notice
+    print(f"ℹ️ Setup reminder broadcast: {'enabled' if not skip_notice else 'skipped'}")
 
     bot.run(TOKEN)
 

@@ -596,19 +596,18 @@ class HelpView(discord.ui.View):
                 "*Custom Mode lets you craft unique Wordle experiences for any occasion!*"
             )
         
-        elif feature in {"bot_setup", "integrations", "channel set up"}:
+        elif feature == "bot_setup":
             embed = discord.Embed(title="Bot Setup (Optional Channel Control)", color=discord.Color.blue())
             embed.description = (
                 "No setup is required. By default, gameplay commands work everywhere.\n\n"
-                "If you want channel restrictions, use `/channel_setup`:\n"
+                "If you want channel restrictions, open the setup wizard with `/setup`.\n"
+                "The wizard provides an interactive multi-channel select menu.\n\n"
+                "You can still use command-based setup:\n"
                 "• `/channel_setup add #channel`\n"
                 "• `/channel_setup remove #channel`\n"
                 "• `/channel_setup list`\n"
                 "• `/channel_setup clear`\n\n"
                 "Only admins with **Manage Server** can use these commands.\n\n"
-                "Optional alternative:\n"
-                "You can also configure Discord Integrations when available:\n"
-                "`Server Settings -> Integrations -> Wordle Game Bot`\n\n"
                 "**What to Do Next:**\n"
                 "• Open **Channels** and allow only your preferred game channels\n"
                 "• Test `/wordle` in allowed and blocked channels\n\n"
