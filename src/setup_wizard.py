@@ -9,7 +9,7 @@ from src.database import (
 
 def _format_channel_lines(guild: discord.Guild, channel_ids: set[int]) -> str:
     if not channel_ids:
-        return "No channels configured."
+        return "No channels configured. Gameplay commands work in all channels."
     lines = []
     for channel_id in sorted(channel_ids):
         ch = guild.get_channel(channel_id)
@@ -23,7 +23,7 @@ class SetupChannelSelect(discord.ui.ChannelSelect):
             channel_types=[discord.ChannelType.text],
             min_values=1,
             max_values=25,
-            placeholder="Select one or more gameplay channels..."
+            placeholder="Select gameplay channels..."
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -46,17 +46,26 @@ class SetupWizardView(discord.ui.View):
 
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(
-            title="Bot Setup Wizard",
-            color=discord.Color.blurple(),
+            title="Bot Setup • Channel Access",
+            color=discord.Color.dark_teal(),
             description=(
-                "This setup is optional. If you clear setup, gameplay commands work in all channels.\n\n"
-                "**Current Allowed Channels:**\n"
+                "Optional setup. Choose where gameplay commands are allowed.\n\n"
+                "**Current Channels:**\n"
                 f"{_format_channel_lines(self.guild, self.current_channel_ids)}\n\n"
                 "**Pending Selection:**\n"
                 f"{_format_channel_lines(self.guild, self.pending_channel_ids)}"
             )
         )
-        embed.set_footer(text="Select channels, then click Save.")
+        embed.add_field(
+            name="Instructions",
+            value=(
+                "1. Select channels from the dropdown.\n"
+                "2. Click `APPLY` to save.\n"
+                "3. Click `DONE` when finished."
+            ),
+            inline=False
+        )
+        embed.set_footer(text="Timeout: 5 minutes")
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -71,7 +80,7 @@ class SetupWizardView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="Save Selection", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="APPLY", style=discord.ButtonStyle.success, row=1)
     async def save_selection(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.pending_channel_ids:
             await interaction.response.send_message(
@@ -89,7 +98,7 @@ class SetupWizardView(discord.ui.View):
         self.bot._set_channel_access_cache(self.guild.id, self.current_channel_ids)
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
-    @discord.ui.button(label="Clear Setup", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="CLEAR", style=discord.ButtonStyle.danger, row=1)
     async def clear_setup(self, interaction: discord.Interaction, button: discord.ui.Button):
         ok = await clear_guild_allowed_channels(self.bot, self.guild.id)
         if not ok:
@@ -101,13 +110,22 @@ class SetupWizardView(discord.ui.View):
         self.bot._set_channel_access_cache(self.guild.id, None)
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
 
-    @discord.ui.button(label="Refresh", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="REFRESH", style=discord.ButtonStyle.secondary, row=1)
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
         channels = await fetch_guild_allowed_channels(self.bot, self.guild.id)
         self.current_channel_ids = set(channels or set())
         self.pending_channel_ids = set(self.current_channel_ids)
         self.bot._set_channel_access_cache(self.guild.id, channels)
         await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    @discord.ui.button(label="DONE", style=discord.ButtonStyle.primary, row=1)
+    async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for child in self.children:
+            child.disabled = True
+        self.stop()
+        embed = self.build_embed()
+        embed.set_footer(text="Setup complete.")
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 class SetupLauncherView(discord.ui.View):

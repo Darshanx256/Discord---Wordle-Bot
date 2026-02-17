@@ -28,7 +28,7 @@ ALWAYS_ALLOWED_COMMANDS = {
     "help", "about", "profile", "leaderboard", "leaderboard_global",
     "solo", "show_solo", "cancel_solo",
     "message", "ping", "shop",
-    "channel_setup",
+    "setup",
 }
 
 # ========= BOT SETUP =========
@@ -162,8 +162,8 @@ class WordleBot(commands.Bot):
 
         if not interaction.response.is_done():
             await interaction.response.send_message(
-                "Checking channel setup... this gameplay command is not enabled here.\n"
-                "Use `/channel_setup add #channel` in an allowed admin channel.",
+                "This gameplay command is not enabled here.\n"
+                "Use `/setup` to select allowed gameplay channels.",
                 ephemeral=True
             )
         return False
@@ -603,13 +603,8 @@ def _build_boot_setup_embed():
     embed.description = (
         "A recent update made channel control simpler for large servers.\n\n"
         "Setup is optional. If you skip it, the bot keeps working in all channels.\n\n"
-        "If you want restrictions, use the setup wizard:\n"
-        "• `/setup` (interactive multi-channel select)\n\n"
-        "Command-based fallback:\n"
-        "• `/channel_setup add #channel`\n"
-        "• `/channel_setup remove #channel`\n"
-        "• `/channel_setup list`\n"
-        "• `/channel_setup clear`"
+        "If you want restrictions, use:\n"
+        "• `/setup` (interactive multi-channel select)"
     )
     embed.set_footer(text="🔇 One-time reminder for this restart")
     return embed
