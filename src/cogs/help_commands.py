@@ -19,7 +19,8 @@ class HelpCommands(commands.Cog):
         app_commands.Choice(name="Solo Mode", value="solo"),
         app_commands.Choice(name="Custom Games", value="custom"),
         app_commands.Choice(name="Bot Setup", value="bot_setup"),
-        app_commands.Choice(name="Progression & Tiers", value="progression")
+        app_commands.Choice(name="Progression & Tiers", value="progression"),
+        app_commands.Choice(name="Why Legacy Guess Was Removed", value="why_g_removed")
     ])
     async def help_cmd(self, interaction: discord.Interaction, feature: str = None):
         view = HelpView(interaction.user, initial_feature=feature)

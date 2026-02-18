@@ -8,12 +8,26 @@ def load_app_emojis(bot_token=TOKEN, app_id=APP_ID):
     url = f"https://discord.com/api/v10/applications/{app_id}/emojis"
     headers = {"Authorization": f"Bot {bot_token}"}
     try:
-        data = requests.get(url, headers=headers).json()
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
         if "items" not in data:
             print(f"⚠️ Warning: Could not load emojis. Response: {data}")
             return {}
+    except requests.exceptions.Timeout:
+        print(f"⚠️ Emoji API request timed out")
+        return {}
+    except requests.exceptions.ConnectionError as e:
+        print(f"⚠️ Connection error loading emojis: {e}")
+        return {}
+    except requests.exceptions.HTTPError as e:
+        print(f"⚠️ HTTP error loading emojis: {e}")
+        return {}
+    except ValueError as e:
+        print(f"⚠️ Invalid JSON response from emoji API: {e}")
+        return {}
     except Exception as e:
-        print(f"⚠️ Error loading emojis: {e}")
+        print(f"⚠️ Unexpected error loading emojis: {e}")
         return {}
 
     E = {}
@@ -199,7 +213,8 @@ async def get_cached_username(bot, user_id: int, *, allow_cache_write: bool = Tr
         if user:
             bot.name_cache[user_id] = user.display_name
             return user.display_name
-    except:
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
+        # User not found or inaccessible; fall through to ID fallback
         pass
     
     # 4. Fallback
@@ -235,7 +250,7 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
             else:
                 await ctx_or_interaction.interaction.followup.send(content=message, ephemeral=ephemeral)
             return
-        except:
+        except (discord.HTTPException, discord.Forbidden, AttributeError) as e:
             pass
     elif isinstance(ctx_or_interaction, discord.Interaction):
          target_user = target_user or ctx_or_interaction.user
@@ -245,7 +260,7 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
             else:
                 await ctx_or_interaction.followup.send(content=message, ephemeral=ephemeral)
             return
-         except:
+         except (discord.HTTPException, discord.Forbidden) as e:
             pass
             
     # 2. Try DM Fallback for Ephemeral
@@ -261,7 +276,7 @@ async def send_smart_message(ctx_or_interaction, message: str, ephemeral: bool =
             dm_embed.set_footer(text="Wordle Game Bot • Personalized Notification")
             await target_user.send(embed=dm_embed)
             return
-        except:
+        except (discord.Forbidden, discord.HTTPException):
             # If DMs are closed, proceed to channel fallback
             pass
 

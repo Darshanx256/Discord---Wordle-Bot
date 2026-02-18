@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import time
+import datetime
 
 class GeneralCommands(commands.Cog):
     def __init__(self, bot):
@@ -10,26 +11,30 @@ class GeneralCommands(commands.Cog):
 
     @app_commands.command(name="ping", description="Check the bot's latency.")
     async def ping(self, interaction: discord.Interaction):
-        # 1. Capture start time
-        start_time = time.monotonic()
-        
-        # 2. Key Step: Send initial response (this actually triggers the API call we want to measure)
-        # We use defer? No, user wants "says pong".
-        # If we respond, that IS the API call.
-        await interaction.response.send_message("Pong... 🏓", ephemeral=True)
-        
-        # 3. Capture end time
-        end_time = time.monotonic()
-        
-        # 4. Calculate API Latency
-        api_latency_ms = (end_time - start_time) * 1000
-        
-        # 5. Get Websocket Latency (from the bot's heartbeat)
-        ws_latency_ms = round(self.bot.latency * 1000)
-        
-        # 6. Edit the original message to show stats
-        # Note: interaction.edit_original_response is the way to edit the initial response.
-        await interaction.edit_original_response(content=f"Pong! 🏓\n📡 **API Latency:** `{int(api_latency_ms)}ms`\n💓 **WS Latency:** `{ws_latency_ms}ms`")
+        t0 = time.perf_counter()
+        await interaction.response.send_message("Running latency probe...", ephemeral=True)
+        t1 = time.perf_counter()
+
+        t2 = time.perf_counter()
+        ws_latency_ms = self.bot.latency * 1000
+        ack_rtt_ms = (t1 - t0) * 1000
+        now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds")
+        node = interaction.client.user.id if interaction.client and interaction.client.user else "unknown"
+
+        report = (
+            "pong!\n"
+            f"utc          {now_utc}\n"
+            f"node_id      {node}\n"
+            f"gateway_ms   {ws_latency_ms:.2f}\n"
+            f"ack_ms       {ack_rtt_ms:.2f}\n"
+        )
+
+        await interaction.edit_original_response(content=f"```text\n{report}```")
+        t3 = time.perf_counter()
+        edit_rtt_ms = (t3 - t2) * 1000
+
+        report = report + f"edit_ms      {edit_rtt_ms:.2f}\n"
+        await interaction.edit_original_response(content=f"```text\n{report}```")
 
 async def setup(bot):
     await bot.add_cog(GeneralCommands(bot))

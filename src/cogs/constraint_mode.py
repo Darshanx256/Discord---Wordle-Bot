@@ -12,6 +12,8 @@ from src.mechanics.rewards import get_tier_multiplier, apply_anti_grind
 from src.config import TIERS
 #from src.mechanics.streaks import StreakManager
 
+RUSH_TIME_SCALE = 1.20
+
 class ConstraintGame:
     def __init__(self, bot, channel_id, started_by, generator, validation_base_5, combined_dict):
         self.bot = bot
@@ -46,6 +48,7 @@ class ConstraintGame:
         self.local_streaks = {}    # {uid: current_session_streak}
         self.best_local_streaks = {} # {uid: max_session_streak}
         self.round_start_time = 0
+        self.lobby_start_time = time.monotonic()
 
     def add_score(self, user_id, wr_gain):
         if user_id not in self.scores:
@@ -106,7 +109,7 @@ class RushStartView(discord.ui.View):
             try:
                 if self.game.game_msg:
                     await self.game.game_msg.edit(content="⏰ Rush lobby timed out.", view=None)
-            except:
+            except (discord.HTTPException, discord.NotFound, AttributeError):
                 pass
 
 class ConstraintMode(commands.Cog):
@@ -136,6 +139,8 @@ class ConstraintMode(commands.Cog):
         
         if cid in self.bot.games or cid in self.bot.custom_games:
              return await interaction.response.send_message("⚠️ A Wordle game is already active here. Finish it first!", ephemeral=True)
+        if cid in self.bot.race_sessions:
+            return await interaction.response.send_message("⚠️ A race session is already active here. Finish it first!", ephemeral=True)
 
         game = ConstraintGame(self.bot, cid, interaction.user, self.generator, self.validation_base_5, self.combined_dict)
         self.bot.constraint_mode[cid] = game
@@ -145,6 +150,8 @@ class ConstraintMode(commands.Cog):
             description=(
                 "**READ RULES BEFORE THE GAME STARTS**\nFind words matching each linguistic constraint!\n"
                 "Watch the traffic lights for timing guidance.\n\n"
+                "**Guessing Command:**\n"
+                "Use `/g word:xxxxx` during live rounds.\n\n"
                 "**🎯 Scoring**\n"
                 "```\n"
                 "1st place  →  5 Rush Points\n"
@@ -175,39 +182,45 @@ class ConstraintMode(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view)
         lobby_msg = await interaction.original_response()
         game.game_msg = lobby_msg
-        
-        asyncio.create_task(self.run_game_loop(interaction, game))
 
-    @app_commands.command(name="stop_rush", description="Stop the active Word Rush session")
-    @app_commands.guild_only()
-    async def stop_rush(self, interaction: discord.Interaction):
-        cid = interaction.channel_id
+        # Keep handle so /stop_game can cancel immediately.
+        game.round_task = self.bot.spawn_task(self.run_game_loop(interaction, game))
+
+    async def stop_rush_session(self, channel, requester=None):
+        """
+        Unified stop helper for Word Rush.
+        Returns (ok, payload) where payload is an embed or message string.
+        """
+        cid = channel.id
         if cid not in self.bot.constraint_mode:
-            return await interaction.response.send_message("No active Word Rush session here.", ephemeral=True)
-        
+            return False, "No active Word Rush session here."
+
         game = self.bot.constraint_mode[cid]
+        if requester is not None:
+            is_host = requester.id == game.started_by.id
+            is_admin = requester.guild_permissions.manage_messages
+            if not (is_host or is_admin):
+                return False, "❌ Only the host or an admin can stop this Word Rush session."
+
         game.is_running = False
         if game.round_task:
             game.round_task.cancel()
-        
-        # --- FINAL REWARDS & GAME COUNT ---
-        await self.finalize_game_session(game, interaction.channel)
-        
+
+        await self.finalize_game_session(game, channel)
+
+        summary_embed = None
         if game.total_wr_per_user:
             sorted_mvp = sorted(game.total_wr_per_user.items(), key=lambda x: x[1], reverse=True)
             mvp_id, mvp_wr = sorted_mvp[0]
             mvp_name = await get_cached_username(self.bot, mvp_id)
-            
             summary_embed = discord.Embed(
                 title="🏆 Rush Complete",
                 description=f"**Session MVP**\n{mvp_name} • {mvp_wr} Rush Points\n\nThanks for playing!",
                 color=discord.Color.gold()
             )
-            await interaction.response.send_message(embed=summary_embed)
-        else:
-            await interaction.response.send_message("🛑 Word Rush stopped.")
-        
+
         self.bot.constraint_mode.pop(cid, None)
+        return True, (summary_embed if summary_embed is not None else "🛑 Word Rush stopped.")
 
     def format_visual_pattern(self, visual):
         """Convert text pattern to emoji blocks."""
@@ -292,7 +305,7 @@ class ConstraintMode(commands.Cog):
             
             try:
                 await game.game_msg.edit(embed=countdown_embed, view=None)
-            except:
+            except (discord.HTTPException, discord.NotFound):
                 game.game_msg = await channel.send(embed=countdown_embed)
 
             await asyncio.sleep(1.2)
@@ -366,8 +379,6 @@ class ConstraintMode(commands.Cog):
                 
                 has_pattern = bool(visual)
                 is_multi_word = game.active_puzzle.get('multi_word', False)
-                round_duration = 20 if has_pattern or is_multi_word else 12
-                
                 display_text = visual if visual else puzzle_desc
                 
                 # Constant spacing to prevent morphing
@@ -389,7 +400,7 @@ class ConstraintMode(commands.Cog):
                     round_embed.set_author(name=f"Word Rush • Round {game.round_number} of 100")
                 
                 # Rotating footer text
-                base_footer = "Type out your guess" if game.round_number % 2 != 0 else "`/stop_rush` to end"
+                base_footer = "Use `/g word:xxxxx`" if game.round_number % 2 != 0 else "`/stop_game` to end"
                 
                 footer_text = f"{base_footer}!" if not is_multi_word else "Type ALL possible words!"
                 
@@ -402,29 +413,29 @@ class ConstraintMode(commands.Cog):
                 
                 try:
                     if has_pattern or is_multi_word:
-                        await asyncio.sleep(8)
+                        await asyncio.sleep(8 * RUSH_TIME_SCALE)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                         round_embed.color = discord.Color.gold()
                         await msg.edit(embed=round_embed)
                         
-                        await asyncio.sleep(7)
+                        await asyncio.sleep(7 * RUSH_TIME_SCALE)
                         round_embed.set_thumbnail(url=self.signal_urls['red'])
                         round_embed.color = discord.Color.red()
                         await msg.edit(embed=round_embed)
                         
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(5 * RUSH_TIME_SCALE)
                     else:
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(5 * RUSH_TIME_SCALE)
                         round_embed.set_thumbnail(url=self.signal_urls['yellow'])
                         round_embed.color = discord.Color.gold()
                         await msg.edit(embed=round_embed)
                         
-                        await asyncio.sleep(4)
+                        await asyncio.sleep(4 * RUSH_TIME_SCALE)
                         round_embed.set_thumbnail(url=self.signal_urls['red'])
                         round_embed.color = discord.Color.red()
                         await msg.edit(embed=round_embed)
                         
-                        await asyncio.sleep(3)
+                        await asyncio.sleep(3 * RUSH_TIME_SCALE)
                     
                 except asyncio.CancelledError:
                     break
@@ -666,7 +677,7 @@ class ConstraintMode(commands.Cog):
             lines.append(f"{medal} **{user_name}** • {rp_total} pts (+{final_wr} WR){level_up_msg}{tier_up_msg}")
 
             # Log Checkpoint Event (fire-and-forget)
-            asyncio.create_task(asyncio.to_thread(
+            self.bot.spawn_task(asyncio.to_thread(
                 log_event_v1,
                 bot=self.bot,
                 event_type="word_rush_checkpoint",
@@ -688,7 +699,7 @@ class ConstraintMode(commands.Cog):
                 except Exception as e:
                     print(f"Failed to record rewards for {uid}: {e}")
         
-        asyncio.create_task(process_db_updates())
+        self.bot.spawn_task(process_db_updates())
 
         return lines
 
@@ -749,6 +760,151 @@ class ConstraintMode(commands.Cog):
         
         await asyncio.sleep(8)
 
+    async def process_rush_guess(self, *, channel, author, content: str, interaction: discord.Interaction | None = None):
+        """
+        Process a Word Rush guess from slash/modal or message flow.
+        Returns True when the channel is in Word Rush mode (even if guess rejected).
+        """
+        cid = channel.id
+        if cid not in self.bot.constraint_mode:
+            return False
+
+        game = self.bot.constraint_mode[cid]
+        if not game.is_round_active or not game.active_puzzle:
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("⏳ No active Word Rush round right now.", ephemeral=True)
+                else:
+                    await interaction.followup.send("⏳ No active Word Rush round right now.", ephemeral=True)
+            return True
+
+        if author.id not in game.participants:
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("⚠️ Join the rush first before guessing.", ephemeral=True)
+                else:
+                    await interaction.followup.send("⚠️ Join the rush first before guessing.", ephemeral=True)
+            return True
+
+        guess = (content or "").strip().lower()
+        if not guess.isalpha():
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("⚠️ Letters only for Word Rush guesses.", ephemeral=True)
+                else:
+                    await interaction.followup.send("⚠️ Letters only for Word Rush guesses.", ephemeral=True)
+            return True
+
+        puzzle = game.active_puzzle
+        is_five_letter_only = puzzle.get('five_letter_only', False)
+        if is_five_letter_only and len(guess) != 5:
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("⚠️ This round requires a 5-letter word.", ephemeral=True)
+                else:
+                    await interaction.followup.send("⚠️ This round requires a 5-letter word.", ephemeral=True)
+            return True
+
+        valid_dict = game.validation_base_5 if is_five_letter_only else game.combined_dict
+        if guess not in valid_dict:
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(f"⚠️ `{guess.upper()}` is not in the Rush dictionary.", ephemeral=True)
+                else:
+                    await interaction.followup.send(f"⚠️ `{guess.upper()}` is not in the Rush dictionary.", ephemeral=True)
+            return True
+
+        if puzzle.get('multi_word', False):
+            if guess not in puzzle['solutions'] or guess in game.used_words:
+                if interaction is not None:
+                    if not interaction.response.is_done():
+                        await interaction.response.send_message("⚠️ Invalid or already-used word for this bonus round.", ephemeral=True)
+                    else:
+                        await interaction.followup.send("⚠️ Invalid or already-used word for this bonus round.", ephemeral=True)
+                return True
+
+            game.used_words.add(guess)
+            game.participants.add(author.id)
+            if author.id not in game.bonus_collected_words:
+                game.bonus_collected_words[author.id] = []
+            game.bonus_collected_words[author.id].append(guess)
+
+            if interaction is not None:
+                msg = f"✅ Accepted: `{guess.upper()}`"
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(msg, ephemeral=True)
+                else:
+                    await interaction.followup.send(msg, ephemeral=True)
+            return True
+
+        if guess in game.used_words:
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("⚠️ Word already used this session.", ephemeral=True)
+                else:
+                    await interaction.followup.send("⚠️ Word already used this session.", ephemeral=True)
+            return True
+
+        if not puzzle['validator'](guess):
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("❌ Does not satisfy this round's constraint.", ephemeral=True)
+                else:
+                    await interaction.followup.send("❌ Does not satisfy this round's constraint.", ephemeral=True)
+            return True
+
+        if author.id in game.user_answers_this_round:
+            if interaction is not None:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("⏭️ You already answered this round.", ephemeral=True)
+                else:
+                    await interaction.followup.send("⏭️ You already answered this round.", ephemeral=True)
+            return True
+
+        game.used_words.add(guess)
+        game.participants.add(author.id)
+        game.user_answers_this_round[author.id] = guess
+
+        rank = len(game.winners_in_round) + 1
+        game.winners_in_round.append(author.id)
+
+        elapsed = time.monotonic() - game.round_start_time
+        if elapsed < game.fastest_answers.get(author.id, 9999):
+            game.fastest_answers[author.id] = elapsed
+
+        game.local_streaks[author.id] = game.local_streaks.get(author.id, 0) + 1
+        current_streak = game.local_streaks[author.id]
+        if current_streak > game.best_local_streaks.get(author.id, 0):
+            game.best_local_streaks[author.id] = current_streak
+
+        rush_points = 1
+        reaction = "✓"
+        if rank == 1:
+            rush_points = 5
+            reaction = "🥇"
+        elif rank == 2:
+            rush_points = 4
+            reaction = "🥈"
+        elif rank == 3:
+            rush_points = 3
+            reaction = "🥉"
+        elif rank == 4:
+            rush_points = 2
+            reaction = "⭐"
+
+        if game.is_bonus_round:
+            rush_points *= 3
+
+        game.add_score(author.id, rush_points)
+
+        if interaction is not None:
+            msg = f"{reaction} Accepted: `{guess.upper()}` (+{rush_points} pts)"
+            if not interaction.response.is_done():
+                await interaction.response.send_message(msg, ephemeral=True)
+            else:
+                await interaction.followup.send(msg, ephemeral=True)
+        return True
+
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction, user):
         if user.bot:
@@ -765,139 +921,23 @@ class ConstraintMode(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        # Message-content intent is optional; keep slash-only behavior when disabled.
+        if not self.bot.intents.message_content:
+            return
         if message.author.bot:
             return
         cid = message.channel.id
         if cid not in self.bot.constraint_mode:
             return
         
-        game = self.bot.constraint_mode[cid]
-        if not game.is_round_active or not game.active_puzzle:
+        handled = await self.process_rush_guess(
+            channel=message.channel,
+            author=message.author,
+            content=message.content,
+            interaction=None,
+        )
+        if not handled:
             return
-        
-        # Only process messages from participants
-        if message.author.id not in game.participants:
-            return
-        
-        content = message.content.strip().lower()
-        if not content.isalpha():
-            return
-        
-        # Check if word is in valid dictionary
-        puzzle = game.active_puzzle
-        is_five_letter_only = puzzle.get('five_letter_only', False)
-        
-        if is_five_letter_only:
-            if len(content) != 5:
-                return
-            # Use strict 5-letter base dictionary (excludes guesses_common inflections)
-            valid_dict = game.validation_base_5
-        else:
-            # Use combined pool (base 5s + 6+ letter puzzles)
-            valid_dict = game.combined_dict
-        
-        if content not in valid_dict:
-            return
-        
-        # For multi-word bonus rounds
-        if puzzle.get('multi_word', False):
-            if content not in puzzle['solutions']:
-                return
-            
-            if content in game.used_words:
-                return
-            
-            game.used_words.add(content)
-            game.participants.add(message.author.id)
-            
-            if message.author.id not in game.bonus_collected_words:
-                game.bonus_collected_words[message.author.id] = []
-            game.bonus_collected_words[message.author.id].append(content)
-            
-            # Add reaction with retry for rate limit resilience
-            for attempt in range(3):
-                try:
-                    await message.add_reaction("✅")
-                    break
-                except discord.HTTPException as e:
-                    if e.status == 429:  # Rate limited
-                        await asyncio.sleep(0.5 * (attempt + 1))
-                    else:
-                        break
-                except:
-                    break
-            return
-        
-        # Standard rounds
-        if content in game.used_words:
-            return
-        
-        # Optimize: Use the validator function from the puzzle
-        if not puzzle['validator'](content):
-            return
-        
-        # Check if user already answered this round
-        if message.author.id in game.user_answers_this_round:
-            try:
-                await message.add_reaction("⏭️")  # Already answered
-            except:
-                pass
-            return
-        
-        game.used_words.add(content)
-        game.participants.add(message.author.id)
-        game.user_answers_this_round[message.author.id] = content
-        
-        rank = len(game.winners_in_round) + 1
-        game.winners_in_round.append(message.author.id)
-        
-        # --- STATS UPDATE ---
-        elapsed = time.monotonic() - game.round_start_time
-        if elapsed < game.fastest_answers.get(message.author.id, 9999):
-             game.fastest_answers[message.author.id] = elapsed
-        
-        # Streak
-        game.local_streaks[message.author.id] = game.local_streaks.get(message.author.id, 0) + 1
-        current_streak = game.local_streaks[message.author.id]
-        if current_streak > game.best_local_streaks.get(message.author.id, 0):
-            game.best_local_streaks[message.author.id] = current_streak
-
-        # --- RUSH POINTS LOGIC ---
-        # 1st: 5 pts, 2nd: 4 pts, 3rd: 3 pts, 4th: 2 pts, Others: 1 pt
-        rush_points = 1
-        reaction = "✓"
-        
-        if rank == 1:
-            rush_points = 5
-            reaction = "🥇"
-        elif rank == 2:
-            rush_points = 4
-            reaction = "🥈"
-        elif rank == 3:
-            rush_points = 3
-            reaction = "🥉"
-        elif rank == 4:
-            rush_points = 2
-            reaction = "⭐"
-        
-        # Apply bonus multiplier (3x Rush Points)
-        if game.is_bonus_round:
-            rush_points *= 3
-        
-        game.add_score(message.author.id, rush_points)
-        
-        # Add reaction with retry for rate limit resilience
-        for attempt in range(3):
-            try:
-                await message.add_reaction(reaction)
-                break
-            except discord.HTTPException as e:
-                if e.status == 429:  # Rate limited
-                    await asyncio.sleep(0.5 * (attempt + 1))
-                else:
-                    break
-            except:
-                break
 
 async def setup(bot):
     await bot.add_cog(ConstraintMode(bot))

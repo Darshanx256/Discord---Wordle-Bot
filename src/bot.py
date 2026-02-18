@@ -19,8 +19,8 @@ CHANNEL_ACCESS_INACTIVE_EVICT_SECONDS = 4 * 24 * 3600
 
 # Commands that should be restricted when guild channel setup is configured.
 GAMEPLAY_COMMANDS = {
-    "wordle", "wordle_classic", "hard_mode", "guess", "race", "show_race",
-    "word_rush", "stop_rush", "custom", "stop_game",
+    "wordle", "wordle_classic", "hard_mode", "guess", "g", "race", "show_race",
+    "word_rush", "custom", "stop_game",
 }
 
 # Commands that should always work regardless of channel setup.
@@ -34,11 +34,11 @@ ALWAYS_ALLOWED_COMMANDS = {
 # ========= BOT SETUP =========
 class WordleBot(commands.Bot):
     def __init__(self):
-        # We need message_content intent for the -g prefix shortcut
+        # Slash-first bot flow; no prefix guess shortcuts required.
         intents = discord.Intents.default()
-        intents.message_content = True
+        intents.message_content = False
         intents.guilds = True
-        intents.members = True
+        intents.members = False
 
         super().__init__(command_prefix=self.get_custom_prefix, intents=intents, max_messages=10)
         self.help_command = None
@@ -61,6 +61,22 @@ class WordleBot(commands.Bot):
         self._boot_notice_dispatched = False
         self.channel_access_cache = {}  # guild_id -> {'channels': set[int], 'configured': bool, 'loaded_at': float, 'last_access': float}
         self.channel_access_locks = {}  # guild_id -> asyncio.Lock
+
+    @staticmethod
+    def _handle_task_exception(task):
+        """Callback to log uncaught exceptions in create_task calls."""
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            print(f"⚠️ Unhandled exception in background task: {type(e).__name__}: {e}")
+
+    def spawn_task(self, coro):
+        """Create a task with a standard unhandled-exception logger."""
+        task = asyncio.create_task(coro)
+        task.add_done_callback(self._handle_task_exception)
+        return task
 
     def _get_interaction_command_name(self, interaction: discord.Interaction) -> str:
         cmd = interaction.command
@@ -99,27 +115,17 @@ class WordleBot(commands.Bot):
             # Keep checks fast; refresh stale entries asynchronously.
             age = now - entry["loaded_at"]
             if age > CHANNEL_ACCESS_CACHE_TTL_SECONDS:
-                asyncio.create_task(self._refresh_channel_access_cache(guild_id))
+                self.spawn_task(self._refresh_channel_access_cache(guild_id))
             return entry
 
         # First interaction for this guild: load once from DB.
         return await self._refresh_channel_access_cache(guild_id)
 
     def get_custom_prefix(self, bot, message):
-        """Only allow '-' as a prefix if it's followed by 'g' (the guess shortcut)."""
+        """Slash-only bot: disable text prefixes."""
         # Global ban check for prefix commands
         if message.author.id in self.banned_users:
             return []
-
-        content = message.content.lower()
-        if content.startswith("-g ") or content.startswith("-g"):
-            # Only allow if a game is active
-            cid = message.channel.id
-            uid = message.author.id
-            if (cid in self.games) or (cid in self.custom_games) or (uid in self.solo_games):
-                return "-"
-        
-        # No prefix for anything else (makes the bot essentially slash-only except for -g)
         return []
 
     async def on_command_error(self, ctx, error):
@@ -181,12 +187,12 @@ class WordleBot(commands.Bot):
         await self.tree.sync()
         
         # Start refactored background tasks
-        self._background_tasks['cleanup'] = asyncio.create_task(self.cleanup_task_loop())
-        self._background_tasks['db_ping'] = asyncio.create_task(self.db_ping_task_loop())
-        self._background_tasks['activity'] = asyncio.create_task(self.activity_loop_task())
-        self._background_tasks['stats'] = asyncio.create_task(self.stats_update_task_loop())
-        self._background_tasks['name_cache'] = asyncio.create_task(self.smart_name_cache_loop_task())
-        self._background_tasks['channel_access_cache'] = asyncio.create_task(self.channel_access_cache_task_loop())
+        self._background_tasks['cleanup'] = self.spawn_task(self.cleanup_task_loop())
+        self._background_tasks['db_ping'] = self.spawn_task(self.db_ping_task_loop())
+        self._background_tasks['activity'] = self.spawn_task(self.activity_loop_task())
+        self._background_tasks['stats'] = self.spawn_task(self.stats_update_task_loop())
+        self._background_tasks['name_cache'] = self.spawn_task(self.smart_name_cache_loop_task())
+        self._background_tasks['channel_access_cache'] = self.spawn_task(self.channel_access_cache_task_loop())
         
         print(f"✅ Ready! {len(self.secrets)} simple secrets, {len(self.hard_secrets)} classic secrets.")
 
@@ -206,6 +212,11 @@ class WordleBot(commands.Bot):
                     print(f"❌ Failed to load cog {cog_name}: {e}")
 
     async def close(self):
+        for task in self._background_tasks.values():
+            task.cancel()
+        if self._background_tasks:
+            await asyncio.gather(*self._background_tasks.values(), return_exceptions=True)
+        self._background_tasks.clear()
         await super().close()
 
     def load_local_data(self):
@@ -213,40 +224,64 @@ class WordleBot(commands.Bot):
         # Note: Added from config imports for clarity if needed, but they are already global
         from src.config import SECRET_FILE, VALID_FILE, FULL_WORDS, CLASSIC_FILE, RUSH_WILD_FILE
 
-        if os.path.exists(SECRET_FILE):
-            with open(SECRET_FILE, "r", encoding="utf-8") as f:
-                # NOTE: secrets MUST be alphabetically sorted in the file for stable bitset bit-mapping
-                self.secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
-        else:
+        try:
+            if os.path.exists(SECRET_FILE):
+                with open(SECRET_FILE, "r", encoding="utf-8") as f:
+                    # NOTE: secrets MUST be alphabetically sorted in the file for stable bitset bit-mapping
+                    self.secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
+            else:
+                print(f"⚠️ Secret file not found: {SECRET_FILE}")
+                self.secrets = []
+        except IOError as e:
+            print(f"⚠️ Failed to load secrets: {e}")
             self.secrets = []
 
         # 1. Standard valid 5-letter words (Clean for generation)
-        # 1. Standard valid 5-letter words (Clean for generation)
         temp_valid_set = set()
-        if os.path.exists(VALID_FILE):
-            with open(VALID_FILE, "r", encoding="utf-8") as f:
-                temp_valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
+        try:
+            if os.path.exists(VALID_FILE):
+                with open(VALID_FILE, "r", encoding="utf-8") as f:
+                    temp_valid_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
+            else:
+                print(f"⚠️ Valid file not found: {VALID_FILE}")
+        except IOError as e:
+            print(f"⚠️ Failed to load valid set: {e}")
         
         # 2. 'Wild' 5-letter words (Validation/Guessing Only - Excluded from generation)
         self.rush_wild_set = frozenset()
         temp_rush_wild_set = set()
-        if os.path.exists(RUSH_WILD_FILE):
-            with open(RUSH_WILD_FILE, "r", encoding="utf-8") as f:
-                temp_rush_wild_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
+        try:
+            if os.path.exists(RUSH_WILD_FILE):
+                with open(RUSH_WILD_FILE, "r", encoding="utf-8") as f:
+                    temp_rush_wild_set = {w.strip().lower() for w in f if len(w.strip()) == 5}
+            else:
+                print(f"⚠️ Rush wild file not found: {RUSH_WILD_FILE}")
+        except IOError as e:
+            print(f"⚠️ Failed to load rush wild set: {e}")
         self.rush_wild_set = frozenset(temp_rush_wild_set)
 
         # 3. Puzzles pool (6+ letters)
-        if os.path.exists(FULL_WORDS):
-            with open(FULL_WORDS, "r", encoding="utf-8") as f:
-                self.full_dict = frozenset({w.strip().lower() for w in f if len(w.strip()) >= 5})
-        else:
+        try:
+            if os.path.exists(FULL_WORDS):
+                with open(FULL_WORDS, "r", encoding="utf-8") as f:
+                    self.full_dict = frozenset({w.strip().lower() for w in f if len(w.strip()) >= 5})
+            else:
+                print(f"⚠️ Full words file not found: {FULL_WORDS}")
+                self.full_dict = frozenset()
+        except IOError as e:
+            print(f"⚠️ Failed to load full dictionary: {e}")
             self.full_dict = frozenset()
 
-        if os.path.exists(CLASSIC_FILE):
-            with open(CLASSIC_FILE, "r", encoding="utf-8") as f:
-                # NOTE: hard_secrets MUST be alphabetically sorted in the file for stable bitset bit-mapping
-                self.hard_secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
-        else:
+        try:
+            if os.path.exists(CLASSIC_FILE):
+                with open(CLASSIC_FILE, "r", encoding="utf-8") as f:
+                    # NOTE: hard_secrets MUST be alphabetically sorted in the file for stable bitset bit-mapping
+                    self.hard_secrets = [w.strip().lower() for w in f if len(w.strip()) == 5]
+            else:
+                print(f"⚠️ Classic file not found: {CLASSIC_FILE}")
+                self.hard_secrets = []
+        except IOError as e:
+            print(f"⚠️ Failed to load classic secrets: {e}")
             self.hard_secrets = []
 
         # Ensure secrets and hard_secrets are also in the clean valid set
@@ -258,6 +293,8 @@ class WordleBot(commands.Bot):
         
         # Combined 5-letter set for general validation
         self.all_valid_5 = frozenset(temp_valid_set | temp_rush_wild_set)
+        
+        print(f"✅ Loaded word lists: {len(self.secrets)} simple, {len(self.hard_secrets)} classic secrets")
     
     def load_banned_users(self):
         """Load banned user IDs from file."""
@@ -297,16 +334,26 @@ class WordleBot(commands.Bot):
         next_run = time.monotonic()
         
         while not self.is_closed():
-            if time.monotonic() >= next_run:
-                if ROTATING_ACTIVITIES:
-                    act_data = random.choice(ROTATING_ACTIVITIES)
-                    activity = discord.Activity(type=act_data["type"], name=act_data["name"])
-                    await self.change_presence(activity=activity)
-                next_run = time.monotonic() + INTERVAL
-            
-            # Dynamic sleep
-            remaining = next_run - time.monotonic()
-            await asyncio.sleep(min(max(remaining, 1), 60))
+            try:
+                if time.monotonic() >= next_run:
+                    if ROTATING_ACTIVITIES and isinstance(ROTATING_ACTIVITIES, (list, tuple)) and len(ROTATING_ACTIVITIES) > 0:
+                        try:
+                            act_data = random.choice(ROTATING_ACTIVITIES)
+                            if isinstance(act_data, dict) and "type" in act_data and "name" in act_data:
+                                activity = discord.Activity(type=act_data["type"], name=act_data["name"])
+                                await self.change_presence(activity=activity)
+                        except (ValueError, KeyError, discord.InvalidArgument) as e:
+                            print(f"⚠️ Error setting activity: {e}")
+                    next_run = time.monotonic() + INTERVAL
+                
+                # Dynamic sleep
+                remaining = next_run - time.monotonic()
+                await asyncio.sleep(min(max(remaining, 1), 60))
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"⚠️ Activity loop error: {e}")
+                await asyncio.sleep(60)
 
     async def cleanup_task_loop(self):
         """Clean up stale games and solo games."""
@@ -333,7 +380,7 @@ class WordleBot(commands.Bot):
                                 )
                                 await channel.send(embed=embed)
                                 await asyncio.sleep(0.5)
-                        except:
+                        except (discord.HTTPException, discord.Forbidden, AttributeError) as e:
                             pass
 
                 for cid in to_remove:
@@ -372,7 +419,8 @@ class WordleBot(commands.Bot):
                     # Use round_start_time if active, else lobby start time?
                     # We can track 'last_interaction' on game object conceptually or just use start time safety net
                     # Rush can be long (100 rounds), give it generous 2 hours timeout if idle
-                    delta = time.monotonic() - (game.round_start_time if game.round_start_time else 0)
+                    base_time = game.round_start_time if game.round_start_time else getattr(game, "lobby_start_time", time.monotonic())
+                    delta = time.monotonic() - base_time
                     
                     # If game hasn't started (round 0) and it's been > 30 mins (lobby stuck?)
                     is_stuck_lobby = (game.round_number == 0 and delta > 1800)
@@ -578,7 +626,7 @@ def _build_welcome_embed():
         "**Getting Started:**\n"
         "• Use `/help` for full command list and how to play\n"
         "• Start a game with `/wordle`\n"
-        "• Make guesses with `/guess word:xxxxx` or `-g xxxxx`"
+        "• Make guesses with `/guess word:xxxxx` or `/g word:xxxxx`"
     )
     embed.add_field(
         name="📌 Channel Setup (Optional)",
@@ -676,6 +724,14 @@ def _ask_skip_setup_message() -> bool:
     Ask at startup whether to skip the post-boot setup reminder.
     Returns True when reminder should be skipped.
     """
+    env_value = os.getenv("WORDLE_SKIP_SETUP_NOTICE")
+    if env_value is not None:
+        return env_value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+    # Production-safe default for non-interactive runtimes.
+    if not sys.stdin or not sys.stdin.isatty():
+        return True
+
     prompt = "Skip one-time setup reminder broadcast after boot? (y/n): "
     try:
         answer = input(prompt).strip().lower()
@@ -700,10 +756,6 @@ def main():
     print(f"ℹ️ Setup reminder broadcast: {'enabled' if not skip_notice else 'skipped'}")
 
     bot.run(TOKEN)
-
-
-if __name__ == "__main__":
-    main()
 
 
 @bot.tree.command(name="shop", description="Exchange collected items for badges.")
@@ -773,3 +825,7 @@ async def shop(interaction: discord.Interaction):
     embed.add_field(name="Your Inventory", value=f"{duck_emoji} Ducks: {duck_count}\n{dragon_emoji} Dragons: {dragon_count}\n{candy_emoji} Candies: {candy_count}", inline=False)
 
     await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+
+if __name__ == "__main__":
+    main()

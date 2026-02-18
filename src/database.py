@@ -28,6 +28,10 @@ async def fetch_guild_allowed_channels(bot: commands.Bot, guild_id: int) -> Opti
     Returns configured channel IDs for a guild, or None when no explicit setup exists.
     """
     try:
+        # Null check for supabase client
+        if not hasattr(bot, 'supabase_client') or bot.supabase_client is None:
+            return None
+            
         def _query():
             return bot.supabase_client.table(_CHANNEL_ACCESS_TABLE) \
                 .select('allowed_channel_ids') \
@@ -36,7 +40,7 @@ async def fetch_guild_allowed_channels(bot: commands.Bot, guild_id: int) -> Opti
                 .execute()
 
         response = await asyncio.to_thread(_query)
-        if not response.data:
+        if not response or not response.data:
             return None
 
         raw_ids = response.data[0].get('allowed_channel_ids') or []
@@ -44,9 +48,12 @@ async def fetch_guild_allowed_channels(bot: commands.Bot, guild_id: int) -> Opti
         for cid in raw_ids:
             try:
                 parsed.add(int(cid))
-            except Exception:
+            except (ValueError, TypeError):
                 continue
         return parsed
+    except (AttributeError, KeyError) as e:
+        print(f"⚠️ Channel setup fetch failed [guild={guild_id}]: {e}")
+        return None
     except Exception as e:
         print(f"⚠️ Channel setup fetch failed [guild={guild_id}]: {e}")
         return None
@@ -100,6 +107,10 @@ async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, co
     """
     lock_key = (guild_id, pool_type)
     
+    # Null-safety checks
+    if not hasattr(bot, 'supabase_client') or bot.supabase_client is None:
+        return
+    
     # If a fetch is already in progress, wait for it
     if lock_key in _GUILD_FETCH_EVENTS:
         await _GUILD_FETCH_EVENTS[lock_key].wait()
@@ -110,9 +121,9 @@ async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, co
     
     try:
         if pool_type == 'classic':
-            pool_list = bot.hard_secrets
+            pool_list = getattr(bot, 'hard_secrets', [])
         else:
-            pool_list = bot.secrets
+            pool_list = getattr(bot, 'secrets', [])
             
         total_words = len(pool_list)
         if total_words == 0: return
@@ -125,8 +136,11 @@ async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, co
                     'p_total_words': total_words
                 }
                 res = bot.supabase_client.rpc('pick_next_word', params).execute()
-                if res.data is not None:
+                if res and res.data is not None:
                      return int(res.data)
+                return None
+            except (TypeError, ValueError) as e:
+                print(f"⚠️ RPC Fetch Error: {e}")
                 return None
             except Exception as e:
                 print(f"⚠️ RPC Fetch Error: {e}")
@@ -143,6 +157,8 @@ async def fetch_words_batch(bot: commands.Bot, guild_id: int, pool_type: str, co
                 if idx is not None:
                     _GUILD_WORD_CACHE[guild_id][pool_type].append(idx)
                 
+    except (AttributeError, KeyError) as e:
+        print(f"❌ Batch Word Fetch Error [guild={guild_id}, pool={pool_type}]: {e}")
     except Exception as e:
         print(f"❌ Batch Word Fetch Error [guild={guild_id}, pool={pool_type}]: {e}")
     finally:
@@ -166,7 +182,10 @@ async def ensure_word_cache(bot: commands.Bot, guild_id: int, wait: bool = False
             if wait:
                 tasks.append(fetch_words_batch(bot, guild_id, p_type, 2))
             else:
-                asyncio.create_task(fetch_words_batch(bot, guild_id, p_type, 2))
+                if hasattr(bot, "spawn_task"):
+                    bot.spawn_task(fetch_words_batch(bot, guild_id, p_type, 2))
+                else:
+                    asyncio.create_task(fetch_words_batch(bot, guild_id, p_type, 2))
     
     if tasks:
         await asyncio.gather(*tasks)
@@ -540,7 +559,10 @@ async def get_next_word_bitset(bot: commands.Bot, guild_id: int, pool_type: str 
 
             # Proactive refill if buffer is getting low
             if len(_GUILD_WORD_CACHE[guild_id][pool_type]) < 2:
-                asyncio.create_task(fetch_words_batch(bot, guild_id, pool_type, 2))
+                if hasattr(bot, "spawn_task"):
+                    bot.spawn_task(fetch_words_batch(bot, guild_id, pool_type, 2))
+                else:
+                    asyncio.create_task(fetch_words_batch(bot, guild_id, pool_type, 2))
                 
             return pool_list[idx]
 
