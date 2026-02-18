@@ -36,10 +36,18 @@ class _InteractionGuessContext:
             await self.interaction.response.defer()
 
     async def send(self, content=None, *, embed=None, view=None, ephemeral=False):
+        kwargs = {"ephemeral": ephemeral}
+        if content is not None:
+            kwargs["content"] = content
+        if embed is not None:
+            kwargs["embed"] = embed
+        if view is not None:
+            kwargs["view"] = view
+
         if not self.interaction.response.is_done():
-            await self.interaction.response.send_message(content=content, embed=embed, view=view, ephemeral=ephemeral)
+            await self.interaction.response.send_message(**kwargs)
         else:
-            await self.interaction.followup.send(content=content, embed=embed, view=view, ephemeral=ephemeral)
+            await self.interaction.followup.send(**kwargs)
 
 
 class GuessHandler(commands.Cog):
