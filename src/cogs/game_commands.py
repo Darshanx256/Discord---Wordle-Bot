@@ -109,6 +109,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         custom_dict = set()
         time_limit_mins = None
         allowed_players = set()
+        allowed_player_names = set()
         blind_mode = False # False, 'full', 'green'
         start_words = []
         custom_only = False
@@ -158,15 +159,19 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                     
                     import re
                     for entry in entries:
-                        match = re.search(r'<@!?(\d+)>|^(\d+)$', entry)
+                        match = re.search(r'^<@!?(\d+)>$|^(\d+)$', entry)
                         if match:
                             target_id = int(match.group(1) or match.group(2))
                             allowed_players.add(target_id)
                         else:
-                            return await interaction.response.send_message(
-                                f"❌ Invalid player `{entry}`. Use mentions or user IDs only.",
-                                ephemeral=True
-                            )
+                            # No member intent fallback: accept @name/name tokens and let users claim via Ready button.
+                            normalized = entry.lstrip("@").strip().lower()
+                            if not normalized:
+                                return await interaction.response.send_message(
+                                    f"❌ Invalid player `{entry}`. Use mentions, user IDs, or plain usernames.",
+                                    ephemeral=True
+                                )
+                            allowed_player_names.add(normalized)
                 
                 elif key == 'blind':
                     val_low = val.lower()
@@ -246,11 +251,12 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         game.custom_dict = custom_dict if custom_dict else None
         game.time_limit = time_limit_mins
         game.allowed_players = allowed_players
+        game.allowed_player_names = allowed_player_names
         game.show_keyboard = show_keyboard
         game.blind_mode = blind_mode
         game.custom_only = custom_only
         game.title = custom_title
-        game.player_lock_confirmed = not bool(allowed_players)
+        game.player_lock_confirmed = not bool(allowed_players or allowed_player_names)
         game.ready_players = set()
         
         # Apply start words
@@ -291,9 +297,11 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                 setup_details.append(f"**Time limit:** {int(time_limit_mins * 60)} seconds")
             else:
                 setup_details.append(f"**Time limit:** {time_limit_mins} minutes")
-        if allowed_players:
+        if allowed_players or allowed_player_names:
             p_mentions = ", ".join([f"<@{pid}>" for pid in allowed_players])
-            setup_details.append(f"**Restricted to:** {p_mentions}")
+            p_names = ", ".join([f"`{name}`" for name in sorted(allowed_player_names)])
+            combined = ", ".join([x for x in [p_mentions, p_names] if x]) or "None"
+            setup_details.append(f"**Restricted to:** {combined}")
         if blind_mode:
             blind_tag = "Full 🙈" if blind_mode == 'full' else "Greens Only 🟢"
             setup_details.append(f"**Blind Mode:** {blind_tag}")
@@ -320,9 +328,11 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             f"A custom wordle has been set up by **{self.user.display_name}**",
             f"**{tries} attempts** total"
         ]
-        if allowed_players:
+        if allowed_players or allowed_player_names:
             p_mentions = ", ".join([f"<@{pid}>" for pid in allowed_players])
-            desc_parts.append(f"**Restricted to:** {p_mentions}")
+            p_names = ", ".join([f"`{name}`" for name in sorted(allowed_player_names)])
+            combined = ", ".join([x for x in [p_mentions, p_names] if x]) or "None"
+            desc_parts.append(f"**Restricted to:** {combined}")
             desc_parts.append("**Status:** Waiting for all locked players to click `Ready`")
         if time_limit_mins:
             t_str = f"{int(time_limit_mins * 60)}s" if time_limit_mins < 1 else f"{time_limit_mins}m"
@@ -336,8 +346,8 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
 
         await interaction.channel.send(embed=embed, view=GuessEntryView(self.bot))
 
-        if allowed_players and not game.player_lock_confirmed:
-            ready_view = CustomPlayerReadyView(self.bot, game, allowed_players)
+        if (allowed_players or allowed_player_names) and not game.player_lock_confirmed:
+            ready_view = CustomPlayerReadyView(self.bot, game, allowed_players, allowed_player_names)
             await interaction.channel.send(embed=ready_view.build_embed(), view=ready_view)
 
 
@@ -360,23 +370,30 @@ class CustomSetupView(ui.View):
 
 
 class CustomPlayerReadyView(ui.View):
-    def __init__(self, bot, game, required_players: set[int]):
+    def __init__(self, bot, game, required_players: set[int], required_names: set[str]):
         super().__init__(timeout=900)
         self.bot = bot
         self.game = game
         self.required_players = set(required_players)
+        self.required_names = {n.strip().lower() for n in required_names if n.strip()}
 
     def _is_game_active(self) -> bool:
         return self.game.channel_id in self.bot.custom_games and self.bot.custom_games[self.game.channel_id] is self.game
 
     def build_embed(self):
         pending = sorted(self.required_players - set(getattr(self.game, "ready_players", set())))
+        pending_names = sorted(self.required_names)
         ready = sorted(set(getattr(self.game, "ready_players", set())))
         embed = discord.Embed(title="🔐 Custom Player Lock", color=discord.Color.orange())
+        pending_parts = []
+        if pending:
+            pending_parts.append(", ".join(f"<@{uid}>" for uid in pending))
+        if pending_names:
+            pending_parts.append(", ".join(f"`{name}`" for name in pending_names))
         embed.description = (
             "All listed players must press `Ready` before guesses are accepted.\n\n"
             f"**Ready:** {', '.join(f'<@{uid}>' for uid in ready) if ready else 'None'}\n"
-            f"**Pending:** {', '.join(f'<@{uid}>' for uid in pending) if pending else 'None'}"
+            f"**Pending:** {', '.join(pending_parts) if pending_parts else 'None'}"
         )
         if getattr(self.game, "player_lock_confirmed", False):
             embed.color = discord.Color.green()
@@ -392,12 +409,29 @@ class CustomPlayerReadyView(ui.View):
                 child.disabled = True
             return await interaction.response.edit_message(content="⚠️ Game is no longer active.", embed=None, view=self)
 
-        if interaction.user.id not in self.required_players:
-            return await interaction.response.send_message("❌ You are not in the locked player list.", ephemeral=True)
+        allowed_by_id = interaction.user.id in self.required_players
+        name_candidates = {
+            (interaction.user.name or "").strip().lower(),
+            (interaction.user.display_name or "").strip().lower(),
+            (getattr(interaction.user, "global_name", "") or "").strip().lower(),
+        }
+        matched_name = next((n for n in self.required_names if n in name_candidates), None)
+
+        if not allowed_by_id and not matched_name:
+            return await interaction.response.send_message(
+                "❌ You are not in the locked player list.",
+                ephemeral=True
+            )
+
+        if matched_name:
+            self.required_names.discard(matched_name)
+            self.required_players.add(interaction.user.id)
+            self.game.allowed_players.add(interaction.user.id)
+            self.game.allowed_player_names.discard(matched_name)
 
         self.game.ready_players.add(interaction.user.id)
 
-        if self.required_players.issubset(self.game.ready_players):
+        if self.required_players.issubset(self.game.ready_players) and not self.required_names:
             self.game.player_lock_confirmed = True
             for child in self.children:
                 child.disabled = True

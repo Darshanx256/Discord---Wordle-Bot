@@ -21,6 +21,7 @@ from src.utils import (
 from src.ui import get_markdown_keypad_status
 from src.handlers.game_logic import handle_game_win, handle_game_loss, PlayAgainView
 from src.database import trigger_egg
+from src.guess_entry import GuessEntryView
 
 
 class _InteractionGuessContext:
@@ -270,7 +271,7 @@ class GuessHandler(commands.Cog):
                         name=f"{ctx.author.display_name}",
                         icon_url=ctx.author.display_avatar.url
                     )
-                    await ctx.send(embed=embed)
+                    await ctx.send(embed=embed, view=GuessEntryView(self.bot))
                 return
 
             # ========= REGULAR GAME =========
@@ -384,7 +385,7 @@ class GuessHandler(commands.Cog):
                     name=f"{ctx.author.display_name}",
                     icon_url=ctx.author.display_avatar.url
                 )
-                await ctx.send(embed=embed)
+                await ctx.send(embed=embed, view=GuessEntryView(self.bot))
                 
         except Exception as e:
             traceback.print_exc()

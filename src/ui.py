@@ -547,6 +547,7 @@ class HelpView(discord.ui.View):
                 "• `player:@username` - Restrict to specific user\n"
                 "• `player:@alice,@bob,123456789` - Allow multiple players (max 20)\n"
                 "• Supports mentions or user IDs\n"
+                "• Plain names are also accepted; users self-verify by clicking `Ready`\n"
                 "• Locked players must click `Ready` before guesses are accepted\n\n"
                 "**🙈 Blind Mode:**\n"
                 "• `blind:yes` or `blind:full` - Hides the BOARD plus COLOR feedback, use keyboard colors to solve (hardcore mode!)\n"
