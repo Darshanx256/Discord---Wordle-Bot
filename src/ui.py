@@ -100,7 +100,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                 )
                 
                 # BACKGROUND: Actual DB write (non-blocking) - Streaks Discontinued
-                asyncio.create_task(asyncio.to_thread(
+                self.bot.spawn_task(asyncio.to_thread(
                     record_game_v2, self.bot, uid, None, 'SOLO', 'win',
                     self.game.attempts_used, time_taken,
                     pre_wr=pre_wr, pre_daily=pre_daily
@@ -152,7 +152,7 @@ class SoloGuessModal(ui.Modal, title="Enter your Guess"):
                     await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
                 else:
                     await interaction.followup.send(f"❌ An error occurred: {str(e)}", ephemeral=True)
-            except:
+            except (discord.HTTPException, discord.Forbidden):
                 pass
 
 class SoloView(ui.View):
@@ -296,7 +296,7 @@ class HelpView(discord.ui.View):
         ), inline=False)
 
         embed.add_field(name="🛠️ Utility Commands", value=(
-            "`/guess word:xxxxx` -> Make a guess (Shortcut: `-g xxxxx`)\n"
+            "`/guess word:xxxxx` -> Make a guess (Fast command: `/g word:xxxxx`)\n"
             "`/profile` -> View your stats, level, and tier\n"
             "`/leaderboard` -> View global and server rankings\n"
             "`/shop` -> Equip unique badges\n"
@@ -311,7 +311,8 @@ class HelpView(discord.ui.View):
             "• **Solo Mode Guide** -> `/help feature:solo`\n"
             "• **Custom Mode Guide** -> `/help feature:custom`\n"
             "• **Bot Setup Guide** -> `/help feature:bot_setup`\n"
-            "• **Tiers & Progression** -> `/help feature:progression`"
+            "• **Tiers & Progression** -> `/help feature:progression`\n"
+            "• **Why Legacy Guess Was Removed** -> `/help feature:why_g_removed`"
         ), inline=False)
         
         embed.set_footer(text="Tip: Solve words quickly to earn Speed Bonuses!")
@@ -363,7 +364,7 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "The classic game of deduction. Guess the hidden 5-letter word in 6 tries.\n\n"
                 "**How to Play:**\n"
-                "• Use `/guess word:xxxxx`, `-g xxxxx` or `-G xxxxx` to submit guesses.\n"
+                "• Use `/guess word:xxxxx` or `/g word:xxxxx` to submit guesses.\n"
                 "• Use `/stop_game` to end the game early.\n"
                 f"• {green_block('A')} = Correct letter in correct position\n"
                 f"• {yellow_block('A')} = Correct letter in wrong position\n"
@@ -408,7 +409,7 @@ class HelpView(discord.ui.View):
                 "A rapid-fire multiplayer game against the clock and other players!\n\n"
                 "**How It Works:**\n"
                 f"• Each round presents a linguistic constraint \n(e.g., word pattern {EMOJIS.get('block_s_green', 'S')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('unknown', '-')}{EMOJIS.get('block_t_green', 'T')} or \"contains double L\").\n"
-                "• Type valid words matching the constraint as fast as possible.\n"
+                "• Submit with `/g word:xxxxx` as fast as possible.\n"
                 "• Watch the **traffic lights** 🟢🟡🔴 for timing guidance.\n"
                 "• **Base forms only** \n(e.g., `APPLE` ✓, `APPLES` ✗).\n"
                 "• No word reuse within the same session.\n\n"
@@ -425,7 +426,7 @@ class HelpView(discord.ui.View):
                 "**Finally:**\n"
                 "• Complete all **100 rounds** to become Rush Champion!\n"
                 "• Game ends if 4 consecutive rounds pass without correct guesses.\n\n"
-                "*Use `/word_rush` to start a session and `/stop_rush` to end early.*"
+                "*Use `/word_rush` to start a session and `/stop_game` to end early.*"
             )
         
         elif feature == "race":
@@ -439,7 +440,7 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "Compete head-to-head against other players on the **same secret word**!\n\n"
                 "**How to Play:**\n"
-                "• Host creates a race lobby with `/race_mode`.\n"
+                "• Host creates a race lobby with `/race`.\n"
                 "• Players join the lobby (2+ required to start).\n"
                 "• Everyone gets the **same word** and **6 attempts** to solve it.\n"
                 "• Click **\"Enter Guess\"** button to open a popup modal.\n"
@@ -470,7 +471,7 @@ class HelpView(discord.ui.View):
                 "• **Time Limit:** Race ends after 10 minutes\n"
                 "• **All Completed:** Race ends when all participants finish\n"
                 "• Final leaderboard shows everyone's rank, time, and rewards\n\n"
-                "*Start a race with `/race_mode` and invite friends for maximum competition!*"
+                "*Start a race with `/race` and invite friends for maximum competition!*"
             )
         
         elif feature == "solo":
@@ -484,7 +485,7 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "Practice Wordle privately without cluttering the server chat!\n\n"
                 "**How to Play:**\n"
-                "• Start with `/solo_mode` to create a private game.\n"
+                "• Start with `/solo` to create a private game.\n"
                 "• Click **\"Enter Guess\"** button to open a popup modal.\n"
                 "• Type your 5-letter guess and submit.\n"
                 "• Only **you** can see your game board and progress.\n"
@@ -507,7 +508,7 @@ class HelpView(discord.ui.View):
                 "• **Loss:** Run out of tries → Word revealed\n"
                 "• **Rewards:** Calculated instantly with tier multipliers applied\n"
                 "**Commands:**\n"
-                "• `/solo_mode` - Start a new private game\n"
+                "• `/solo` - Start a new private game\n"
                 "• `/show_solo` - Resume your active game if you navigated away\n"
                 "• **Enter Guess** button - Submit guesses via popup modal\n"
                 "• **End Game** button - Forfeit current game\n\n"
@@ -524,7 +525,7 @@ class HelpView(discord.ui.View):
             embed.description = (
                 "Design personalized Wordle games with complete control over rules and settings!\n\n"
                 "**How to Start:**\n"
-                "• Use `/custom_mode` to open the setup interface\n"
+                "• Use `/custom` to open the setup interface\n"
                 "• Click **\"Set Up\"** button to open the configuration modal\n"
                 "• Fill in your custom parameters (word, tries, options)\n"
                 "• Game launches immediately in the channel\n\n"
@@ -545,8 +546,8 @@ class HelpView(discord.ui.View):
                 "**👥 Player Restrictions:**\n"
                 "• `player:@username` - Restrict to specific user\n"
                 "• `player:@alice,@bob,123456789` - Allow multiple players (max 20)\n"
-                "• Supports mentions, user IDs, or @username format\n"
-                "• Players must be present in the channel\n\n"
+                "• Supports mentions or user IDs\n"
+                "• Locked players must click `Ready` before guesses are accepted\n\n"
                 "**🙈 Blind Mode:**\n"
                 "• `blind:yes` or `blind:full` - Hides the BOARD plus COLOR feedback, use keyboard colors to solve (hardcore mode!)\n"
                 "• `blind:green` - Only show green letters, hide yellow/gray\n"
@@ -579,7 +580,7 @@ class HelpView(discord.ui.View):
                 "Word: START | player:@player1,@player2 | time:5\n"
                 "```\n\n"
                 "**How to Play Custom Games:**\n"
-                "• Use `/guess word:xxxxx`, `-g xxxxx` or `-G xxxxx` like a normal game\n"
+                "• Use `/guess word:xxxxx` or `/g word:xxxxx` like a normal game\n"
                 "• Restricted games only accept guesses from allowed players\n"
                 "• Custom dictionary limits which words are valid\n"
                 "• Use `/stop_game` to end early\n\n"
@@ -595,6 +596,20 @@ class HelpView(discord.ui.View):
                 "• Great for teaching new players or testing strategies\n\n"
                 "*Custom Mode lets you craft unique Wordle experiences for any occasion!*"
             )
+
+        elif feature == "why_g_removed":
+            embed = discord.Embed(title="Why Legacy Guess Was Removed", color=discord.Color.orange())
+            embed.description = (
+                "I really wanted to keep `-g`, and I tried more than once over several months.\n\n"
+                "Discord still rejected the required intent request, without a clear reason.\n\n"
+                "Without that approval, the bot cannot safely read text guesses in chat, including Word Rush message guesses.\n\n"
+                "If I kept those old message-based features, the bot would stop being eligible to join new servers.\n\n"
+                "**What to use now:**\n"
+                "• `/g word:xxxxx` for fast guesses\n"
+                "• `/guess word:xxxxx` for the full command\n"
+                "• Word Rush guesses through slash commands for stable, fair gameplay\n\n"
+                "If Discord approves this in the near future, `-g` can return."
+            )
         
         elif feature == "bot_setup":
             embed = discord.Embed(title="Bot Setup (Optional Channel Control)", color=discord.Color.blue())
@@ -608,7 +623,7 @@ class HelpView(discord.ui.View):
                 "• Test `/wordle` in allowed and blocked channels\n\n"
                 "**Important:**\n"
                 "• This setup is optional; the bot works normally without it\n"
-                "• `-g` works only when a game is active in that same channel"
+                "• `/g` works as a fast slash guess command in the same channel"
             )
 
         elif feature == "progression":

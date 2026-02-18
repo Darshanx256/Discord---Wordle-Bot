@@ -8,7 +8,7 @@ class WordleGame:
                  'used_letters', 'participants', 'guessed_words', 'last_interaction', 'message_id', 'start_time',
                  'reveal_on_loss', 'difficulty', 'custom_dict', 'time_limit', 'allowed_players', 'show_keyboard',
                  'blind_mode', 'custom_only', 'discovered_green_positions', 'title', 'monotonic_end_time',
-                 'hard_mode', 'hard_constraints')
+                 'hard_mode', 'hard_constraints', 'player_lock_confirmed', 'ready_players')
 
     def __init__(self, secret: str, channel_id: int, started_by: discord.abc.User, message_id: int):
         self.secret = secret
@@ -35,6 +35,8 @@ class WordleGame:
         self.custom_only = False     # If True, only custom dictionary words are allowed
         self.discovered_green_positions = set()  # Track which positions have greens discovered
         self.title = None            # Custom title for the game embed
+        self.player_lock_confirmed = True
+        self.ready_players = set()
         
         # Hard Mode
         self.hard_mode = False

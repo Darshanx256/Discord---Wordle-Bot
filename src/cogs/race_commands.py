@@ -76,10 +76,11 @@ class RaceCommands(commands.Cog):
         if channel_id in self._race_timers:
             self._race_timers[channel_id].cancel()
         
-        task = asyncio.create_task(self._run_race_timer(channel_id, session))
+        task = self.bot.spawn_task(self._run_race_timer(channel_id, session))
         self._race_timers[channel_id] = task
     
     @app_commands.command(name="race", description="Start a race lobby - compete to solve the same word!")
+    @app_commands.guild_only()
     async def race(self, interaction: discord.Interaction):
         """Start a race lobby where players compete to solve the same word."""
         # Check if user is banned
@@ -103,6 +104,11 @@ class RaceCommands(commands.Cog):
         if cid in self.bot.custom_games:
             return await interaction.followup.send(
                 "⚠️ A custom game is already active in this channel! Use `/stop_game` first.",
+                ephemeral=True
+            )
+        if cid in self.bot.constraint_mode:
+            return await interaction.followup.send(
+                "⚠️ A Word Rush session is already active in this channel! Finish it first.",
                 ephemeral=True
             )
         
@@ -133,6 +139,7 @@ class RaceCommands(commands.Cog):
         await message.edit(embed=embed, view=view)
     
     @app_commands.command(name="show_race", description="Recover your race game if you dismissed it.")
+    @app_commands.guild_only()
     async def show_race(self, interaction: discord.Interaction):
         """Show the user's active race game if they dismissed it."""
         # Check if user is banned
@@ -165,6 +172,8 @@ class RaceCommands(commands.Cog):
         # Generate keypad
         from src.ui_race import RaceGameView
         view = RaceGameView(self.bot, game, interaction.user, user_race_session)
+        if interaction.user.id in user_race_session.completed_users:
+            view.disable_all()
         keypad = view.get_markdown_keypad(game.used_letters, interaction.user.id)
         
         # Timer check

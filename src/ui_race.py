@@ -53,7 +53,7 @@ class RaceLobbyView(ui.View):
             embed = self.create_lobby_embed()
             try:
                 await interaction.message.edit(embed=embed, view=self)
-            except:
+            except (discord.HTTPException, discord.NotFound):
                 pass
         else:
             await interaction.response.send_message("⚠️ You've already joined this race!", ephemeral=True)
@@ -128,6 +128,8 @@ class RaceLobbyView(ui.View):
         """Ephemeral button to open the game board."""
         if not self.race_session.is_participant(interaction.user.id):
              return await interaction.response.send_message("⚠️ You are not in this race!", ephemeral=True)
+        if interaction.user.id in self.race_session.completed_users:
+            return await interaction.response.send_message("✅ You already finished this race. Waiting for final results.", ephemeral=True)
         
         game = self.race_session.race_games.get(interaction.user.id)
         if not game:
@@ -232,7 +234,7 @@ class RaceLobbyView(ui.View):
                         color=discord.Color.dark_grey()
                     )
                     await message.edit(embed=embed, view=None)
-            except:
+            except (discord.HTTPException, discord.NotFound, AttributeError):
                 pass
 
     async def update_to_ended(self):
@@ -261,17 +263,22 @@ async def send_race_summary(bot, channel_id, race_session):
     """Helper to conclude race, generate summary, and send it."""
     # print(f"Attempting to send summary for channel {channel_id}...")
     
-    # 1. Clean up session first (Atomic check)
+    # 1. Atomic guard for single summary execution
     if not hasattr(bot, 'race_sessions') or channel_id not in bot.race_sessions:
         # print("⚠️ Race session already closed/deleted.")
         return
-        
-    del bot.race_sessions[channel_id]
+    if bot.race_sessions.get(channel_id) is not race_session:
+        return
+    if getattr(race_session, "summary_in_progress", False):
+        return
+
+    race_session.summary_in_progress = True
     
     try:
         results = await asyncio.to_thread(race_session.conclude_race, bot)
         if not results:
             # print("⚠️ No results gathered for summary.")
+            race_session.summary_in_progress = False
             return
 
         # 2. Find the channel
@@ -293,7 +300,7 @@ async def send_race_summary(bot, channel_id, race_session):
                 l_embed = lobby_msg.embeds[0]
                 l_embed.description = l_embed.description.replace("Ends <t:", "Ended <t:")
                 await lobby_msg.edit(embed=l_embed)
-        except:
+        except (discord.HTTPException, discord.NotFound, AttributeError):
             pass
 
         embed = discord.Embed(
@@ -322,12 +329,19 @@ async def send_race_summary(bot, channel_id, race_session):
         
         await channel.send(embed=embed)
 
+        # Remove active session only after successful summary send.
+        if hasattr(bot, 'race_sessions') and bot.race_sessions.get(channel_id) is race_session:
+            del bot.race_sessions[channel_id]
+
         # 4. Personal Notifications (Streaks/Badges) - DISCONTINUED
         
         # print("✅ Summary sent successfully.")
         
     except Exception as e:
         print(f"❌ CRITICAL ERROR in send_race_summary: {e}")
+    finally:
+        if hasattr(bot, 'race_sessions') and bot.race_sessions.get(channel_id) is race_session:
+            race_session.summary_in_progress = False
 
 
 
@@ -346,6 +360,13 @@ class RaceGuessModal(ui.Modal, title="🏁 Race Guess"):
     async def on_submit(self, interaction: discord.Interaction):
         """Handle guess submission in race mode."""
         guess = self.guess_input.value.strip().lower()
+
+        if self.race_session.status != 'active':
+            return await interaction.response.send_message("⏰ This race is no longer active.", ephemeral=True)
+        if interaction.user.id in self.race_session.completed_users:
+            return await interaction.response.send_message("✅ You already finished this race. Waiting for final results.", ephemeral=True)
+        if self.game.attempts_used >= self.game.max_attempts:
+            return await interaction.response.send_message("⏳ No attempts left. Waiting for final results.", ephemeral=True)
         
         # Validate word
         if guess not in self.bot.valid_set:
@@ -459,6 +480,12 @@ class RaceGameView(ui.View):
         if interaction.user.id != self.user.id:
             await interaction.response.send_message("❌ This is not your race!", ephemeral=True)
             return False
+        if self.race_session.status != 'active':
+            await interaction.response.send_message("⏰ This race is no longer active.", ephemeral=True)
+            return False
+        if interaction.user.id in self.race_session.completed_users:
+            await interaction.response.send_message("✅ You already finished this race. Waiting for final results.", ephemeral=True)
+            return False
         return True
     
     @ui.button(label="Make Guess", style=discord.ButtonStyle.primary, emoji="📝")
@@ -468,6 +495,9 @@ class RaceGameView(ui.View):
     @ui.button(label="Forfeit", style=discord.ButtonStyle.danger) # Renamed to Forfeit
     async def end_race_button(self, interaction: discord.Interaction, button: ui.Button):
         """End the race early (forfeit)."""
+        if interaction.user.id in self.race_session.completed_users:
+            return await interaction.response.send_message("✅ You already finished this race.", ephemeral=True)
+
         # Record as failed
         time_taken = (datetime.datetime.now() - self.game.start_time).total_seconds()
         self.race_session.record_completion(interaction.user.id, False, time_taken)

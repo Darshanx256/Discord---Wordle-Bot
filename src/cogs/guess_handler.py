@@ -8,6 +8,7 @@ import random
 import traceback
 import discord
 from discord.ext import commands
+from discord import app_commands
 from src.utils import (
     get_badge_emoji,
     get_cached_username,
@@ -20,6 +21,25 @@ from src.utils import (
 from src.ui import get_markdown_keypad_status
 from src.handlers.game_logic import handle_game_win, handle_game_loss, PlayAgainView
 from src.database import trigger_egg
+
+
+class _InteractionGuessContext:
+    """Small adapter so modal/app-command guesses can reuse Context-based flow."""
+    def __init__(self, interaction: discord.Interaction):
+        self.interaction = interaction
+        self.guild = interaction.guild
+        self.channel = interaction.channel
+        self.author = interaction.user
+
+    async def defer(self):
+        if not self.interaction.response.is_done():
+            await self.interaction.response.defer()
+
+    async def send(self, content=None, *, embed=None, view=None, ephemeral=False):
+        if not self.interaction.response.is_done():
+            await self.interaction.response.send_message(content=content, embed=embed, view=view, ephemeral=ephemeral)
+        else:
+            await self.interaction.followup.send(content=content, embed=embed, view=view, ephemeral=ephemeral)
 
 
 class GuessHandler(commands.Cog):
@@ -56,8 +76,7 @@ class GuessHandler(commands.Cog):
     #    await asyncio.sleep(delay)
     #    await send_smart_message(ctx, message, ephemeral=True, transient_duration=15, user=user)
 
-    @commands.hybrid_command(name="guess", aliases=["g", "G"], description="Guess a 5-letter word.")
-    async def guess(self, ctx, word: str):
+    async def _handle_guess_ctx(self, ctx, word: str):
         await ctx.defer()
         if not ctx.guild:
             return await ctx.send("Guild only.", ephemeral=True)
@@ -69,6 +88,18 @@ class GuessHandler(commands.Cog):
             custom_game = self.bot.custom_games.get(cid)
             g_word = word.strip().lower()
 
+            # Word Rush route: allows slash/modal guesses when message-content intent is disabled.
+            rush_cog = self.bot.get_cog("ConstraintMode")
+            if cid in self.bot.constraint_mode and rush_cog:
+                handled = await rush_cog.process_rush_guess(
+                    channel=ctx.channel,
+                    author=ctx.author,
+                    content=g_word,
+                    interaction=getattr(ctx, "interaction", None),
+                )
+                if handled:
+                    return
+
             # Check which game type is active
             is_custom = False
             if custom_game:
@@ -76,11 +107,17 @@ class GuessHandler(commands.Cog):
                 is_custom = True
             elif not game:
                 return await ctx.send("⚠️ No active game.", ephemeral=True)
+
+            # Secret selection is async for multiplayer startup; block guesses until resolved.
+            if not is_custom and (not getattr(game, "secret", None) or str(game.secret).upper() == "LOADING"):
+                return await ctx.send("Youre too fast, try again!", ephemeral=True)
             
             # Custom game validations
             if is_custom:
                 if game.allowed_players and ctx.author.id not in game.allowed_players:
                     return await ctx.send("❌ This game is restricted to a specific player!", ephemeral=True)
+                if game.allowed_players and not getattr(game, "player_lock_confirmed", True):
+                    return await ctx.send("⏳ Waiting for all locked players to press `Ready`.", ephemeral=True)
                 
                 if game.custom_dict and g_word not in game.custom_dict:
                     # If it's custom_only, we fail here. If not, we fall through to bot.valid_set check.
@@ -123,16 +160,17 @@ class GuessHandler(commands.Cog):
                     egg = roll_easter_egg(is_classic)
                     if egg:
                         try:
-                            asyncio.create_task(asyncio.to_thread(trigger_egg, self.bot, ctx.author.id, egg))
-                        except:
-                            pass
+                            task = asyncio.create_task(asyncio.to_thread(trigger_egg, self.bot, ctx.author.id, egg))
+                            task.add_done_callback(self.bot._handle_task_exception)
+                        except (RuntimeError, TypeError) as e:
+                            print(f"⚠️ Failed to trigger egg task: {e}")
                         try:
                             msg = format_egg_message(egg, ctx.author.display_name, EMOJIS)
                             await ctx.channel.send(msg)
-                        except:
+                        except (discord.HTTPException, AttributeError) as e:
                             pass
-            except:
-                pass
+            except Exception as e:
+                print(f"⚠️ Easter egg trigger failed: {e}")
 
             # Get keyboard status
             key_blind = game.blind_mode if not (win or game_over) else False
@@ -172,7 +210,7 @@ class GuessHandler(commands.Cog):
                 cached_profile = fetch_user_profile_v2(self.bot, ctx.author.id, use_cache=True)
                 if cached_profile:
                     active_badge = cached_profile.get('active_badge')
-            except:
+            except (KeyError, TypeError, AttributeError) as e:
                 pass
             badge_str = f" {get_badge_emoji(active_badge)}" if active_badge else ""
 
@@ -280,7 +318,8 @@ class GuessHandler(commands.Cog):
                         break
 
                 # 3. Launch background task for rewards/progression
-                asyncio.create_task(self._finish_game_sequence(ctx, game, winner_user, cid, is_win=True, final_time=final_time))
+                task = asyncio.create_task(self._finish_game_sequence(ctx, game, winner_user, cid, is_win=True, final_time=final_time))
+                task.add_done_callback(self.bot._handle_task_exception)
 
             elif game_over:
                 # 1. Pop from games immediately with race condition check
@@ -319,7 +358,8 @@ class GuessHandler(commands.Cog):
                         break
 
                 # 3. Launch background task for rewards/progression
-                asyncio.create_task(self._finish_game_sequence(ctx, game, None, cid, is_win=False))
+                task = asyncio.create_task(self._finish_game_sequence(ctx, game, None, cid, is_win=False))
+                task.add_done_callback(self.bot._handle_task_exception)
 
             else:
                 # Just a turn (REGULAR GAME)
@@ -343,6 +383,19 @@ class GuessHandler(commands.Cog):
             try:
                 await ctx.send(f"❌ Internal Error: {e}", ephemeral=True)
             except: pass
+
+    async def handle_interaction_guess(self, interaction: discord.Interaction, word: str):
+        adapter = _InteractionGuessContext(interaction)
+        await self._handle_guess_ctx(adapter, word)
+
+    @commands.hybrid_command(name="guess", aliases=["g", "G"], description="Guess a 5-letter word.")
+    async def guess(self, ctx, word: str):
+        await self._handle_guess_ctx(ctx, word)
+
+    @app_commands.command(name="g", description="Short guess command.")
+    @app_commands.describe(word="Your guess")
+    async def g_short(self, interaction: discord.Interaction, word: str):
+        await self.handle_interaction_guess(interaction, word)
 
     async def _finish_game_sequence(self, ctx, game, winner_user, cid, is_win: bool, final_time: float = None):
         """Background task for reward processing and progression embeds."""

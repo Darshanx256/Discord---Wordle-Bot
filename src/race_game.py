@@ -12,7 +12,8 @@ class RaceSession:
     
     __slots__ = ('channel_id', 'started_by', 'participants', 'secret', 'start_time', 
                  'lobby_message_id', 'status', 'race_games', 'completion_order', 'end_time', 
-                 'duration_minutes', 'green_scores', 'final_results', 'monotonic_end_time')
+                 'duration_minutes', 'green_scores', 'final_results', 'monotonic_end_time',
+                 'completed_users', 'summary_in_progress')
     
     def __init__(self, channel_id: int, started_by: discord.User, secret: str = None, lobby_message_id: int = 0):
         self.channel_id = channel_id
@@ -29,6 +30,8 @@ class RaceSession:
         self.monotonic_end_time = None
         self.green_scores: Dict[int, int] = {}  # user_id: total greens count
         self.final_results = [] # Stores final ranking info
+        self.completed_users: Set[int] = set()
+        self.summary_in_progress = False
     
     @property
     def participant_count(self) -> int:
@@ -51,17 +54,21 @@ class RaceSession:
     
     def record_completion(self, user_id: int, won: bool, time_taken: float):
         """Record when a participant completes their race game."""
+        if user_id in self.completed_users:
+            return
+
         # Update green score from game instance just to be sure
         game = self.race_games.get(user_id)
         if game:
              self.green_scores[user_id] = len(game.discovered_green_positions)
-             
+
+        self.completed_users.add(user_id)
         self.completion_order.append((user_id, won, time_taken))
     
     @property
     def all_completed(self) -> bool:
         """Check if all participants have completed their games."""
-        return len(self.completion_order) >= len(self.participants)
+        return len(self.completed_users) >= len(self.participants)
     
     @property
     def anyone_failed(self) -> bool:

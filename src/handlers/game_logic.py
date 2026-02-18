@@ -7,6 +7,7 @@ import discord
 from src.game import WordleGame
 from src.database import record_game_v2, get_next_word_bitset
 from src.utils import get_badge_emoji, get_win_flavor, get_cached_username
+from src.guess_entry import GuessEntryView
 
 
 async def _batch_fetch_participant_stats(bot, participant_ids: list):
@@ -62,10 +63,16 @@ async def _process_participant_reward(bot, uid, outcome_key, attempts, time_take
     )
     
     # Background DB update
-    asyncio.create_task(asyncio.to_thread(
-        record_game_v2, bot, uid, guild_id, 'MULTI', outcome_key, 
-        attempts, time_taken, pre_wr=p_stats['wr'], pre_daily=p_stats['daily']
-    ))
+    if hasattr(bot, "spawn_task"):
+        bot.spawn_task(asyncio.to_thread(
+            record_game_v2, bot, uid, guild_id, 'MULTI', outcome_key, 
+            attempts, time_taken, pre_wr=p_stats['wr'], pre_daily=p_stats['daily']
+        ))
+    else:
+        asyncio.create_task(asyncio.to_thread(
+            record_game_v2, bot, uid, guild_id, 'MULTI', outcome_key, 
+            attempts, time_taken, pre_wr=p_stats['wr'], pre_daily=p_stats['daily']
+        ))
     
     return (uid, outcome_key, pres)
 
@@ -147,11 +154,18 @@ async def _process_game_results(bot, game, winner_user, guild_id, time_taken, in
             game.attempts_used, time_taken, 
             pre_wr=winner_stats['wr'], pre_xp=winner_stats['xp'], pre_daily=winner_stats['daily']
         )
-        asyncio.create_task(asyncio.to_thread(
-            record_game_v2, bot, winner_user.id, guild_id, 'MULTI', 'win', 
-            game.attempts_used, time_taken, 
-            pre_wr=winner_stats['wr'], pre_daily=winner_stats['daily']
-        ))
+        if hasattr(bot, "spawn_task"):
+            bot.spawn_task(asyncio.to_thread(
+                record_game_v2, bot, winner_user.id, guild_id, 'MULTI', 'win', 
+                game.attempts_used, time_taken, 
+                pre_wr=winner_stats['wr'], pre_daily=winner_stats['daily']
+            ))
+        else:
+            asyncio.create_task(asyncio.to_thread(
+                record_game_v2, bot, winner_user.id, guild_id, 'MULTI', 'win', 
+                game.attempts_used, time_taken, 
+                pre_wr=winner_stats['wr'], pre_daily=winner_stats['daily']
+            ))
         if winner_res:
             embed.add_field(name="Winner Rewards", value=f"+ {winner_res.get('xp_gain', 0)} XP | 📈 WR: {winner_res.get('multi_wr')}", inline=False)
 
@@ -255,6 +269,26 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
                 await interaction_or_ctx.followup.send(msg, ephemeral=True)
         else: await interaction_or_ctx.send(msg, ephemeral=True)
         return
+    if cid in bot.constraint_mode:
+        msg = "⚠️ A Word Rush session is active in this channel. Finish it first."
+        if is_interaction:
+            if not interaction_or_ctx.response.is_done():
+                await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            else:
+                await interaction_or_ctx.followup.send(msg, ephemeral=True)
+        else:
+            await interaction_or_ctx.send(msg, ephemeral=True)
+        return
+    if cid in bot.race_sessions:
+        msg = "⚠️ A race session is active in this channel. Finish it first."
+        if is_interaction:
+            if not interaction_or_ctx.response.is_done():
+                await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            else:
+                await interaction_or_ctx.followup.send(msg, ephemeral=True)
+        else:
+            await interaction_or_ctx.send(msg, ephemeral=True)
+        return
 
     # Defer early to prevent timeout during DB secret selection
     if is_interaction:
@@ -268,7 +302,11 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
     if is_classic:
         if not bot.hard_secrets:
             msg = "❌ Classic word list missing."
-            if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            if is_interaction:
+                if not interaction_or_ctx.response.is_done():
+                    await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+                else:
+                    await interaction_or_ctx.followup.send(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
 
@@ -286,7 +324,11 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
     else:
         if not bot.secrets:
             msg = "❌ Simple word list missing."
-            if is_interaction: await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+            if is_interaction:
+                if not interaction_or_ctx.response.is_done():
+                    await interaction_or_ctx.response.send_message(msg, ephemeral=True)
+                else:
+                    await interaction_or_ctx.followup.send(msg, ephemeral=True)
             else: await interaction_or_ctx.send(msg, ephemeral=True)
             return
 
@@ -298,17 +340,17 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
 
     # 4. Announcement
     embed = discord.Embed(title=title, color=color, description=desc)
-    embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
+    embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `/g word:xxxxx`", inline=False)
     embed.set_footer(text="Everyone in this channel can participate.")
     
     if is_interaction:
         if not interaction_or_ctx.response.is_done():
-            await interaction_or_ctx.response.send_message(embed=embed)
+            await interaction_or_ctx.response.send_message(embed=embed, view=GuessEntryView(bot))
             msg = await interaction_or_ctx.original_response()
         else:
-            msg = await channel.send(embed=embed)
+            msg = await channel.send(embed=embed, view=GuessEntryView(bot))
     else:
-        msg = await interaction_or_ctx.send(embed=embed)
+        msg = await interaction_or_ctx.send(embed=embed, view=GuessEntryView(bot))
 
     # 5. Initialize Game Object
     bot.games[cid] = WordleGame(secret, cid, author, msg.id)
@@ -334,7 +376,10 @@ async def start_multiplayer_game(bot, interaction_or_ctx, is_classic: bool, hard
                 bot.games.pop(cid, None)
                 await channel.send("⚠️ Failed to start game (Database Error). Please try again.")
 
-    asyncio.create_task(_resolve_secret())
+    if hasattr(bot, "spawn_task"):
+        bot.spawn_task(_resolve_secret())
+    else:
+        asyncio.create_task(_resolve_secret())
 
     return bot.games[cid]
 
@@ -370,5 +415,5 @@ class PlayAgainView(discord.ui.View):
         try:
             button.disabled = True
             await interaction.message.edit(view=self)
-        except:
+        except (discord.HTTPException, discord.NotFound):
             pass

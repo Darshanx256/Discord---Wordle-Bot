@@ -13,6 +13,7 @@ from src.database import fetch_user_profile_v2
 from src.utils import EMOJIS, format_attempt_footer
 from src.ui import SoloView, get_markdown_keypad_status
 from src.handlers.game_logic import start_multiplayer_game
+from src.guess_entry import GuessEntryView
 
 
 # ========= CUSTOM MODE MODAL =========
@@ -156,30 +157,14 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
                         )
                     
                     import re
-                    # Security: Only allow members present in this channel
-                    channel_members = interaction.channel.members if hasattr(interaction.channel, 'members') else []
-                    if not channel_members and interaction.guild:
-                        channel_members = interaction.guild.members
-                    
                     for entry in entries:
-                        found_member = None
-                        
                         match = re.search(r'<@!?(\d+)>|^(\d+)$', entry)
                         if match:
                             target_id = int(match.group(1) or match.group(2))
-                            # Security: Must be in channel members cache
-                            found_member = next((m for m in channel_members if m.id == target_id), None)
-                        elif entry.startswith('@'):
-                            name_to_find = entry[1:].lower()
-                            found_member = next((m for m in channel_members if (m.display_name.lower() == name_to_find or m.name.lower() == name_to_find)), None)
-                        
-                        if found_member:
-                            if found_member.bot:
-                                return await interaction.response.send_message(f"❌ `{entry}` is a bot. Only humans can play!", ephemeral=True)
-                            allowed_players.add(found_member.id)
+                            allowed_players.add(target_id)
                         else:
                             return await interaction.response.send_message(
-                                f"❌ Could not find player `{entry}` in this channel. They must be present here to be added.",
+                                f"❌ Invalid player `{entry}`. Use mentions or user IDs only.",
                                 ephemeral=True
                             )
                 
@@ -265,6 +250,8 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         game.blind_mode = blind_mode
         game.custom_only = custom_only
         game.title = custom_title
+        game.player_lock_confirmed = not bool(allowed_players)
+        game.ready_players = set()
         
         # Apply start words
         for sw in start_words:
@@ -336,6 +323,7 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
         if allowed_players:
             p_mentions = ", ".join([f"<@{pid}>" for pid in allowed_players])
             desc_parts.append(f"**Restricted to:** {p_mentions}")
+            desc_parts.append("**Status:** Waiting for all locked players to click `Ready`")
         if time_limit_mins:
             t_str = f"{int(time_limit_mins * 60)}s" if time_limit_mins < 1 else f"{time_limit_mins}m"
             desc_parts.append(f"**Time limit:** {t_str}")
@@ -344,9 +332,13 @@ class EnhancedCustomModal(ui.Modal, title="🧂 CUSTOM MODE Setup"):
             desc_parts.append(f"**Blind Mode:** {blind_tag}")
         
         embed.description = "\n".join(desc_parts)
-        embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `-g xxxxx`", inline=False)
+        embed.add_field(name="How to Play", value="`/guess word:xxxxx` or `/g word:xxxxx`", inline=False)
 
-        await interaction.channel.send(embed=embed)
+        await interaction.channel.send(embed=embed, view=GuessEntryView(self.bot))
+
+        if allowed_players and not game.player_lock_confirmed:
+            ready_view = CustomPlayerReadyView(self.bot, game, allowed_players)
+            await interaction.channel.send(embed=ready_view.build_embed(), view=ready_view)
 
 
 
@@ -365,6 +357,66 @@ class CustomSetupView(ui.View):
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.defer()
         await interaction.delete_original_response()
+
+
+class CustomPlayerReadyView(ui.View):
+    def __init__(self, bot, game, required_players: set[int]):
+        super().__init__(timeout=900)
+        self.bot = bot
+        self.game = game
+        self.required_players = set(required_players)
+
+    def _is_game_active(self) -> bool:
+        return self.game.channel_id in self.bot.custom_games and self.bot.custom_games[self.game.channel_id] is self.game
+
+    def build_embed(self):
+        pending = sorted(self.required_players - set(getattr(self.game, "ready_players", set())))
+        ready = sorted(set(getattr(self.game, "ready_players", set())))
+        embed = discord.Embed(title="🔐 Custom Player Lock", color=discord.Color.orange())
+        embed.description = (
+            "All listed players must press `Ready` before guesses are accepted.\n\n"
+            f"**Ready:** {', '.join(f'<@{uid}>' for uid in ready) if ready else 'None'}\n"
+            f"**Pending:** {', '.join(f'<@{uid}>' for uid in pending) if pending else 'None'}"
+        )
+        if getattr(self.game, "player_lock_confirmed", False):
+            embed.color = discord.Color.green()
+            embed.set_footer(text="Lock confirmed. Game is live.")
+        else:
+            embed.set_footer(text="Timeout: 15 minutes")
+        return embed
+
+    @ui.button(label="Ready", style=discord.ButtonStyle.success, emoji="✅")
+    async def ready_button(self, interaction: discord.Interaction, button: ui.Button):
+        if not self._is_game_active():
+            for child in self.children:
+                child.disabled = True
+            return await interaction.response.edit_message(content="⚠️ Game is no longer active.", embed=None, view=self)
+
+        if interaction.user.id not in self.required_players:
+            return await interaction.response.send_message("❌ You are not in the locked player list.", ephemeral=True)
+
+        self.game.ready_players.add(interaction.user.id)
+
+        if self.required_players.issubset(self.game.ready_players):
+            self.game.player_lock_confirmed = True
+            for child in self.children:
+                child.disabled = True
+            self.stop()
+
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def on_timeout(self):
+        if not self._is_game_active():
+            return
+        if getattr(self.game, "player_lock_confirmed", False):
+            return
+        self.bot.custom_games.pop(self.game.channel_id, None)
+        channel = self.bot.get_channel(self.game.channel_id)
+        if channel:
+            try:
+                await channel.send("⏰ Player lock timed out. Custom game canceled.")
+            except (discord.HTTPException, discord.Forbidden):
+                pass
 
 
 class GameCommands(commands.Cog):
@@ -433,7 +485,7 @@ class GameCommands(commands.Cog):
         if channel_id in self._custom_timers:
             self._custom_timers[channel_id].cancel()
         
-        task = asyncio.create_task(self._run_custom_timer(channel_id, game))
+        task = self.bot.spawn_task(self._run_custom_timer(channel_id, game))
         self._custom_timers[channel_id] = task
 
 
@@ -518,8 +570,9 @@ class GameCommands(commands.Cog):
         cid = ctx.channel.id
         game = self.bot.games.get(cid)
         custom_game = self.bot.custom_games.get(cid)
+        rush_game = self.bot.constraint_mode.get(cid)
 
-        if not game and not custom_game:
+        if not game and not custom_game and not rush_game:
             return await ctx.send("No active game to stop.")
 
         # Handle regular game
@@ -533,10 +586,10 @@ class GameCommands(commands.Cog):
                     await asyncio.sleep(300)
                     try:
                         self.bot.stopped_games.discard(ch_id)
-                    except:
+                    except (KeyError, AttributeError):
                         pass
 
-                asyncio.create_task(_clear_stopped(cid))
+                self.bot.spawn_task(_clear_stopped(cid))
             else:
                 await ctx.send("❌ Only Starter or Admin can stop it.", ephemeral=True)
             return
@@ -551,6 +604,22 @@ class GameCommands(commands.Cog):
                     await ctx.send("🛑 Custom game stopped. Word was hidden.")
             else:
                 await ctx.send("❌ Only Starter or Admin can stop it.", ephemeral=True)
+            return
+
+        # Handle Word Rush session
+        if rush_game:
+            rush_cog = self.bot.get_cog("ConstraintMode")
+            if not rush_cog:
+                return await ctx.send("⚠️ Word Rush controller is unavailable.", ephemeral=True)
+
+            ok, payload = await rush_cog.stop_rush_session(ctx.channel, requester=ctx.author)
+            if not ok:
+                return await ctx.send(payload, ephemeral=True)
+
+            if isinstance(payload, discord.Embed):
+                await ctx.send(embed=payload)
+            else:
+                await ctx.send(payload)
             return
 
     @commands.hybrid_command(name="custom", description="Start a custom Wordle game with your own word.")
@@ -570,6 +639,10 @@ class GameCommands(commands.Cog):
         # Check if a regular game already exists
         if cid in self.bot.games:
             return await ctx.send("⚠️ A regular game is already active. Use `/stop_game` first.", ephemeral=True)
+        if cid in self.bot.constraint_mode:
+            return await ctx.send("⚠️ A Word Rush session is already active here. Finish it first.", ephemeral=True)
+        if cid in self.bot.race_sessions:
+            return await ctx.send("⚠️ A race session is already active here. Finish it first.", ephemeral=True)
 
         embed = discord.Embed(
             title="🧂 CUSTOM MODE",
@@ -579,7 +652,7 @@ class GameCommands(commands.Cog):
         embed.add_field(
             name="How it works?",
             value="• Click **Set Up** button below and enter a 5-letter word\n"
-                  "• A wordle match would start, others can use `/guess` or `-g` to make a guess\n"
+                  "• A wordle match would start, others can use `/guess` or `/g` to make a guess\n"
                   "• This mode gives **no XP** or **WR** score\n\n"
                   "*Tip: Use `/help custom` to see all extra options!*",
             inline=False

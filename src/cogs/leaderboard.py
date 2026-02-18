@@ -73,7 +73,7 @@ async def fetch_and_format_rankings(results, bot_instance, guild=None, *, allow_
                 u = await bot_instance.fetch_user(uid)
                 name = u.display_name
                 bot_instance.name_cache[uid] = name
-            except:
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                 pass
 
         return (i + 1, name, w, xp, wr, tier_icon, badge)
