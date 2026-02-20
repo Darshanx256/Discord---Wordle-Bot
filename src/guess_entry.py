@@ -34,17 +34,27 @@ class GuessEntryView(discord.ui.View):
 
     @discord.ui.button(label="Open Integration UI", style=discord.ButtonStyle.primary, emoji="🌐")
     async def open_integration_ui(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Prefer Discord-native Activity launch when available.
+        launch_activity = getattr(interaction.response, "launch_activity", None)
+        if callable(launch_activity):
+            try:
+                await launch_activity()
+                return
+            except discord.HTTPException:
+                # Fall through to URL fallback if Activity launch fails.
+                pass
+
         link = build_integration_link(self.bot, interaction.user.id, interaction.channel_id)
         if not link:
             return await interaction.response.send_message(
-                "⚠️ No active game found for this channel (or your solo game).",
+                "⚠️ Activity launch is unavailable and no active game link was found.",
                 ephemeral=True,
             )
 
         launch_view = discord.ui.View(timeout=180)
         launch_view.add_item(discord.ui.Button(label="Open Live Board", style=discord.ButtonStyle.link, url=link))
         await interaction.response.send_message(
-            "Tap to open the live integration board.",
+            "Activity launch is unavailable here, using web link fallback.",
             ephemeral=True,
             view=launch_view,
         )

@@ -7,25 +7,29 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 :root {
-  --bg: #f9f9f6;
-  --surface: #ffffff;
-  --border: #d3d6da;
-  --border-filled: #878a8c;
-  --text: #1a1a1b;
-  --muted: #878a8c;
-  --correct: #6aaa64;
+  --bg:           #f9f9f6;
+  --surface:      #ffffff;
+  --border:       #d3d6da;
+  --border-filled:#878a8c;
+  --text:         #1a1a1b;
+  --muted:        #878a8c;
+  --correct:      #6aaa64;
   --correct-dark: #538d4e;
-  --present: #c9b458;
-  --absent: #787c7e;
-  --key-bg: #d3d6da;
-  --tile-size: 52px;
-  --tile-gap: 5px;
-  --tile-font: 22px;
-  --key-h: 52px;
-  --key-font: 30px;
-  --kb-gap: 6px;
+  --present:      #c9b458;
+  --present-dark: #b59f3b;
+  --absent:       #787c7e;
+  --key-bg:       #d3d6da;
+  --key-text:     #1a1a1b;
+  --tile-size:    52px;
+  --tile-gap:     5px;
+  --tile-font:    22px;
+  --key-h:        46px;
+  --key-font:     12px;
+  --kb-gap:       5px;
 }
+
 html, body {
   height: 100%;
   height: 100dvh;
@@ -33,60 +37,109 @@ html, body {
   color: var(--text);
   font-family: 'Space Mono', monospace;
   overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
+
 #app {
   display: flex;
   flex-direction: column;
   height: 100dvh;
   width: 100%;
-  max-width: 560px;
+  max-width: 500px;
   margin: 0 auto;
 }
+
 header {
   flex-shrink: 0;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 14px;
-  height: 56px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-.logo {
+
+.logo-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.logo-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.logo {
   font-family: 'Unbounded', sans-serif;
   font-weight: 900;
   font-size: 17px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.16em;
+  color: var(--text);
+  flex-shrink: 0;
 }
-.logo img {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-}
+
 .header-stats {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
+
 .stat-chip {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   background: #f0f0ed;
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 4px 9px;
+  padding: 4px 10px 4px 8px;
   font-size: 10px;
   font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
 }
-.chip-val {
+
+.stat-chip svg { width: 13px; height: 13px; flex-shrink: 0; }
+.stat-chip .chip-label { color: var(--muted); }
+.stat-chip .chip-val { font-family: 'Unbounded', sans-serif; font-size: 11px; font-weight: 900; }
+.chip-wr .chip-val { color: var(--correct-dark); }
+.chip-players .chip-val { color: #2563eb; }
+
+#toast-container {
+  position: fixed;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.toast {
+  background: #1a1a1b;
+  color: #fff;
   font-family: 'Unbounded', sans-serif;
   font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  padding: 8px 16px;
+  border-radius: 4px;
+  white-space: nowrap;
+  animation: toastIn 0.18s cubic-bezier(0.34,1.56,0.64,1) forwards;
 }
+.toast.out { animation: toastOut 0.22s ease forwards; }
+@keyframes toastIn { from { opacity:0; transform:translateY(-8px) scale(0.9); } to { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes toastOut { from { opacity:1; } to { opacity:0; transform:translateY(-6px); } }
+
 #grid-wrap {
   flex: 1;
   min-height: 0;
@@ -96,48 +149,69 @@ header {
   padding: 6px 8px;
   overflow: hidden;
 }
+
 #grid {
   display: flex;
   flex-direction: column;
   gap: var(--tile-gap);
 }
+
 .row-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .row-user {
-  width: 84px;
+  width: 70px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 5px;
   opacity: 0;
   transform: translateX(4px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }
 .row-user.visible { opacity: 1; transform: translateX(0); }
+
 .user-avatar {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #ddd;
+  background: var(--correct);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 8px;
+  font-weight: 900;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
   border: 2px solid #fff;
-  object-fit: cover;
+  background-size: cover;
+  background-position: center;
 }
+
 .user-name {
   font-size: 9px;
+  font-weight: 700;
   color: var(--muted);
-  max-width: 46px;
+  letter-spacing: 0.03em;
+  max-width: 38px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
+  line-height: 1;
 }
-.row-spacer { width: 84px; flex-shrink: 0; }
+
+.row-spacer { width: 70px; flex-shrink: 0; }
 .tile-row { display: flex; gap: var(--tile-gap); }
+
 .tile {
-  width: var(--tile-size);
+  width:  var(--tile-size);
   height: var(--tile-size);
   border: 2px solid var(--border);
   border-radius: 4px;
@@ -148,419 +222,686 @@ header {
   font-family: 'Unbounded', sans-serif;
   font-weight: 700;
   font-size: var(--tile-font);
+  color: var(--text);
+  transform-style: preserve-3d;
+  perspective: 600px;
+  will-change: transform;
 }
-.tile.filled { border-color: var(--border-filled); }
-.tile.correct { background: var(--correct); border-color: var(--correct); color: #fff; }
-.tile.present { background: var(--present); border-color: var(--present); color: #fff; }
-.tile.absent { background: var(--absent); border-color: var(--absent); color: #fff; }
-.tile.pending {
-  animation: pendingFlip 0.5s ease-in-out infinite;
-}
-@keyframes pendingFlip {
+
+.tile.filled { border-color: var(--border-filled); animation: pop 0.1s cubic-bezier(0.34,1.56,0.64,1); }
+.tile.shake { animation: shake 0.45s ease; }
+.tile.reveal { animation: flip3d var(--flip-dur, 460ms) ease forwards; animation-delay: var(--flip-delay, 0s); }
+.tile.bounce { animation: bounce 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards; animation-delay: var(--bounce-delay, 0s); }
+
+@keyframes flip3d {
   0% { transform: rotateX(0deg); }
-  50% { transform: rotateX(-88deg); }
-  100% { transform: rotateX(0deg); }
+  49% { transform: rotateX(-90deg); }
+  50% { transform: rotateX(-90deg); background: var(--tile-bg); border-color: var(--tile-bg); color: #fff; }
+  100% { transform: rotateX(0deg); background: var(--tile-bg); border-color: var(--tile-bg); color: #fff; }
 }
+@keyframes pop { 50% { transform: scale(1.1); } }
+@keyframes shake {
+  15% { transform: translateX(-5px) rotate(-0.8deg); }
+  30% { transform: translateX(5px)  rotate(0.8deg); }
+  50% { transform: translateX(-4px); }
+  70% { transform: translateX(4px); }
+  90% { transform: translateX(-2px); }
+}
+@keyframes bounce {
+  25% { transform: translateY(-11px) scale(1.07); }
+  50% { transform: translateY(0) scale(0.97); }
+  75% { transform: translateY(-4px) scale(1.02); }
+  100% { transform: translateY(0) scale(1); }
+}
+
 #keyboard {
   flex-shrink: 0;
   width: 100%;
-  padding: 6px 6px 8px;
+  padding: 4px 6px 6px;
   display: flex;
   flex-direction: column;
   gap: var(--kb-gap);
 }
+
 .kb-row { display: flex; justify-content: center; gap: var(--kb-gap); }
+
 .key {
   height: var(--key-h);
   flex: 1;
   min-width: 0;
-  max-width: 46px;
+  max-width: 43px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--key-bg);
-  color: #1a1a1b;
+  color: var(--key-text);
   font-family: 'Space Mono', monospace;
   font-size: var(--key-font);
   font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  touch-action: manipulation;
+  transition: background 0.18s, color 0.18s, transform 0.07s;
+  -webkit-tap-highlight-color: transparent;
 }
-.key.wide { max-width: 78px; font-size: calc(var(--key-font) * 0.62); }
-.key.correct { background: var(--correct); color: #fff; }
-.key.present { background: var(--present); color: #fff; }
-.key.absent { background: var(--absent); color: #fff; }
-#footer {
-  flex-shrink: 0;
-  text-align: center;
-  font-size: 10px;
-  color: var(--muted);
-  padding: 0 12px 8px;
+.key.wide { max-width: 64px; font-size: calc(var(--key-font) - 1px); }
+.key:active { transform: scale(0.91); }
+.key::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.06); opacity: 0; transition: opacity 0.1s; }
+.key:hover::after { opacity: 1; }
+.key .ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.09);
+  transform: scale(0);
+  animation: ripple 0.38s ease-out;
+  pointer-events: none;
 }
+@keyframes ripple { to { transform: scale(3.5); opacity: 0; } }
+.key.state-correct { background: var(--correct); color: #fff; }
+.key.state-present { background: var(--present); color: #fff; }
+.key.state-absent  { background: var(--absent); color: #fff; }
+.key.state-update  { animation: keyPop 0.3s ease; }
+@keyframes keyPop { 40% { transform: scale(1.13); } 100% { transform: scale(1); } }
+
 #win-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 150;
   align-items: center;
   justify-content: center;
-  background: rgba(249, 249, 246, 0.9);
+  background: rgba(249,249,246,0.86);
+  backdrop-filter: blur(6px);
 }
 #win-overlay.show { display: flex; }
+
 .win-card {
   background: #fff;
   border: 2px solid var(--border);
-  border-radius: 12px;
-  padding: 18px 18px;
-  width: 92%;
-  max-width: 350px;
+  border-radius: 14px;
+  padding: 20px 22px;
   text-align: center;
+  width: 90%;
+  max-width: 320px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+  animation: cardIn 0.36s cubic-bezier(0.34,1.56,0.64,1);
 }
+@keyframes cardIn { from { opacity:0; transform: scale(0.82) translateY(14px); } to { opacity:1; transform: scale(1) translateY(0); } }
+
 .winner-avatar {
   width: 54px;
   height: 54px;
   border-radius: 50%;
-  object-fit: cover;
-  margin-bottom: 8px;
+  margin: 0 auto 8px;
+  border: 2px solid #fff;
+  background: var(--correct);
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
 }
-.win-title {
-  font-family: 'Unbounded', sans-serif;
-  font-size: 18px;
-  margin-bottom: 4px;
-}
-.win-sub { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-.win-word { font-family: 'Unbounded', sans-serif; letter-spacing: 0.08em; font-size: 21px; color: var(--correct-dark); margin-bottom: 8px; }
+.win-title { font-family: 'Unbounded', sans-serif; font-size: 19px; font-weight: 900; color: var(--text); margin-bottom: 5px; }
+.lose-title { color: #c0392b; }
+.win-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; margin-bottom: 4px; }
+.win-word { font-family: 'Unbounded', sans-serif; font-size: 24px; font-weight: 700; color: var(--correct-dark); letter-spacing: 0.13em; margin: 10px 0 14px; }
 #breakdown {
-  max-height: 140px;
+  max-height: 120px;
   overflow-y: auto;
   text-align: left;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-size: 11px;
 }
 .break-row {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 4px;
 }
 .break-row:last-child { margin-bottom: 0; }
+
 .btn {
   width: 100%;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 0;
   background: var(--correct);
+  border: none;
+  border-radius: 6px;
   color: #fff;
   font-family: 'Unbounded', sans-serif;
   font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 11px 0;
   cursor: pointer;
+  transition: background 0.18s, transform 0.08s;
 }
+.btn:hover { background: var(--correct-dark); }
+.btn:active { transform: scale(0.97); }
 .btn[disabled] { opacity: 0.55; cursor: not-allowed; }
-#toast {
+
+#confetti-canvas { position: fixed; inset: 0; z-index: 149; pointer-events: none; }
+.particle {
   position: fixed;
-  left: 50%;
-  top: 64px;
-  transform: translateX(-50%);
-  z-index: 30;
-  background: #1a1a1b;
-  color: #fff;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-family: 'Unbounded', sans-serif;
-  font-size: 11px;
-  display: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 148;
+  animation: particleFly var(--dur) ease-out forwards;
 }
+@keyframes particleFly {
+  0% { transform: translate(0,0) scale(1) rotate(0deg); opacity:1; }
+  100% { transform: translate(var(--tx),var(--ty)) scale(0) rotate(200deg); opacity:0; }
+}
+
 #loading-mask {
+  display: none;
   position: fixed;
   inset: 0;
-  z-index: 32;
-  display: none;
+  z-index: 201;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  background: rgba(249, 249, 246, 0.92);
-  backdrop-filter: blur(3px);
+  background: rgba(249,249,246,0.92);
 }
 #loading-mask.show { display: flex; }
-.loader-grid {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-.loader-tile {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: #d3d6da;
-  animation: loadPulse 0.8s ease-in-out infinite;
-}
-.loader-tile:nth-child(2) { animation-delay: 0.08s; }
-.loader-tile:nth-child(3) { animation-delay: 0.16s; }
-.loader-tile:nth-child(4) { animation-delay: 0.24s; }
-.loader-tile:nth-child(5) { animation-delay: 0.32s; }
-@keyframes loadPulse {
-  0%, 100% { transform: translateY(0); background: #d3d6da; }
-  50% { transform: translateY(-8px); background: #6aaa64; }
-}
-#loading-text {
+.loading-card {
   font-family: 'Unbounded', sans-serif;
   font-size: 12px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+#disclaimer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 10px;
+  padding-bottom: 8px;
 }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="logo">
-      <img src="/integration/static/logo-placeholder.svg" alt="Wordle Logo">
-      <span id="mode-title">Classic</span>
+    <div class="logo-wrap">
+      <img class="logo-icon" src="/integration/static/logo-placeholder.svg" alt="Logo">
+      <div class="logo" id="mode-title">CLASSIC</div>
     </div>
     <div class="header-stats">
-      <div class="stat-chip"><span>WR</span><span class="chip-val" id="wr-val">—</span></div>
-      <div class="stat-chip"><span class="chip-val" id="participants-val">—</span><span>participants</span></div>
+      <div class="stat-chip chip-wr">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#538d4e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9H4a2 2 0 0 1-2-2V5h4"></path><path d="M18 9h2a2 2 0 0 0 2-2V5h-4"></path>
+          <path d="M12 17v4"></path><path d="M8 21h8"></path>
+          <path d="M6 5h12v7a6 6 0 0 1-12 0V5z"></path>
+        </svg>
+        <span class="chip-label">WR</span>
+        <span class="chip-val" id="wr-val">—</span>
+      </div>
+      <div class="stat-chip chip-players">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        <span class="chip-val" id="players-val">—</span>
+        <span class="chip-label">participants</span>
+      </div>
     </div>
   </header>
+
   <div id="grid-wrap"><div id="grid"></div></div>
   <div id="keyboard"></div>
-  <div id="footer">Not affiliated with The New York Times.</div>
+  <div id="disclaimer">Not affiliated with The New York Times.</div>
 </div>
-<div id="toast"></div>
-<div id="loading-mask">
-  <div class="loader-grid">
-    <div class="loader-tile"></div><div class="loader-tile"></div><div class="loader-tile"></div><div class="loader-tile"></div><div class="loader-tile"></div>
-  </div>
-  <div id="loading-text">SYNCING WITH DISCORD</div>
-</div>
+
+<div id="toast-container"></div>
+<canvas id="confetti-canvas"></canvas>
+<div id="loading-mask"><div class="loading-card">SYNCING WITH DISCORD</div></div>
+
 <div id="win-overlay">
   <div class="win-card">
-    <img class="winner-avatar" id="winner-avatar" src="/integration/static/logo-placeholder.svg" alt="Winner Avatar">
-    <div class="win-title" id="win-title">Victory</div>
-    <div class="win-sub" id="win-sub"></div>
+    <div class="winner-avatar" id="winner-avatar"></div>
+    <div class="win-title" id="win-title">BRILLIANT!</div>
+    <div class="win-sub" id="win-sub">Solved in <strong id="win-attempts">?</strong> attempts</div>
     <div class="win-word" id="win-word"></div>
     <div id="breakdown"></div>
-    <button class="btn" id="retry-btn" onclick="retryGame()">PLAY AGAIN</button>
+    <button class="btn" id="retry-btn">PLAY AGAIN</button>
   </div>
 </div>
+
 <script>
 const INITIAL_TOKEN = {{ token|tojson }};
 const ACTIVITY_MODE = {{ activity_mode|tojson }};
 const ACTIVITY_CLIENT_ID = {{ activity_client_id|tojson }};
+
 const ROWS = 6;
 const COLS = 5;
-const KB = [
+const FLIP_DUR = 460;
+const FLIP_STAGGER = 90;
+const COLORS = ['#6aaa64','#c9b458','#538d4e','#b59f3b','#4a90d9','#e67e22','#e74c3c'];
+const KB_ROWS = [
   ['Q','W','E','R','T','Y','U','I','O','P'],
   ['A','S','D','F','G','H','J','K','L'],
   ['ENTER','Z','X','C','V','B','N','M','⌫']
 ];
-let currentState = null;
-let localGuess = [];
-let submitting = false;
-let animatingRow = -1;
+
 let sessionToken = INITIAL_TOKEN;
+let state = null;
+let localInput = [];
+let keyMap = {};
+let submitting = false;
+
+const gridEl = document.getElementById('grid');
+const kbEl = document.getElementById('keyboard');
 
 function setLoading(on) {
   document.getElementById('loading-mask').classList.toggle('show', Boolean(on));
 }
 
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 1700);
+function showToast(msg, ms = 1400) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => {
+    t.classList.add('out');
+    setTimeout(() => t.remove(), 260);
+  }, ms);
 }
 
 function calcLayout() {
+  const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const vw = Math.min(window.innerWidth, 560);
+  const headerH = 52;
   const kbRows = 3;
-  const kbGap = 6;
-  const kbH = Math.max(160, Math.floor(vh * 0.33));
-  const keyH = Math.floor((kbH - kbGap * (kbRows - 1) - 16) / kbRows);
-  const gridH = vh - 56 - kbH - 26;
-  const sideW = 84 * 2 + 16;
-  const tileGap = 5;
-  const tileFromH = (gridH - tileGap * (ROWS - 1)) / ROWS;
-  const tileFromW = (vw - sideW - tileGap * (COLS - 1) - 16) / COLS;
-  const size = Math.floor(Math.min(64, tileFromH, tileFromW));
+  const kbGap = Math.min(6, Math.max(4, vh * 0.007));
+  const kbKeyH = Math.min(52, Math.max(36, vh * 0.067));
+  const kbPad = 12;
+  const kbH = kbKeyH * kbRows + kbGap * (kbRows - 1) + kbPad;
+  const gridPad = 10;
+  const gridH = vh - headerH - kbH - gridPad * 2;
+  const sideW = 70 * 2 + 8 * 2;
+  const gridW = Math.min(vw, 500) - sideW - 16;
+  const tileGap = Math.min(6, Math.max(3, vw * 0.012));
+  const fromH = (gridH - tileGap * (ROWS - 1)) / ROWS;
+  const fromW = (gridW - tileGap * (COLS - 1)) / COLS;
+  const tSize = Math.floor(Math.min(fromH, fromW, 64));
+
   const root = document.documentElement;
-  root.style.setProperty('--tile-size', size + 'px');
-  root.style.setProperty('--tile-font', Math.max(18, Math.round(size * 0.42)) + 'px');
-  root.style.setProperty('--key-h', Math.max(42, keyH) + 'px');
-  root.style.setProperty('--key-font', Math.max(18, Math.round(keyH * 0.6)) + 'px');
+  root.style.setProperty('--tile-size', tSize + 'px');
+  root.style.setProperty('--tile-gap', tileGap + 'px');
+  root.style.setProperty('--tile-font', Math.round(tSize * 0.41) + 'px');
+  root.style.setProperty('--key-h', Math.round(kbKeyH) + 'px');
+  root.style.setProperty('--key-font', Math.max(9, Math.round(kbKeyH * 0.26)) + 'px');
+  root.style.setProperty('--kb-gap', kbGap + 'px');
 }
 
-function keyClass(state) {
-  if (state === 'correct') return 'correct';
-  if (state === 'present') return 'present';
-  if (state === 'absent') return 'absent';
-  return '';
+function initialsFrom(name) {
+  const n = String(name || 'P').trim();
+  return n.slice(0, 2).toUpperCase();
 }
 
 function breakdownMarkup(items) {
-  if (!Array.isArray(items) || !items.length) {
-    return '<div class="break-row"><span>No breakdown yet</span><span>—</span></div>';
-  }
+  if (!Array.isArray(items) || !items.length) return '<div class="break-row"><span>No breakdown</span><span>—</span></div>';
   return items.map(item => {
     const status = item.solved ? 'Solved' : `${item.best_greens}/5 greens`;
-    return `<div class="break-row"><span>#${item.rank} ${escapeHtml(item.name)}</span><span>${status} • ${item.attempts} tries</span></div>`;
+    return `<div class="break-row"><span>#${item.rank} ${escapeHtml(item.name)}</span><span>${status}</span></div>`;
   }).join('');
 }
 
-function escapeHtml(text) {
-  return String(text || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
-function draw(state) {
-  currentState = state;
-  document.getElementById('mode-title').textContent = state.mode_label || 'Classic';
-  document.getElementById('wr-val').textContent = state.wr ?? '—';
-  document.getElementById('participants-val').textContent = state.participants ?? '—';
+function tileAt(r, c) {
+  const rowWrap = gridEl.children[r];
+  if (!rowWrap) return null;
+  const tileRow = rowWrap.querySelector('.tile-row');
+  if (!tileRow) return null;
+  return tileRow.children[c] || null;
+}
 
-  const grid = document.getElementById('grid');
-  grid.innerHTML = '';
-  const keyState = {};
-
+function buildGrid() {
+  gridEl.innerHTML = '';
   for (let r = 0; r < ROWS; r++) {
     const wrap = document.createElement('div');
     wrap.className = 'row-wrap';
 
-    const left = document.createElement('div');
-    left.className = 'row-user';
-    const name = document.createElement('div');
-    name.className = 'user-name';
-    const avatar = document.createElement('img');
-    avatar.className = 'user-avatar';
-    avatar.src = '/integration/static/logo-placeholder.svg';
+    const userDiv = document.createElement('div');
+    userDiv.className = 'row-user';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'user-name';
+    const avatarEl = document.createElement('div');
+    avatarEl.className = 'user-avatar';
+    userDiv.append(nameEl, avatarEl);
+    wrap.appendChild(userDiv);
 
-    if (state.rows[r]) {
-      left.classList.add('visible');
-      name.textContent = state.rows[r].user.name || 'Player';
-      if (state.rows[r].user.avatar_url) avatar.src = state.rows[r].user.avatar_url;
-    }
-    left.append(name, avatar);
-    wrap.appendChild(left);
-
-    const row = document.createElement('div');
-    row.className = 'tile-row';
+    const tileRow = document.createElement('div');
+    tileRow.className = 'tile-row';
     for (let c = 0; c < COLS; c++) {
       const t = document.createElement('div');
       t.className = 'tile';
-      if (state.rows[r]) {
-        const ch = (state.rows[r].word || '')[c] || '';
-        const st = state.rows[r].states[c] || '';
+      tileRow.appendChild(t);
+    }
+    wrap.appendChild(tileRow);
+
+    const spacer = document.createElement('div');
+    spacer.className = 'row-spacer';
+    wrap.appendChild(spacer);
+    gridEl.appendChild(wrap);
+  }
+}
+
+function refreshFromState() {
+  if (!state) return;
+  document.getElementById('mode-title').textContent = String(state.mode_label || 'Classic').toUpperCase();
+  document.getElementById('wr-val').textContent = state.wr ?? '—';
+  document.getElementById('players-val').textContent = state.participants ?? '—';
+
+  const keyPriority = { correct: 3, present: 2, absent: 1 };
+  const keyState = {};
+
+  for (let r = 0; r < ROWS; r++) {
+    const rowWrap = gridEl.children[r];
+    const userDiv = rowWrap.querySelector('.row-user');
+    const nameEl = rowWrap.querySelector('.user-name');
+    const avatarEl = rowWrap.querySelector('.user-avatar');
+
+    const rowData = state.rows && state.rows[r] ? state.rows[r] : null;
+    const word = rowData ? String(rowData.word || '').toUpperCase() : '';
+    const states = rowData ? (rowData.states || []) : [];
+
+    if (rowData && rowData.user) {
+      userDiv.classList.add('visible');
+      nameEl.textContent = rowData.user.name || 'Player';
+      if (rowData.user.avatar_url) {
+        avatarEl.style.backgroundImage = `url('${rowData.user.avatar_url}')`;
+        avatarEl.textContent = '';
+      } else {
+        avatarEl.style.backgroundImage = '';
+        avatarEl.textContent = initialsFrom(rowData.user.name);
+      }
+    } else {
+      userDiv.classList.remove('visible');
+      nameEl.textContent = '';
+      avatarEl.style.backgroundImage = '';
+      avatarEl.textContent = '';
+    }
+
+    for (let c = 0; c < COLS; c++) {
+      const t = tileAt(r, c);
+      const ch = word[c] || '';
+      t.className = 'tile';
+
+      if (rowData) {
         t.textContent = ch;
         if (ch) t.classList.add('filled');
-        if (st) t.classList.add(st);
-        const best = keyState[ch];
-        if (ch && (!best || (best !== 'correct' && st === 'correct') || (best === 'absent' && st === 'present'))) {
-          keyState[ch] = st;
+        const st = states[c] || '';
+        if (st) {
+          if (st === 'correct' || st === 'present' || st === 'absent') {
+            t.style.setProperty('--tile-bg', st === 'correct' ? '#6aaa64' : st === 'present' ? '#c9b458' : '#787c7e');
+            t.style.background = t.style.getPropertyValue('--tile-bg');
+            t.style.borderColor = t.style.getPropertyValue('--tile-bg');
+            t.style.color = '#fff';
+          }
+          const old = keyState[ch] || '';
+          if (ch && (keyPriority[st] || 0) > (keyPriority[old] || 0)) keyState[ch] = st;
         }
-      } else if (r === state.attempts_used && c < localGuess.length && !state.game_over) {
-        t.textContent = localGuess[c];
+      } else if (!state.game_over && r === state.attempts_used && c < localInput.length) {
+        t.textContent = localInput[c];
         t.classList.add('filled');
-        if (animatingRow === r) {
-          t.classList.add('pending');
-        }
+      } else {
+        t.textContent = '';
       }
-      row.appendChild(t);
     }
-    wrap.appendChild(row);
-    const sp = document.createElement('div');
-    sp.className = 'row-spacer';
-    wrap.appendChild(sp);
-    grid.appendChild(wrap);
   }
 
-  const kb = document.getElementById('keyboard');
-  kb.innerHTML = '';
-  KB.forEach(line => {
-    const row = document.createElement('div');
-    row.className = 'kb-row';
-    line.forEach(k => {
-      const btn = document.createElement('button');
-      btn.className = 'key' + (k.length > 1 ? ' wide' : '');
-      if (k.length === 1 && keyState[k]) btn.classList.add(keyClass(keyState[k]));
-      btn.textContent = k;
-      btn.disabled = state.game_over || submitting;
-      btn.addEventListener('click', () => handleKey(k));
-      row.appendChild(btn);
-    });
-    kb.appendChild(row);
+  Object.keys(keyMap).forEach(k => {
+    const btn = keyMap[k];
+    const ks = keyState[k] || '';
+    btn.className = 'key';
+    if (ks) btn.classList.add('state-' + ks);
   });
+  kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
 
   const overlay = document.getElementById('win-overlay');
   if (state.game_over) {
     overlay.classList.add('show');
-    if (state.winner) {
-      document.getElementById('win-title').textContent = `${state.winner.name} solved it!`;
-      document.getElementById('win-sub').textContent = 'Winner';
-      if (state.winner.avatar_url) document.getElementById('winner-avatar').src = state.winner.avatar_url;
-    } else {
-      document.getElementById('win-title').textContent = 'Game Over';
-      document.getElementById('win-sub').textContent = 'No winner this round';
-    }
-    document.getElementById('win-word').textContent = state.secret || '';
-    document.getElementById('breakdown').innerHTML = breakdownMarkup(state.breakdown);
+    const winTitle = document.getElementById('win-title');
+    const winSub = document.getElementById('win-sub');
+    const winWord = document.getElementById('win-word');
+    const winAttempts = document.getElementById('win-attempts');
+    const winnerAvatar = document.getElementById('winner-avatar');
     const retryBtn = document.getElementById('retry-btn');
+    const breakdown = document.getElementById('breakdown');
+
+    if (state.winner) {
+      winTitle.className = 'win-title';
+      winTitle.textContent = `${state.winner.name} WON!`;
+      winSub.innerHTML = `Solved in <strong id="win-attempts">${state.attempts_used}</strong> attempts`;
+      winWord.textContent = state.secret || '';
+      if (state.winner.avatar_url) winnerAvatar.style.backgroundImage = `url('${state.winner.avatar_url}')`;
+      if (state.winner.avatar_url) winnerAvatar.textContent = '';
+      else winnerAvatar.textContent = initialsFrom(state.winner.name);
+    } else {
+      winTitle.className = 'win-title lose-title';
+      winTitle.textContent = 'GAME OVER';
+      winSub.textContent = 'The word was:';
+      winWord.textContent = state.secret || '';
+      winnerAvatar.style.backgroundImage = '';
+      winnerAvatar.textContent = '💀';
+    }
+    if (winAttempts) winAttempts.textContent = String(state.attempts_used || '?');
+    breakdown.innerHTML = breakdownMarkup(state.breakdown);
     retryBtn.disabled = !state.can_retry;
   } else {
     overlay.classList.remove('show');
   }
 }
 
+function buildKeyboard() {
+  kbEl.innerHTML = '';
+  keyMap = {};
+  KB_ROWS.forEach(rowKeys => {
+    const row = document.createElement('div');
+    row.className = 'kb-row';
+    rowKeys.forEach(k => {
+      const btn = document.createElement('button');
+      btn.className = 'key' + (k.length > 1 ? ' wide' : '');
+      btn.textContent = k;
+      btn.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        addRipple(btn, e);
+        handleKey(k);
+      });
+      row.appendChild(btn);
+      if (k.length === 1) keyMap[k] = btn;
+    });
+    kbEl.appendChild(row);
+  });
+}
+
+function addRipple(btn, e) {
+  const r = document.createElement('span');
+  r.className = 'ripple';
+  const rect = btn.getBoundingClientRect();
+  const sz = Math.max(rect.width, rect.height);
+  r.style.cssText = `width:${sz}px;height:${sz}px;left:${(e.clientX ?? rect.left+rect.width/2)-rect.left-sz/2}px;top:${(e.clientY ?? rect.top+rect.height/2)-rect.top-sz/2}px`;
+  btn.appendChild(r);
+  setTimeout(() => r.remove(), 420);
+}
+
+function shakeRow(row) {
+  for (let c = 0; c < COLS; c++) {
+    const t = tileAt(row, c);
+    if (!t) continue;
+    t.classList.remove('shake');
+    void t.offsetWidth;
+    t.classList.add('shake');
+  }
+}
+
+function bounceRow(row) {
+  for (let c = 0; c < COLS; c++) {
+    const t = tileAt(row, c);
+    if (!t) continue;
+    t.style.setProperty('--bounce-delay', `${c * 75}ms`);
+    t.classList.remove('bounce');
+    void t.offsetWidth;
+    t.classList.add('bounce');
+  }
+}
+
+async function revealRow(rowIndex, letters, states) {
+  const BG = { correct: '#6aaa64', present: '#c9b458', absent: '#787c7e' };
+  for (let c = 0; c < COLS; c++) {
+    const tile = tileAt(rowIndex, c);
+    if (!tile) continue;
+    tile.textContent = letters[c] || '';
+    tile.classList.add('filled');
+    tile.style.setProperty('--tile-bg', BG[states[c]] || '#787c7e');
+    tile.style.setProperty('--flip-dur', FLIP_DUR + 'ms');
+    tile.style.setProperty('--flip-delay', (c * FLIP_STAGGER) + 'ms');
+    tile.classList.add('reveal');
+  }
+  await new Promise(res => setTimeout(res, COLS * FLIP_STAGGER + FLIP_DUR + 40));
+}
+
+function spawnParticles() {
+  for (let i = 0; i < 30; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const ang = Math.random() * 360;
+    const d = 70 + Math.random() * 160;
+    const dur = 0.55 + Math.random() * 0.4;
+    p.style.cssText = `left:${36+Math.random()*28}%;top:${28+Math.random()*18}%;background:${COLORS[Math.floor(Math.random()*COLORS.length)]};--tx:${Math.cos(ang*Math.PI/180)*d}px;--ty:${Math.sin(ang*Math.PI/180)*d-70}px;--dur:${dur}s`;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), dur * 1000 + 80);
+  }
+}
+
+function launchConfetti() {
+  const cv = document.getElementById('confetti-canvas');
+  const ctx = cv.getContext('2d');
+  cv.width = window.innerWidth;
+  cv.height = window.innerHeight;
+  const pp = Array.from({ length: 90 }, () => ({
+    x: Math.random()*cv.width, y: -10-Math.random()*80,
+    vx: (Math.random()-.5)*3.5, vy: 2+Math.random()*3.5,
+    rot: Math.random()*360, vrot: (Math.random()-.5)*7,
+    color: COLORS[Math.floor(Math.random()*COLORS.length)],
+    w: 6+Math.random()*7, h: 4+Math.random()*5
+  }));
+  (function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    let alive = false;
+    pp.forEach(p => {
+      p.x+=p.vx; p.y+=p.vy; p.vy+=.07; p.rot+=p.vrot;
+      if (p.y < cv.height+20) alive = true;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, Math.max(0, 1-p.y/cv.height)*3);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      ctx.restore();
+    });
+    if (alive) requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,cv.width,cv.height);
+  })();
+}
+
 async function fetchState(showMask = false) {
   if (!sessionToken) {
-    toast('Session is not ready');
-    return;
+    showToast('Session not ready');
+    return false;
   }
   if (showMask) setLoading(true);
   try {
     const res = await fetch(`/integration/api/state?token=${encodeURIComponent(sessionToken)}`);
     const data = await res.json();
     if (!data.ok) {
-      toast(data.error || 'Failed to load game state');
-      return;
+      showToast(data.error || 'Failed to load');
+      return false;
     }
-    if (data.state.game_over) localGuess = [];
-    draw(data.state);
+    state = data.state;
+    refreshFromState();
+    return true;
   } finally {
     if (showMask) setLoading(false);
   }
 }
 
 async function submitGuess() {
-  if (!currentState || currentState.game_over || submitting) return;
-  if (localGuess.length < 5) {
-    toast('Not enough letters');
+  if (submitting || !state || state.game_over) return;
+  if (localInput.length < COLS) {
+    shakeRow(state.attempts_used);
+    showToast('Not enough letters');
     return;
   }
+
   submitting = true;
-  animatingRow = currentState.attempts_used;
-  draw(currentState);
-  const word = localGuess.join('');
+  const rowIndex = state.attempts_used;
+  const guess = localInput.join('');
+
   try {
     const res = await fetch('/integration/api/guess', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: sessionToken, word })
+      body: JSON.stringify({ token: sessionToken, word: guess })
     });
     const data = await res.json();
     if (!data.ok) {
-      toast(data.error || 'Guess failed');
+      shakeRow(rowIndex);
+      showToast(data.error || 'Guess rejected');
       return;
     }
-    localGuess = [];
-    draw(data.state);
+
+    const rowData = data.state.rows && data.state.rows[rowIndex] ? data.state.rows[rowIndex] : null;
+    if (rowData) {
+      await revealRow(rowIndex, guess.split(''), rowData.states || []);
+    }
+
+    if (rowData && (rowData.states || []).every(s => s === 'correct')) {
+      bounceRow(rowIndex);
+      spawnParticles();
+      launchConfetti();
+    }
+
+    localInput = [];
+    state = data.state;
+    refreshFromState();
   } finally {
     submitting = false;
-    animatingRow = -1;
+  }
+}
+
+function handleKey(key) {
+  if (!state || state.game_over || submitting) return;
+  if (key === '⌫' || key === 'BACKSPACE') {
+    if (localInput.length > 0) localInput.pop();
+    refreshFromState();
+    return;
+  }
+  if (key === 'ENTER') {
+    submitGuess();
+    return;
+  }
+  if (/^[A-Z]$/.test(key) && localInput.length < COLS) {
+    localInput.push(key);
+    refreshFromState();
   }
 }
 
 async function retryGame() {
-  if (!currentState || !currentState.game_over || submitting) return;
+  if (submitting || !state || !state.game_over) return;
   setLoading(true);
   try {
     const res = await fetch('/integration/api/retry', {
@@ -570,39 +911,17 @@ async function retryGame() {
     });
     const data = await res.json();
     if (!data.ok) {
-      toast(data.error || 'Retry failed');
+      showToast(data.error || 'Retry failed');
       return;
     }
-    localGuess = [];
-    draw(data.state);
+    localInput = [];
+    state = data.state;
+    document.getElementById('confetti-canvas').getContext('2d').clearRect(0, 0, window.innerWidth, window.innerHeight);
+    refreshFromState();
   } finally {
     setLoading(false);
   }
 }
-
-function handleKey(k) {
-  if (!currentState || currentState.game_over || submitting) return;
-  if (k === '⌫') {
-    localGuess.pop();
-    draw(currentState);
-    return;
-  }
-  if (k === 'ENTER') {
-    submitGuess();
-    return;
-  }
-  if (/^[A-Z]$/.test(k) && localGuess.length < COLS) {
-    localGuess.push(k);
-    draw(currentState);
-  }
-}
-
-document.addEventListener('keydown', (e) => {
-  const k = e.key.toUpperCase();
-  if (k === 'BACKSPACE') handleKey('⌫');
-  else if (k === 'ENTER') handleKey('ENTER');
-  else if (/^[A-Z]$/.test(k)) handleKey(k);
-});
 
 function detectChannelIdFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -612,16 +931,15 @@ function detectChannelIdFromUrl() {
 async function bootstrapActivitySession() {
   if (!ACTIVITY_MODE) return Boolean(sessionToken);
   if (!ACTIVITY_CLIENT_ID) {
-    toast('Missing DISCORD_ACTIVITY_CLIENT_ID/APP_ID');
+    showToast('Missing activity client id');
     return false;
   }
 
   setLoading(true);
-  document.getElementById('loading-text').textContent = 'CONNECTING DISCORD ACTIVITY';
   try {
     const sdkModule = await import('https://esm.sh/@discord/embedded-app-sdk');
     const DiscordSDK = sdkModule.DiscordSDK || (sdkModule.default && sdkModule.default.DiscordSDK) || sdkModule.default;
-    if (!DiscordSDK) throw new Error('Discord SDK could not be loaded');
+    if (!DiscordSDK) throw new Error('Discord SDK unavailable');
 
     const discordSdk = new DiscordSDK(ACTIVITY_CLIENT_ID);
     await discordSdk.ready();
@@ -649,7 +967,7 @@ async function bootstrapActivitySession() {
       body: JSON.stringify({ code: authRes.code, redirect_uri: redirectUri })
     });
     const oauthData = await oauthRes.json();
-    if (!oauthData.ok) throw new Error(oauthData.error || 'OAuth token exchange failed');
+    if (!oauthData.ok) throw new Error(oauthData.error || 'OAuth exchange failed');
 
     await discordSdk.commands.authenticate({ access_token: oauthData.access_token });
 
@@ -659,26 +977,42 @@ async function bootstrapActivitySession() {
       body: JSON.stringify({ access_token: oauthData.access_token, channel_id: channelId || null, scope: 'channel' })
     });
     const sessData = await sessRes.json();
-    if (!sessData.ok) throw new Error(sessData.error || 'Session token generation failed');
+    if (!sessData.ok) throw new Error(sessData.error || 'Session token failed');
     sessionToken = sessData.token;
     return true;
   } catch (err) {
-    toast(String(err && err.message ? err.message : err));
+    showToast(String(err && err.message ? err.message : err));
     return false;
   } finally {
-    document.getElementById('loading-text').textContent = 'SYNCING WITH DISCORD';
     setLoading(false);
   }
 }
 
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toUpperCase();
+  if (k === 'BACKSPACE') handleKey('⌫');
+  else if (k === 'ENTER') handleKey('ENTER');
+  else if (/^[A-Z]$/.test(k)) handleKey(k);
+});
+
+document.getElementById('retry-btn').addEventListener('click', retryGame);
 window.addEventListener('resize', calcLayout);
+
+buildGrid();
+buildKeyboard();
 calcLayout();
+
 (async () => {
   const ok = await bootstrapActivitySession();
   if (!ok) return;
-  await fetchState(true);
-  setInterval(() => fetchState(false), 3000);
+  const loaded = await fetchState(true);
+  if (!loaded) return;
+  setInterval(() => {
+    if (!submitting) fetchState(false);
+  }, 3000);
 })();
 </script>
 </body>
 </html>
+
