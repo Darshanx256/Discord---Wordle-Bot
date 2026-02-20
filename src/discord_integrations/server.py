@@ -656,7 +656,11 @@ def start_integration_server(bot):
             return
 
         host = os.getenv("INTEGRATION_HOST", "0.0.0.0")
-        port = int(os.getenv("INTEGRATION_PORT", "8787"))
+        port_raw = os.getenv("INTEGRATION_PORT") or os.getenv("PORT") or "8787"
+        try:
+            port = int(port_raw)
+        except ValueError:
+            raise RuntimeError(f"Invalid integration port value: {port_raw!r}")
         from waitress import serve
         app = _create_app(bot)
 
