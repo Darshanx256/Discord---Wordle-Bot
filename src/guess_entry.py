@@ -34,27 +34,52 @@ class GuessEntryView(discord.ui.View):
 
     @discord.ui.button(label="Open Integration UI", style=discord.ButtonStyle.primary, emoji="🌐")
     async def open_integration_ui(self, interaction: discord.Interaction, button: discord.ui.Button):
+        async def _send_ephemeral(*, content: str, view=None):
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(content, ephemeral=True, view=view)
+                    return
+            except (discord.NotFound, discord.HTTPException):
+                pass
+
+            try:
+                await interaction.followup.send(content, ephemeral=True, view=view)
+                return
+            except (discord.NotFound, discord.HTTPException):
+                pass
+
+            # Last-resort fallback if interaction token already expired.
+            if interaction.channel:
+                try:
+                    await interaction.channel.send(f"{interaction.user.mention} {content}", view=view)
+                except (discord.NotFound, discord.HTTPException, discord.Forbidden):
+                    pass
+
         # Prefer Discord-native Activity launch when available.
-        launch_activity = getattr(interaction.response, "launch_activity", None)
-        if callable(launch_activity):
+        # Support both interaction.response.launch_activity and interaction.launch_activity variants.
+        launch_candidates = [
+            getattr(interaction.response, "launch_activity", None),
+            getattr(interaction, "launch_activity", None),
+        ]
+        for launch_activity in launch_candidates:
+            if not callable(launch_activity):
+                continue
             try:
                 await launch_activity()
                 return
-            except discord.HTTPException:
-                # Fall through to URL fallback if Activity launch fails.
-                pass
+            except Exception:
+                # Fall through to URL fallback if Activity launch is unsupported/fails here.
+                break
 
         link = build_integration_link(self.bot, interaction.user.id, interaction.channel_id)
         if not link:
-            return await interaction.response.send_message(
-                "⚠️ Activity launch is unavailable and no active game link was found.",
-                ephemeral=True,
+            return await _send_ephemeral(
+                content="⚠️ Activity launch is unavailable and no active game link was found."
             )
 
         launch_view = discord.ui.View(timeout=180)
         launch_view.add_item(discord.ui.Button(label="Open Live Board", style=discord.ButtonStyle.link, url=link))
-        await interaction.response.send_message(
-            "Activity launch is unavailable here, using web link fallback.",
-            ephemeral=True,
+        await _send_ephemeral(
+            content="Activity launch is unavailable here, using web link fallback.",
             view=launch_view,
         )
