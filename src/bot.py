@@ -189,7 +189,15 @@ class WordleBot(commands.Bot):
 
         # Load cogs first so their app-commands are registered before syncing
         await self.load_cogs()
-        await self.tree.sync()
+        try:
+            await self.tree.sync()
+        except discord.HTTPException as e:
+            # Activity apps can have an Entry Point command managed outside this bulk sync.
+            # Discord rejects removing it via bulk update (50240), so we skip sync and continue boot.
+            if getattr(e, "code", None) == 50240:
+                print("⚠️ Skipping bulk command sync (50240: Activity Entry Point command must be preserved).")
+            else:
+                raise
         
         # Start refactored background tasks
         self._background_tasks['cleanup'] = self.spawn_task(self.cleanup_task_loop())
