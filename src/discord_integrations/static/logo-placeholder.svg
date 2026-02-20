@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Wordle">
+  <rect width="128" height="128" rx="24" fill="#6aaa64"/>
+  <rect x="16" y="16" width="96" height="96" rx="14" fill="#ffffff"/>
+  <path d="M30 34h12l10 36 12-36h11l12 36 10-36h12l-19 60H82L69 57 56 94H49z" fill="#1a1a1b"/>
+</svg>
+

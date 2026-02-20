@@ -50,6 +50,56 @@ Discord---Wordle-Bot/
 - **Shop**: Unlock badges like "Duck Lord" or "Dragon Slayer".
 - **Collection**: Find rare easter eggs (Ducks, Dragons) randomly in games.
 - **Anti-Grind**: Daily soft-caps to encourage consistency over spam.
+- **Discord Integration UI**: Open a live browser board from the in-chat game buttons (Flask + Waitress).
+
+## 🌐 Discord Integration UI (Flask + Waitress)
+
+The bot now starts a lightweight web server for in-browser gameplay integration.
+
+### What it does
+- Adds an **Open Integration UI** button next to the modal guess button.
+- Opens a signed link tied to your Discord user and active game.
+- Mirrors channel/custom integration guesses back into Discord chat via existing `/guess` flow.
+- Supports Solo sessions privately from the same integration endpoint.
+
+### Environment variables
+- `INTEGRATION_BASE_URL` (default: `http://127.0.0.1:8787`)
+- `INTEGRATION_HOST` (default: `0.0.0.0`)
+- `INTEGRATION_PORT` (default: `8787`)
+- `INTEGRATION_TOKEN_SECRET` (recommended in production)
+
+### Run locally
+1. Install deps: `pip install -r requirements.txt`
+2. Set your Discord/Supabase env vars as usual.
+3. Optional: set `INTEGRATION_BASE_URL` to your tunnel/public URL if remote users must access it.
+4. Start bot normally (`python wordle_bot.py` or your existing entry command).
+5. In Discord, start a game and press **Open Integration UI**.
+
+### Important deploy note
+- If users outside your machine should access the UI, `INTEGRATION_BASE_URL` must point to a reachable public domain or tunnel URL that routes to `INTEGRATION_HOST:INTEGRATION_PORT`.
+- Replace `src/discord_integrations/static/logo-placeholder.svg` with your own logo file when ready.
+
+## 🎯 Discord Activity Mode (Embedded App)
+
+The same web UI now supports an Activity bootstrap path at:
+- `/integration/activity`
+
+This keeps gameplay logic unchanged and only changes how session/auth is established.
+
+### Required environment variables (Activity)
+- `DISCORD_ACTIVITY_CLIENT_ID` (or `APP_ID`)
+- `DISCORD_CLIENT_SECRET`
+- `INTEGRATION_BASE_URL` must be public HTTPS (required by Discord OAuth redirect rules)
+
+### Backend endpoints used by Activity bootstrap
+- `POST /integration/api/activity/oauth-token` (OAuth code -> access token)
+- `POST /integration/api/activity/session-token` (Discord user token -> signed Wordle session token)
+
+### Developer Portal checklist
+1. Enable the app for Activities/Embedded usage in Discord Developer Portal.
+2. Add redirect URI: `<YOUR_PUBLIC_BASE_URL>/integration/activity`
+3. Ensure your app is installed in the test server.
+4. Launch Activity in Discord, then the web client bootstraps and binds to channel game state.
 
 ## 🎮 Commands
 

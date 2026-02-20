@@ -1,4 +1,5 @@
 import discord
+from src.discord_integrations.server import build_integration_link
 
 
 class GuessInputModal(discord.ui.Modal, title="Submit Guess"):
@@ -30,3 +31,20 @@ class GuessEntryView(discord.ui.View):
     @discord.ui.button(label="Guess (Modal)", style=discord.ButtonStyle.secondary, emoji="📝")
     async def guess_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(GuessInputModal(self.bot))
+
+    @discord.ui.button(label="Open Integration UI", style=discord.ButtonStyle.primary, emoji="🌐")
+    async def open_integration_ui(self, interaction: discord.Interaction, button: discord.ui.Button):
+        link = build_integration_link(self.bot, interaction.user.id, interaction.channel_id)
+        if not link:
+            return await interaction.response.send_message(
+                "⚠️ No active game found for this channel (or your solo game).",
+                ephemeral=True,
+            )
+
+        launch_view = discord.ui.View(timeout=180)
+        launch_view.add_item(discord.ui.Button(label="Open Live Board", style=discord.ButtonStyle.link, url=link))
+        await interaction.response.send_message(
+            "Tap to open the live integration board.",
+            ephemeral=True,
+            view=launch_view,
+        )

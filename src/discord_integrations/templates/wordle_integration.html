@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Discord Wordle Integration</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f9f9f6;
+  --surface: #ffffff;
+  --border: #d3d6da;
+  --border-filled: #878a8c;
+  --text: #1a1a1b;
+  --muted: #878a8c;
+  --correct: #6aaa64;
+  --correct-dark: #538d4e;
+  --present: #c9b458;
+  --absent: #787c7e;
+  --key-bg: #d3d6da;
+  --tile-size: 52px;
+  --tile-gap: 5px;
+  --tile-font: 22px;
+  --key-h: 52px;
+  --key-font: 30px;
+  --kb-gap: 6px;
+}
+html, body {
+  height: 100%;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  overflow: hidden;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+header {
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 14px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 17px;
+  letter-spacing: 0.08em;
+}
+.logo img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stat-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f0f0ed;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.chip-val {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 11px;
+}
+#grid-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  overflow: hidden;
+}
+#grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tile-gap);
+}
+.row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row-user {
+  width: 84px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.row-user.visible { opacity: 1; transform: translateX(0); }
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ddd;
+  border: 2px solid #fff;
+  object-fit: cover;
+}
+.user-name {
+  font-size: 9px;
+  color: var(--muted);
+  max-width: 46px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-spacer { width: 84px; flex-shrink: 0; }
+.tile-row { display: flex; gap: var(--tile-gap); }
+.tile {
+  width: var(--tile-size);
+  height: var(--tile-size);
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 700;
+  font-size: var(--tile-font);
+}
+.tile.filled { border-color: var(--border-filled); }
+.tile.correct { background: var(--correct); border-color: var(--correct); color: #fff; }
+.tile.present { background: var(--present); border-color: var(--present); color: #fff; }
+.tile.absent { background: var(--absent); border-color: var(--absent); color: #fff; }
+.tile.pending {
+  animation: pendingFlip 0.5s ease-in-out infinite;
+}
+@keyframes pendingFlip {
+  0% { transform: rotateX(0deg); }
+  50% { transform: rotateX(-88deg); }
+  100% { transform: rotateX(0deg); }
+}
+#keyboard {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 6px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kb-gap);
+}
+.kb-row { display: flex; justify-content: center; gap: var(--kb-gap); }
+.key {
+  height: var(--key-h);
+  flex: 1;
+  min-width: 0;
+  max-width: 46px;
+  border: none;
+  border-radius: 6px;
+  background: var(--key-bg);
+  color: #1a1a1b;
+  font-family: 'Space Mono', monospace;
+  font-size: var(--key-font);
+  font-weight: 700;
+}
+.key.wide { max-width: 78px; font-size: calc(var(--key-font) * 0.62); }
+.key.correct { background: var(--correct); color: #fff; }
+.key.present { background: var(--present); color: #fff; }
+.key.absent { background: var(--absent); color: #fff; }
+#footer {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+  padding: 0 12px 8px;
+}
+#win-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  align-items: center;
+  justify-content: center;
+  background: rgba(249, 249, 246, 0.9);
+}
+#win-overlay.show { display: flex; }
+.win-card {
+  background: #fff;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 18px;
+  width: 92%;
+  max-width: 350px;
+  text-align: center;
+}
+.winner-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 8px;
+}
+.win-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+.win-sub { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.win-word { font-family: 'Unbounded', sans-serif; letter-spacing: 0.08em; font-size: 21px; color: var(--correct-dark); margin-bottom: 8px; }
+#breakdown {
+  max-height: 140px;
+  overflow-y: auto;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+.break-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.break-row:last-child { margin-bottom: 0; }
+.btn {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 0;
+  background: var(--correct);
+  color: #fff;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 11px;
+  cursor: pointer;
+}
+.btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+#toast {
+  position: fixed;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  z-index: 30;
+  background: #1a1a1b;
+  color: #fff;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 11px;
+  display: none;
+}
+#loading-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 32;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: rgba(249, 249, 246, 0.92);
+  backdrop-filter: blur(3px);
+}
+#loading-mask.show { display: flex; }
+.loader-grid {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.loader-tile {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: #d3d6da;
+  animation: loadPulse 0.8s ease-in-out infinite;
+}
+.loader-tile:nth-child(2) { animation-delay: 0.08s; }
+.loader-tile:nth-child(3) { animation-delay: 0.16s; }
+.loader-tile:nth-child(4) { animation-delay: 0.24s; }
+.loader-tile:nth-child(5) { animation-delay: 0.32s; }
+@keyframes loadPulse {
+  0%, 100% { transform: translateY(0); background: #d3d6da; }
+  50% { transform: translateY(-8px); background: #6aaa64; }
+}
+#loading-text {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <img src="/integration/static/logo-placeholder.svg" alt="Wordle Logo">
+      <span id="mode-title">Classic</span>
+    </div>
+    <div class="header-stats">
+      <div class="stat-chip"><span>WR</span><span class="chip-val" id="wr-val">—</span></div>
+      <div class="stat-chip"><span class="chip-val" id="participants-val">—</span><span>participants</span></div>
+    </div>
+  </header>
+  <div id="grid-wrap"><div id="grid"></div></div>
+  <div id="keyboard"></div>
+  <div id="footer">Not affiliated with The New York Times.</div>
+</div>
+<div id="toast"></div>
+<div id="loading-mask">
+  <div class="loader-grid">
+    <div class="loader-tile"></div><div class="loader-tile"></div><div class="loader-tile"></div><div class="loader-tile"></div><div class="loader-tile"></div>
+  </div>
+  <div id="loading-text">SYNCING WITH DISCORD</div>
+</div>
+<div id="win-overlay">
+  <div class="win-card">
+    <img class="winner-avatar" id="winner-avatar" src="/integration/static/logo-placeholder.svg" alt="Winner Avatar">
+    <div class="win-title" id="win-title">Victory</div>
+    <div class="win-sub" id="win-sub"></div>
+    <div class="win-word" id="win-word"></div>
+    <div id="breakdown"></div>
+    <button class="btn" id="retry-btn" onclick="retryGame()">PLAY AGAIN</button>
+  </div>
+</div>
+<script>
+const INITIAL_TOKEN = {{ token|tojson }};
+const ACTIVITY_MODE = {{ activity_mode|tojson }};
+const ACTIVITY_CLIENT_ID = {{ activity_client_id|tojson }};
+const ROWS = 6;
+const COLS = 5;
+const KB = [
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['ENTER','Z','X','C','V','B','N','M','⌫']
+];
+let currentState = null;
+let localGuess = [];
+let submitting = false;
+let animatingRow = -1;
+let sessionToken = INITIAL_TOKEN;
+
+function setLoading(on) {
+  document.getElementById('loading-mask').classList.toggle('show', Boolean(on));
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 1700);
+}
+
+function calcLayout() {
+  const vh = window.innerHeight;
+  const vw = Math.min(window.innerWidth, 560);
+  const kbRows = 3;
+  const kbGap = 6;
+  const kbH = Math.max(160, Math.floor(vh * 0.33));
+  const keyH = Math.floor((kbH - kbGap * (kbRows - 1) - 16) / kbRows);
+  const gridH = vh - 56 - kbH - 26;
+  const sideW = 84 * 2 + 16;
+  const tileGap = 5;
+  const tileFromH = (gridH - tileGap * (ROWS - 1)) / ROWS;
+  const tileFromW = (vw - sideW - tileGap * (COLS - 1) - 16) / COLS;
+  const size = Math.floor(Math.min(64, tileFromH, tileFromW));
+  const root = document.documentElement;
+  root.style.setProperty('--tile-size', size + 'px');
+  root.style.setProperty('--tile-font', Math.max(18, Math.round(size * 0.42)) + 'px');
+  root.style.setProperty('--key-h', Math.max(42, keyH) + 'px');
+  root.style.setProperty('--key-font', Math.max(18, Math.round(keyH * 0.6)) + 'px');
+}
+
+function keyClass(state) {
+  if (state === 'correct') return 'correct';
+  if (state === 'present') return 'present';
+  if (state === 'absent') return 'absent';
+  return '';
+}
+
+function breakdownMarkup(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return '<div class="break-row"><span>No breakdown yet</span><span>—</span></div>';
+  }
+  return items.map(item => {
+    const status = item.solved ? 'Solved' : `${item.best_greens}/5 greens`;
+    return `<div class="break-row"><span>#${item.rank} ${escapeHtml(item.name)}</span><span>${status} • ${item.attempts} tries</span></div>`;
+  }).join('');
+}
+
+function escapeHtml(text) {
+  return String(text || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function draw(state) {
+  currentState = state;
+  document.getElementById('mode-title').textContent = state.mode_label || 'Classic';
+  document.getElementById('wr-val').textContent = state.wr ?? '—';
+  document.getElementById('participants-val').textContent = state.participants ?? '—';
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const keyState = {};
+
+  for (let r = 0; r < ROWS; r++) {
+    const wrap = document.createElement('div');
+    wrap.className = 'row-wrap';
+
+    const left = document.createElement('div');
+    left.className = 'row-user';
+    const name = document.createElement('div');
+    name.className = 'user-name';
+    const avatar = document.createElement('img');
+    avatar.className = 'user-avatar';
+    avatar.src = '/integration/static/logo-placeholder.svg';
+
+    if (state.rows[r]) {
+      left.classList.add('visible');
+      name.textContent = state.rows[r].user.name || 'Player';
+      if (state.rows[r].user.avatar_url) avatar.src = state.rows[r].user.avatar_url;
+    }
+    left.append(name, avatar);
+    wrap.appendChild(left);
+
+    const row = document.createElement('div');
+    row.className = 'tile-row';
+    for (let c = 0; c < COLS; c++) {
+      const t = document.createElement('div');
+      t.className = 'tile';
+      if (state.rows[r]) {
+        const ch = (state.rows[r].word || '')[c] || '';
+        const st = state.rows[r].states[c] || '';
+        t.textContent = ch;
+        if (ch) t.classList.add('filled');
+        if (st) t.classList.add(st);
+        const best = keyState[ch];
+        if (ch && (!best || (best !== 'correct' && st === 'correct') || (best === 'absent' && st === 'present'))) {
+          keyState[ch] = st;
+        }
+      } else if (r === state.attempts_used && c < localGuess.length && !state.game_over) {
+        t.textContent = localGuess[c];
+        t.classList.add('filled');
+        if (animatingRow === r) {
+          t.classList.add('pending');
+        }
+      }
+      row.appendChild(t);
+    }
+    wrap.appendChild(row);
+    const sp = document.createElement('div');
+    sp.className = 'row-spacer';
+    wrap.appendChild(sp);
+    grid.appendChild(wrap);
+  }
+
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  KB.forEach(line => {
+    const row = document.createElement('div');
+    row.className = 'kb-row';
+    line.forEach(k => {
+      const btn = document.createElement('button');
+      btn.className = 'key' + (k.length > 1 ? ' wide' : '');
+      if (k.length === 1 && keyState[k]) btn.classList.add(keyClass(keyState[k]));
+      btn.textContent = k;
+      btn.disabled = state.game_over || submitting;
+      btn.addEventListener('click', () => handleKey(k));
+      row.appendChild(btn);
+    });
+    kb.appendChild(row);
+  });
+
+  const overlay = document.getElementById('win-overlay');
+  if (state.game_over) {
+    overlay.classList.add('show');
+    if (state.winner) {
+      document.getElementById('win-title').textContent = `${state.winner.name} solved it!`;
+      document.getElementById('win-sub').textContent = 'Winner';
+      if (state.winner.avatar_url) document.getElementById('winner-avatar').src = state.winner.avatar_url;
+    } else {
+      document.getElementById('win-title').textContent = 'Game Over';
+      document.getElementById('win-sub').textContent = 'No winner this round';
+    }
+    document.getElementById('win-word').textContent = state.secret || '';
+    document.getElementById('breakdown').innerHTML = breakdownMarkup(state.breakdown);
+    const retryBtn = document.getElementById('retry-btn');
+    retryBtn.disabled = !state.can_retry;
+  } else {
+    overlay.classList.remove('show');
+  }
+}
+
+async function fetchState(showMask = false) {
+  if (!sessionToken) {
+    toast('Session is not ready');
+    return;
+  }
+  if (showMask) setLoading(true);
+  try {
+    const res = await fetch(`/integration/api/state?token=${encodeURIComponent(sessionToken)}`);
+    const data = await res.json();
+    if (!data.ok) {
+      toast(data.error || 'Failed to load game state');
+      return;
+    }
+    if (data.state.game_over) localGuess = [];
+    draw(data.state);
+  } finally {
+    if (showMask) setLoading(false);
+  }
+}
+
+async function submitGuess() {
+  if (!currentState || currentState.game_over || submitting) return;
+  if (localGuess.length < 5) {
+    toast('Not enough letters');
+    return;
+  }
+  submitting = true;
+  animatingRow = currentState.attempts_used;
+  draw(currentState);
+  const word = localGuess.join('');
+  try {
+    const res = await fetch('/integration/api/guess', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: sessionToken, word })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      toast(data.error || 'Guess failed');
+      return;
+    }
+    localGuess = [];
+    draw(data.state);
+  } finally {
+    submitting = false;
+    animatingRow = -1;
+  }
+}
+
+async function retryGame() {
+  if (!currentState || !currentState.game_over || submitting) return;
+  setLoading(true);
+  try {
+    const res = await fetch('/integration/api/retry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: sessionToken })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      toast(data.error || 'Retry failed');
+      return;
+    }
+    localGuess = [];
+    draw(data.state);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function handleKey(k) {
+  if (!currentState || currentState.game_over || submitting) return;
+  if (k === '⌫') {
+    localGuess.pop();
+    draw(currentState);
+    return;
+  }
+  if (k === 'ENTER') {
+    submitGuess();
+    return;
+  }
+  if (/^[A-Z]$/.test(k) && localGuess.length < COLS) {
+    localGuess.push(k);
+    draw(currentState);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  const k = e.key.toUpperCase();
+  if (k === 'BACKSPACE') handleKey('⌫');
+  else if (k === 'ENTER') handleKey('ENTER');
+  else if (/^[A-Z]$/.test(k)) handleKey(k);
+});
+
+function detectChannelIdFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('channel_id') || params.get('channelId') || params.get('cid') || '';
+}
+
+async function bootstrapActivitySession() {
+  if (!ACTIVITY_MODE) return Boolean(sessionToken);
+  if (!ACTIVITY_CLIENT_ID) {
+    toast('Missing DISCORD_ACTIVITY_CLIENT_ID/APP_ID');
+    return false;
+  }
+
+  setLoading(true);
+  document.getElementById('loading-text').textContent = 'CONNECTING DISCORD ACTIVITY';
+  try {
+    const sdkModule = await import('https://esm.sh/@discord/embedded-app-sdk');
+    const DiscordSDK = sdkModule.DiscordSDK || (sdkModule.default && sdkModule.default.DiscordSDK) || sdkModule.default;
+    if (!DiscordSDK) throw new Error('Discord SDK could not be loaded');
+
+    const discordSdk = new DiscordSDK(ACTIVITY_CLIENT_ID);
+    await discordSdk.ready();
+
+    let channelId = String(discordSdk.channelId || '') || detectChannelIdFromUrl();
+    if (!channelId) {
+      try {
+        const ch = await discordSdk.commands.getChannel({});
+        channelId = String(ch?.id || ch?.channel_id || '');
+      } catch (_) {}
+    }
+
+    const redirectUri = `${window.location.origin}/integration/activity`;
+    const authRes = await discordSdk.commands.authorize({
+      client_id: ACTIVITY_CLIENT_ID,
+      response_type: 'code',
+      state: 'wordle-activity',
+      prompt: 'none',
+      scope: ['identify']
+    });
+
+    const oauthRes = await fetch('/integration/api/activity/oauth-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: authRes.code, redirect_uri: redirectUri })
+    });
+    const oauthData = await oauthRes.json();
+    if (!oauthData.ok) throw new Error(oauthData.error || 'OAuth token exchange failed');
+
+    await discordSdk.commands.authenticate({ access_token: oauthData.access_token });
+
+    const sessRes = await fetch('/integration/api/activity/session-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: oauthData.access_token, channel_id: channelId || null, scope: 'channel' })
+    });
+    const sessData = await sessRes.json();
+    if (!sessData.ok) throw new Error(sessData.error || 'Session token generation failed');
+    sessionToken = sessData.token;
+    return true;
+  } catch (err) {
+    toast(String(err && err.message ? err.message : err));
+    return false;
+  } finally {
+    document.getElementById('loading-text').textContent = 'SYNCING WITH DISCORD';
+    setLoading(false);
+  }
+}
+
+window.addEventListener('resize', calcLayout);
+calcLayout();
+(async () => {
+  const ok = await bootstrapActivitySession();
+  if (!ok) return;
+  await fetchState(true);
+  setInterval(() => fetchState(false), 3000);
+})();
+</script>
+</body>
+</html>

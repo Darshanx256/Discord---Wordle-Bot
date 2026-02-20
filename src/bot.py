@@ -178,6 +178,11 @@ class WordleBot(commands.Bot):
         self.load_local_data()
         self.load_banned_users()
         self.setup_db()
+        try:
+            from src.discord_integrations.server import start_integration_server
+            start_integration_server(self)
+        except Exception as e:
+            print(f"⚠️ Integration server did not start: {e}")
         
         # Register Global Ban Check for Slash Commands
         self.tree.interaction_check = self.interaction_check

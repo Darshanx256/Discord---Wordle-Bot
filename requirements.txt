@@ -3,3 +3,5 @@ discord.py[voice]
 python-dotenv==1.0.1
 cachetools
 supabase==2.5.3
+flask==3.0.3
+waitress==3.0.0
