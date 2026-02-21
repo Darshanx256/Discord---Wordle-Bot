@@ -661,7 +661,8 @@ def start_integration_server(bot):
             return
 
         host = os.getenv("INTEGRATION_HOST", "0.0.0.0")
-        port_raw = os.getenv("INTEGRATION_PORT") or os.getenv("PORT") or "8787"
+        # For deployed environments (Render, Cloud Run): use PORT. For local dev: use INTEGRATION_PORT or default 8787
+        port_raw = os.getenv("PORT") or os.getenv("INTEGRATION_PORT") or "8787"
         try:
             port = int(port_raw)
         except ValueError:
