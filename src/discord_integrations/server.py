@@ -514,6 +514,11 @@ def _create_app(bot):
         static_url_path="/integration/static",
     )
 
+    @app.before_request
+    def _integration_debug_request_log():
+        ua = (request.headers.get("user-agent") or "")[:120]
+        print(f"[INT] {request.method} {request.full_path} ua={ua}")
+
     @app.get("/integration/wordle")
     def wordle_page():
         token = request.args.get("token", "")

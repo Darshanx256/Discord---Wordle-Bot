@@ -67,7 +67,11 @@ class GuessEntryView(discord.ui.View):
             try:
                 await launch_activity()
                 return
-            except Exception:
+            except Exception as e:
+                err_code = getattr(e, "code", None)
+                err_status = getattr(e, "status", None)
+                err_text = str(e)
+                print(f"⚠️ launch_activity failed: code={err_code} status={err_status} err={err_text}")
                 # Fall through to URL fallback if Activity launch is unsupported/fails here.
                 break
 
@@ -80,6 +84,6 @@ class GuessEntryView(discord.ui.View):
         launch_view = discord.ui.View(timeout=180)
         launch_view.add_item(discord.ui.Button(label="Open Live Board", style=discord.ButtonStyle.link, url=link))
         await _send_ephemeral(
-            content="Activity launch is unavailable here, using web link fallback.",
+            content="Activity launch is unavailable here, using web link fallback. Check bot logs for launch_activity error details.",
             view=launch_view,
         )
