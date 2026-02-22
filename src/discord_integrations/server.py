@@ -521,6 +521,42 @@ def _create_app(bot):
         ua = (request.headers.get("user-agent") or "")[:120]
         print(f"[INT] {request.method} {request.full_path} ua={ua}")
 
+    def _debug_echo_enabled() -> bool:
+        return str(os.getenv("INTEGRATION_DEBUG_ECHO", "0")).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _render_debug_echo(note: str = "matched-route"):
+        host = request.headers.get("host", "")
+        ua = request.headers.get("user-agent", "")
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        method = request.method
+        full_url = request.url
+        query = request.query_string.decode("utf-8", errors="ignore")
+        path = request.path
+        html = f"""<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Integration Debug Echo</title>
+<style>
+body {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#111; color:#eee; padding:18px; }}
+.box {{ background:#1b1b1b; border:1px solid #333; border-radius:8px; padding:14px; max-width:1100px; }}
+h1 {{ font-size:16px; margin:0 0 10px 0; }}
+pre {{ white-space:pre-wrap; word-break:break-word; margin:0; line-height:1.45; }}
+</style></head>
+<body>
+  <div class="box">
+    <h1>Integration Debug Echo ({note})</h1>
+    <pre>method: {method}
+path: {path}
+query: {query}
+full_url: {full_url}
+host: {host}
+x-forwarded-host: {forwarded_host}
+x-forwarded-proto: {forwarded_proto}
+user-agent: {ua}</pre>
+  </div>
+</body></html>"""
+        return html, 200
+
     @app.get("/")
     def root_redirect():
         return redirect("/integration/activity", code=302)
@@ -531,6 +567,8 @@ def _create_app(bot):
 
     @app.get("/integration/wordle")
     def wordle_page():
+        if _debug_echo_enabled():
+            return _render_debug_echo("integration-wordle")
         token = request.args.get("token", "")
         if not _verify_token(token):
             return "Invalid or expired integration token.", 403
@@ -543,6 +581,8 @@ def _create_app(bot):
 
     @app.get("/integration/activity")
     def activity_page():
+        if _debug_echo_enabled():
+            return _render_debug_echo("integration-activity")
         return render_template(
             "wordle_integration.html",
             token="",
@@ -651,41 +691,9 @@ def _create_app(bot):
         Temporary debugging helper: show exactly what URL/path Discord is hitting.
         Enable with INTEGRATION_DEBUG_ECHO=1.
         """
-        if str(os.getenv("INTEGRATION_DEBUG_ECHO", "0")).strip().lower() not in {"1", "true", "yes", "on"}:
+        if not _debug_echo_enabled():
             return "Not Found", 404
-
-        host = request.headers.get("host", "")
-        ua = request.headers.get("user-agent", "")
-        forwarded_host = request.headers.get("x-forwarded-host", "")
-        forwarded_proto = request.headers.get("x-forwarded-proto", "")
-        method = request.method
-        full_url = request.url
-        query = request.query_string.decode("utf-8", errors="ignore")
-        path = request.path
-
-        html = f"""<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Integration Debug Echo</title>
-<style>
-body {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#111; color:#eee; padding:18px; }}
-.box {{ background:#1b1b1b; border:1px solid #333; border-radius:8px; padding:14px; max-width:1000px; }}
-h1 {{ font-size:16px; margin:0 0 10px 0; }}
-pre {{ white-space:pre-wrap; word-break:break-word; margin:0; line-height:1.45; }}
-</style></head>
-<body>
-  <div class="box">
-    <h1>Integration Debug Echo (INTEGRATION_DEBUG_ECHO=1)</h1>
-    <pre>method: {method}
-path: {path}
-query: {query}
-full_url: {full_url}
-host: {host}
-x-forwarded-host: {forwarded_host}
-x-forwarded-proto: {forwarded_proto}
-user-agent: {ua}</pre>
-  </div>
-</body></html>"""
-        return html, 200
+        return _render_debug_echo("unmatched-path")
 
     return app
 
