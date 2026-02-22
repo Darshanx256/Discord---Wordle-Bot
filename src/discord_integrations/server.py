@@ -504,7 +504,7 @@ def _run_on_bot_loop(bot, coro):
 
 
 def _create_app(bot):
-    from flask import Flask, jsonify, render_template, request
+    from flask import Flask, jsonify, redirect, render_template, request
 
     base_dir = Path(__file__).resolve().parent
     app = Flask(
@@ -513,11 +513,21 @@ def _create_app(bot):
         static_folder=str(base_dir / "static"),
         static_url_path="/integration/static",
     )
+    # Accept both `/path` and `/path/` so Discord path normalization doesn't 404.
+    app.url_map.strict_slashes = False
 
     @app.before_request
     def _integration_debug_request_log():
         ua = (request.headers.get("user-agent") or "")[:120]
         print(f"[INT] {request.method} {request.full_path} ua={ua}")
+
+    @app.get("/")
+    def root_redirect():
+        return redirect("/integration/activity", code=302)
+
+    @app.get("/integration")
+    def integration_root_redirect():
+        return redirect("/integration/activity", code=302)
 
     @app.get("/integration/wordle")
     def wordle_page():
@@ -634,6 +644,48 @@ def _create_app(bot):
             return jsonify(result), (200 if result.get("ok") else 400)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"Retry failed: {exc}"}), 500
+
+    @app.route("/<path:any_path>", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
+    def debug_echo_unmatched(any_path: str):
+        """
+        Temporary debugging helper: show exactly what URL/path Discord is hitting.
+        Enable with INTEGRATION_DEBUG_ECHO=1.
+        """
+        if str(os.getenv("INTEGRATION_DEBUG_ECHO", "0")).strip().lower() not in {"1", "true", "yes", "on"}:
+            return "Not Found", 404
+
+        host = request.headers.get("host", "")
+        ua = request.headers.get("user-agent", "")
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+        forwarded_proto = request.headers.get("x-forwarded-proto", "")
+        method = request.method
+        full_url = request.url
+        query = request.query_string.decode("utf-8", errors="ignore")
+        path = request.path
+
+        html = f"""<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Integration Debug Echo</title>
+<style>
+body {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#111; color:#eee; padding:18px; }}
+.box {{ background:#1b1b1b; border:1px solid #333; border-radius:8px; padding:14px; max-width:1000px; }}
+h1 {{ font-size:16px; margin:0 0 10px 0; }}
+pre {{ white-space:pre-wrap; word-break:break-word; margin:0; line-height:1.45; }}
+</style></head>
+<body>
+  <div class="box">
+    <h1>Integration Debug Echo (INTEGRATION_DEBUG_ECHO=1)</h1>
+    <pre>method: {method}
+path: {path}
+query: {query}
+full_url: {full_url}
+host: {host}
+x-forwarded-host: {forwarded_host}
+x-forwarded-proto: {forwarded_proto}
+user-agent: {ua}</pre>
+  </div>
+</body></html>"""
+        return html, 200
 
     return app
 
