@@ -611,6 +611,7 @@ user-agent: {ua}</pre>
         data = request.get_json(silent=True) or {}
         access_token = str(data.get("access_token", "")).strip()
         channel_id_raw = data.get("channel_id")
+        location_id_raw = data.get("location_id")
         scope = str(data.get("scope", "channel")).strip().lower() or "channel"
 
         if not access_token:
@@ -630,10 +631,27 @@ user-agent: {ua}</pre>
             payload = {"uid": uid, "scope": "solo", "exp": int(time.time()) + 7200}
             return jsonify({"ok": True, "token": _sign_token(payload), "scope": "solo"})
 
+        def _coerce_channel_id(value):
+            if value is None:
+                return None
+            raw = str(value).strip()
+            if raw.isdigit():
+                return int(raw)
+            import re
+            m = re.search(r"\d{16,22}", raw)
+            if m:
+                return int(m.group(0))
+            return None
+
+        cid = _coerce_channel_id(channel_id_raw)
+        if cid is None:
+            cid = _coerce_channel_id(location_id_raw)
+
         try:
-            cid = int(channel_id_raw)
+            if cid is None:
+                raise ValueError("missing channel id")
         except Exception:
-            return jsonify({"ok": False, "error": "Missing or invalid channel_id for channel mode."}), 400
+            return jsonify({"ok": False, "error": "Missing or invalid channel_id/location_id for channel mode."}), 400
 
         if cid not in bot.games and cid not in bot.custom_games:
             return jsonify({"ok": False, "error": "No active channel/custom game found."}), 404

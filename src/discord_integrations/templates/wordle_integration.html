@@ -925,7 +925,16 @@ async function retryGame() {
 
 function detectChannelIdFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  return params.get('channel_id') || params.get('channelId') || params.get('cid') || '';
+  const direct = params.get('channel_id') || params.get('channelId') || params.get('cid');
+  if (direct) return String(direct);
+
+  const location = params.get('location_id') || '';
+  if (!location) return '';
+
+  // Accept raw snowflake or extract first snowflake-like token from compound values.
+  if (/^\d{16,22}$/.test(location)) return location;
+  const m = String(location).match(/\d{16,22}/);
+  return m ? m[0] : '';
 }
 
 async function bootstrapActivitySession() {
@@ -974,7 +983,12 @@ async function bootstrapActivitySession() {
     const sessRes = await fetch('/integration/api/activity/session-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: oauthData.access_token, channel_id: channelId || null, scope: 'channel' })
+      body: JSON.stringify({
+        access_token: oauthData.access_token,
+        channel_id: channelId || null,
+        location_id: new URLSearchParams(window.location.search).get('location_id') || null,
+        scope: 'channel'
+      })
     });
     const sessData = await sessRes.json();
     if (!sessData.ok) throw new Error(sessData.error || 'Session token failed');
@@ -1015,4 +1029,3 @@ calcLayout();
 </script>
 </body>
 </html>
-
