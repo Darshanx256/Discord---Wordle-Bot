@@ -487,12 +487,12 @@ function computeIntegrationBase() {
   const i = p.indexOf(marker);
   if (i >= 0) return p.slice(0, i) + "/integration";
   if (p.endsWith("/integration")) return p;
-  return "/integration";
+  return "";
 }
 
 const INTEGRATION_BASE = computeIntegrationBase();
-const API_BASE = `${INTEGRATION_BASE}/api`;
-const STATIC_BASE = `${INTEGRATION_BASE}/static`;
+const API_BASE = new URL("./../api", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
+const STATIC_BASE = new URL("./../static", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
 
 const ROWS = 6;
 const COLS = 5;
@@ -989,7 +989,8 @@ async function bootstrapActivitySession() {
       } catch (_) {}
     }
 
-    const redirectUri = `${window.location.origin}${INTEGRATION_BASE}/activity`;
+    const activityPath = INTEGRATION_BASE ? `${INTEGRATION_BASE}/activity` : "/activity";
+    const redirectUri = `${window.location.origin}${activityPath}`;
     const authRes = await discordSdk.commands.authorize({
       client_id: ACTIVITY_CLIENT_ID,
       response_type: 'code',

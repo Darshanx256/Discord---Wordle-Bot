@@ -566,6 +566,7 @@ user-agent: {ua}</pre>
         return redirect("/integration/activity", code=302)
 
     @app.get("/integration/wordle")
+    @app.get("/wordle")
     def wordle_page():
         if _debug_echo_enabled():
             return _render_debug_echo("integration-wordle")
@@ -580,6 +581,7 @@ user-agent: {ua}</pre>
         )
 
     @app.get("/integration/activity")
+    @app.get("/activity")
     def activity_page():
         if _debug_echo_enabled():
             return _render_debug_echo("integration-activity")
@@ -591,6 +593,7 @@ user-agent: {ua}</pre>
         )
 
     @app.post("/integration/api/activity/oauth-token")
+    @app.post("/api/activity/oauth-token")
     def api_activity_oauth_token():
         data = request.get_json(silent=True) or {}
         code = str(data.get("code", "")).strip()
@@ -607,6 +610,7 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": f"OAuth exchange failed: {exc}"}), 400
 
     @app.post("/integration/api/activity/session-token")
+    @app.post("/api/activity/session-token")
     def api_activity_session_token():
         data = request.get_json(silent=True) or {}
         access_token = str(data.get("access_token", "")).strip()
@@ -660,6 +664,7 @@ user-agent: {ua}</pre>
         return jsonify({"ok": True, "token": _sign_token(payload), "scope": "channel"})
 
     @app.get("/integration/api/state")
+    @app.get("/api/state")
     def api_state():
         token = request.args.get("token", "")
         payload = _verify_token(token)
@@ -672,6 +677,7 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": f"State fetch failed: {exc}"}), 500
 
     @app.post("/integration/api/guess")
+    @app.post("/api/guess")
     def api_guess():
         data = request.get_json(silent=True) or {}
         token = data.get("token", "")
@@ -691,6 +697,7 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": f"Guess submit failed: {exc}"}), 500
 
     @app.post("/integration/api/retry")
+    @app.post("/api/retry")
     def api_retry():
         data = request.get_json(silent=True) or {}
         token = data.get("token", "")
