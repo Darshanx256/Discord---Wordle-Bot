@@ -429,7 +429,7 @@ header {
 <div id="app">
   <header>
     <div class="logo-wrap">
-      <img class="logo-icon" src="/integration/static/logo-placeholder.svg" alt="Logo">
+      <img class="logo-icon" id="logo-icon" src="/integration/static/logo-placeholder.svg" alt="Logo">
       <div class="logo" id="mode-title">CLASSIC</div>
     </div>
     <div class="header-stats">
@@ -479,6 +479,20 @@ header {
 const INITIAL_TOKEN = {{ token|tojson }};
 const ACTIVITY_MODE = {{ activity_mode|tojson }};
 const ACTIVITY_CLIENT_ID = {{ activity_client_id|tojson }};
+const SESSION_KEY = "wordle_integration_session_token";
+
+function computeIntegrationBase() {
+  const p = window.location.pathname || "";
+  const marker = "/integration/";
+  const i = p.indexOf(marker);
+  if (i >= 0) return p.slice(0, i) + "/integration";
+  if (p.endsWith("/integration")) return p;
+  return "/integration";
+}
+
+const INTEGRATION_BASE = computeIntegrationBase();
+const API_BASE = `${INTEGRATION_BASE}/api`;
+const STATIC_BASE = `${INTEGRATION_BASE}/static`;
 
 const ROWS = 6;
 const COLS = 5;
@@ -491,7 +505,7 @@ const KB_ROWS = [
   ['ENTER','Z','X','C','V','B','N','M','⌫']
 ];
 
-let sessionToken = INITIAL_TOKEN;
+let sessionToken = INITIAL_TOKEN || sessionStorage.getItem(SESSION_KEY) || "";
 let state = null;
 let localInput = [];
 let keyMap = {};
@@ -499,6 +513,7 @@ let submitting = false;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
+document.getElementById("logo-icon").src = `${STATIC_BASE}/logo-placeholder.svg`;
 
 function setLoading(on) {
   document.getElementById('loading-mask').classList.toggle('show', Boolean(on));
@@ -825,10 +840,20 @@ async function fetchState(showMask = false) {
   }
   if (showMask) setLoading(true);
   try {
-    const res = await fetch(`/integration/api/state?token=${encodeURIComponent(sessionToken)}`);
-    const data = await res.json();
+    const res = await fetch(`${API_BASE}/state?token=${encodeURIComponent(sessionToken)}`);
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (_) {
+      showToast(`State API non-JSON: ${raw.slice(0, 80)}`);
+      return false;
+    }
     if (!data.ok) {
       showToast(data.error || 'Failed to load');
+      if ((data.error || "").toLowerCase().includes("token")) {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
       return false;
     }
     state = data.state;
@@ -852,12 +877,13 @@ async function submitGuess() {
   const guess = localInput.join('');
 
   try {
-    const res = await fetch('/integration/api/guess', {
+    const res = await fetch(`${API_BASE}/guess`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: sessionToken, word: guess })
     });
-    const data = await res.json();
+    const raw = await res.text();
+    const data = JSON.parse(raw);
     if (!data.ok) {
       shakeRow(rowIndex);
       showToast(data.error || 'Guess rejected');
@@ -904,12 +930,13 @@ async function retryGame() {
   if (submitting || !state || !state.game_over) return;
   setLoading(true);
   try {
-    const res = await fetch('/integration/api/retry', {
+    const res = await fetch(`${API_BASE}/retry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: sessionToken })
     });
-    const data = await res.json();
+    const raw = await res.text();
+    const data = JSON.parse(raw);
     if (!data.ok) {
       showToast(data.error || 'Retry failed');
       return;
@@ -939,6 +966,7 @@ function detectChannelIdFromUrl() {
 
 async function bootstrapActivitySession() {
   if (!ACTIVITY_MODE) return Boolean(sessionToken);
+  if (sessionToken) return true;
   if (!ACTIVITY_CLIENT_ID) {
     showToast('Missing activity client id');
     return false;
@@ -961,7 +989,7 @@ async function bootstrapActivitySession() {
       } catch (_) {}
     }
 
-    const redirectUri = `${window.location.origin}/integration/activity`;
+    const redirectUri = `${window.location.origin}${INTEGRATION_BASE}/activity`;
     const authRes = await discordSdk.commands.authorize({
       client_id: ACTIVITY_CLIENT_ID,
       response_type: 'code',
@@ -970,17 +998,18 @@ async function bootstrapActivitySession() {
       scope: ['identify']
     });
 
-    const oauthRes = await fetch('/integration/api/activity/oauth-token', {
+    const oauthRes = await fetch(`${API_BASE}/activity/oauth-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: authRes.code, redirect_uri: redirectUri })
     });
-    const oauthData = await oauthRes.json();
+    const oauthRaw = await oauthRes.text();
+    const oauthData = JSON.parse(oauthRaw);
     if (!oauthData.ok) throw new Error(oauthData.error || 'OAuth exchange failed');
 
     await discordSdk.commands.authenticate({ access_token: oauthData.access_token });
 
-    const sessRes = await fetch('/integration/api/activity/session-token', {
+    const sessRes = await fetch(`${API_BASE}/activity/session-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -990,11 +1019,14 @@ async function bootstrapActivitySession() {
         scope: 'channel'
       })
     });
-    const sessData = await sessRes.json();
+    const sessRaw = await sessRes.text();
+    const sessData = JSON.parse(sessRaw);
     if (!sessData.ok) throw new Error(sessData.error || 'Session token failed');
     sessionToken = sessData.token;
+    sessionStorage.setItem(SESSION_KEY, sessionToken);
     return true;
   } catch (err) {
+    sessionStorage.removeItem(SESSION_KEY);
     showToast(String(err && err.message ? err.message : err));
     return false;
   } finally {
