@@ -493,6 +493,7 @@ function computeIntegrationBase() {
 const INTEGRATION_BASE = computeIntegrationBase();
 const API_BASE = new URL("./../api", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
 const STATIC_BASE = new URL("./../static", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
+const API_BASE_CANDIDATES = Array.from(new Set([API_BASE, "/integration/api", "/api"]));
 
 const ROWS = 6;
 const COLS = 5;
@@ -529,6 +530,28 @@ function showToast(msg, ms = 1400) {
     t.classList.add('out');
     setTimeout(() => t.remove(), 260);
   }, ms);
+}
+
+async function fetchJsonWithFallback(path, options = {}) {
+  const errs = [];
+  for (const base of API_BASE_CANDIDATES) {
+    const url = `${base}${path}`;
+    try {
+      const res = await fetch(url, options);
+      const raw = await res.text();
+      let data = null;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        errs.push(`${url} -> non-json: ${raw.slice(0, 60)}`);
+        continue;
+      }
+      return { data, url, status: res.status };
+    } catch (e) {
+      errs.push(`${url} -> fetch error: ${String(e)}`);
+    }
+  }
+  throw new Error(`All API bases failed for ${path}: ${errs.join(" | ")}`);
 }
 
 function calcLayout() {
@@ -840,17 +863,9 @@ async function fetchState(showMask = false) {
   }
   if (showMask) setLoading(true);
   try {
-    const res = await fetch(`${API_BASE}/state?token=${encodeURIComponent(sessionToken)}`);
-    const raw = await res.text();
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (_) {
-      showToast(`State API non-JSON: ${raw.slice(0, 80)}`);
-      return false;
-    }
+    const { data, url } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
     if (!data.ok) {
-      showToast(data.error || 'Failed to load');
+      showToast(`${data.error || 'Failed to load'} (${url})`);
       if ((data.error || "").toLowerCase().includes("token")) {
         sessionStorage.removeItem(SESSION_KEY);
       }
@@ -877,16 +892,14 @@ async function submitGuess() {
   const guess = localInput.join('');
 
   try {
-    const res = await fetch(`${API_BASE}/guess`, {
+    const { data, url } = await fetchJsonWithFallback(`/guess`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: sessionToken, word: guess })
     });
-    const raw = await res.text();
-    const data = JSON.parse(raw);
     if (!data.ok) {
       shakeRow(rowIndex);
-      showToast(data.error || 'Guess rejected');
+      showToast(`${data.error || 'Guess rejected'} (${url})`);
       return;
     }
 
@@ -930,15 +943,13 @@ async function retryGame() {
   if (submitting || !state || !state.game_over) return;
   setLoading(true);
   try {
-    const res = await fetch(`${API_BASE}/retry`, {
+    const { data, url } = await fetchJsonWithFallback(`/retry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: sessionToken })
     });
-    const raw = await res.text();
-    const data = JSON.parse(raw);
     if (!data.ok) {
-      showToast(data.error || 'Retry failed');
+      showToast(`${data.error || 'Retry failed'} (${url})`);
       return;
     }
     localInput = [];
@@ -999,18 +1010,16 @@ async function bootstrapActivitySession() {
       scope: ['identify']
     });
 
-    const oauthRes = await fetch(`${API_BASE}/activity/oauth-token`, {
+    const { data: oauthData, url: oauthUrl } = await fetchJsonWithFallback(`/activity/oauth-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: authRes.code, redirect_uri: redirectUri })
     });
-    const oauthRaw = await oauthRes.text();
-    const oauthData = JSON.parse(oauthRaw);
-    if (!oauthData.ok) throw new Error(oauthData.error || 'OAuth exchange failed');
+    if (!oauthData.ok) throw new Error(`${oauthData.error || 'OAuth exchange failed'} (${oauthUrl})`);
 
     await discordSdk.commands.authenticate({ access_token: oauthData.access_token });
 
-    const sessRes = await fetch(`${API_BASE}/activity/session-token`, {
+    const { data: sessData, url: sessUrl } = await fetchJsonWithFallback(`/activity/session-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1020,9 +1029,7 @@ async function bootstrapActivitySession() {
         scope: 'channel'
       })
     });
-    const sessRaw = await sessRes.text();
-    const sessData = JSON.parse(sessRaw);
-    if (!sessData.ok) throw new Error(sessData.error || 'Session token failed');
+    if (!sessData.ok) throw new Error(`${sessData.error || 'Session token failed'} (${sessUrl})`);
     sessionToken = sessData.token;
     sessionStorage.setItem(SESSION_KEY, sessionToken);
     return true;
