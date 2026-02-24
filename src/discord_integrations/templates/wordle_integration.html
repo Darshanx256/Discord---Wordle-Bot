@@ -493,7 +493,13 @@ function computeIntegrationBase() {
 const INTEGRATION_BASE = computeIntegrationBase();
 const API_BASE = new URL("./../api", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
 const STATIC_BASE = new URL("./../static", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
-const API_BASE_CANDIDATES = Array.from(new Set([API_BASE, "/integration/api", "/api"]));
+const API_BASE_CANDIDATES = Array.from(new Set([
+  API_BASE,
+  INTEGRATION_BASE ? `${INTEGRATION_BASE}/activity/api` : "/integration/activity/api",
+  "/integration/api",
+  "/activity/api",
+  "/api"
+]));
 
 const ROWS = 6;
 const COLS = 5;

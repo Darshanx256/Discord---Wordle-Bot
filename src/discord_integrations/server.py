@@ -593,7 +593,9 @@ user-agent: {ua}</pre>
         )
 
     @app.post("/integration/api/activity/oauth-token")
+    @app.post("/integration/activity/api/activity/oauth-token")
     @app.post("/api/activity/oauth-token")
+    @app.post("/activity/api/activity/oauth-token")
     def api_activity_oauth_token():
         data = request.get_json(silent=True) or {}
         code = str(data.get("code", "")).strip()
@@ -610,7 +612,9 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": f"OAuth exchange failed: {exc}"}), 400
 
     @app.post("/integration/api/activity/session-token")
+    @app.post("/integration/activity/api/activity/session-token")
     @app.post("/api/activity/session-token")
+    @app.post("/activity/api/activity/session-token")
     def api_activity_session_token():
         data = request.get_json(silent=True) or {}
         access_token = str(data.get("access_token", "")).strip()
@@ -664,7 +668,9 @@ user-agent: {ua}</pre>
         return jsonify({"ok": True, "token": _sign_token(payload), "scope": "channel"})
 
     @app.get("/integration/api/state")
+    @app.get("/integration/activity/api/state")
     @app.get("/api/state")
+    @app.get("/activity/api/state")
     def api_state():
         token = request.args.get("token", "")
         payload = _verify_token(token)
@@ -677,7 +683,9 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": f"State fetch failed: {exc}"}), 500
 
     @app.post("/integration/api/guess")
+    @app.post("/integration/activity/api/guess")
     @app.post("/api/guess")
+    @app.post("/activity/api/guess")
     def api_guess():
         data = request.get_json(silent=True) or {}
         token = data.get("token", "")
@@ -697,7 +705,9 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": f"Guess submit failed: {exc}"}), 500
 
     @app.post("/integration/api/retry")
+    @app.post("/integration/activity/api/retry")
     @app.post("/api/retry")
+    @app.post("/activity/api/retry")
     def api_retry():
         data = request.get_json(silent=True) or {}
         token = data.get("token", "")
@@ -717,6 +727,9 @@ user-agent: {ua}</pre>
         Enable with INTEGRATION_DEBUG_ECHO=1.
         """
         if not _debug_echo_enabled():
+            req_path = (request.path or "").lower()
+            if req_path.startswith("/api/") or req_path.startswith("/integration/api/") or req_path.startswith("/integration/activity/api/") or req_path.startswith("/activity/api/"):
+                return jsonify({"ok": False, "error": f"Endpoint not found: {request.path}"}), 404
             return "Not Found", 404
         return _render_debug_echo("unmatched-path")
 
