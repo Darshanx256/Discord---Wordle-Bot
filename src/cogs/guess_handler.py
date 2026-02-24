@@ -229,6 +229,11 @@ class GuessHandler(commands.Cog):
             if is_custom:
                 # ========= CUSTOM GAME =========
                 if win:
+                    try:
+                        from src.discord_integrations.server import cache_integration_finished_channel_state
+                        cache_integration_finished_channel_state(self.bot, game, cid, getattr(ctx.author, "id", 0))
+                    except Exception:
+                        pass
                     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                     embed = self._build_game_embed(
                         title="🏆 VICTORY!",
@@ -243,6 +248,11 @@ class GuessHandler(commands.Cog):
                     await ctx.send(embed=embed)
 
                 elif game_over:
+                    try:
+                        from src.discord_integrations.server import cache_integration_finished_channel_state
+                        cache_integration_finished_channel_state(self.bot, game, cid, getattr(ctx.author, "id", 0))
+                    except Exception:
+                        pass
                     board_display = "\n".join([f"{h['pattern']}" for h in game.history])
                     reveal_text = f"The word was **{game.secret.upper()}**." if game.reveal_on_loss else "Better luck next time!"
                     embed = self._build_game_embed(
@@ -283,6 +293,12 @@ class GuessHandler(commands.Cog):
                         break
                 if winner_user is None:
                     winner_user = ctx.author
+
+                try:
+                    from src.discord_integrations.server import cache_integration_finished_channel_state
+                    cache_integration_finished_channel_state(self.bot, game, cid, getattr(winner_user, "id", 0))
+                except Exception:
+                    pass
 
                 # 1. Pop from games immediately to prevent double-processing
                 # Use atomic check-and-remove to prevent race conditions
@@ -331,6 +347,11 @@ class GuessHandler(commands.Cog):
                 task.add_done_callback(self.bot._handle_task_exception)
 
             elif game_over:
+                try:
+                    from src.discord_integrations.server import cache_integration_finished_channel_state
+                    cache_integration_finished_channel_state(self.bot, game, cid, getattr(ctx.author, "id", 0))
+                except Exception:
+                    pass
                 # 1. Pop from games immediately with race condition check
                 if cid not in self.bot.games:
                     return  # Game already processed

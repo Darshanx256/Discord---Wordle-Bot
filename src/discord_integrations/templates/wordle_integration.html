@@ -579,6 +579,7 @@ let submitting = false;
 let preferredApiBase = null;
 let carryInputPending = false;
 let revealUserLockRow = -1;
+let noActiveNoticeShown = false;
 const ICON_VERSION = "20260224b";
 
 const gridEl = document.getElementById('grid');
@@ -603,6 +604,42 @@ function showToast(msg, ms = 1400) {
     t.classList.add('out');
     setTimeout(() => t.remove(), 260);
   }, ms);
+}
+
+function clearBoardAndKeyboard() {
+  for (let r = 0; r < ROWS; r++) {
+    const rowWrap = gridEl.children[r];
+    if (!rowWrap) continue;
+    const userDiv = rowWrap.querySelector('.row-user');
+    const nameEl = rowWrap.querySelector('.user-name');
+    const avatarEl = rowWrap.querySelector('.user-avatar');
+    if (userDiv) userDiv.classList.remove('visible');
+    if (nameEl) nameEl.textContent = '';
+    if (avatarEl) {
+      avatarEl.style.backgroundImage = '';
+      avatarEl.textContent = '';
+    }
+    for (let c = 0; c < COLS; c++) {
+      const t = tileAt(r, c);
+      if (!t) continue;
+      t.className = 'tile';
+      t.textContent = '';
+      t.style.background = '';
+      t.style.borderColor = '';
+      t.style.color = '';
+      t.style.removeProperty('--tile-bg');
+      t.style.removeProperty('--flip-dur');
+      t.style.removeProperty('--flip-delay');
+      t.style.removeProperty('--bounce-delay');
+      t.style.removeProperty('--carry-delay');
+    }
+  }
+  Object.keys(keyMap).forEach(k => {
+    const btn = keyMap[k];
+    btn.className = 'key';
+  });
+  kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
+  document.getElementById('win-overlay').classList.remove('show');
 }
 
 async function fetchJsonWithFallback(path, options = {}) {
@@ -960,12 +997,24 @@ async function fetchState(showMask = false) {
     const { data, url } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
     if (!data.ok) {
       const errLower = String(data.error || "").toLowerCase();
-      if (errLower.includes("no active channel game")) return false;
+      if (errLower.includes("no active channel game")) {
+        localInput = [];
+        carryInputPending = false;
+        state = null;
+        clearBoardAndKeyboard();
+        if (!noActiveNoticeShown) showToast('Waiting for a game in this channel', 1200);
+        noActiveNoticeShown = true;
+        return false;
+      }
       showToast(`${data.error || 'Failed to load'} (${url})`);
       if ((data.error || "").toLowerCase().includes("token")) {
         sessionStorage.removeItem(SESSION_KEY);
       }
       return false;
+    }
+    if (noActiveNoticeShown) {
+      showToast('New game started', 900);
+      noActiveNoticeShown = false;
     }
     const prevState = state;
     if (!submitting && prevState && !prevState.game_over && localInput.length > 0) {
@@ -1008,6 +1057,7 @@ async function submitGuess() {
     if (!data.ok) {
       const beforeAttempts = rowIndex;
       const loaded = await fetchState(false);
+      if (!loaded && !state) return;
       const afterAttempts = Number((state && state.attempts_used) || beforeAttempts);
       const nowOver = Boolean(state && state.game_over);
       const advanced = loaded && afterAttempts > beforeAttempts;

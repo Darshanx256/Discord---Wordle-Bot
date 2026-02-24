@@ -219,6 +219,31 @@ def _load_finished_state(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return _FINISHED_STATE_CACHE.get(key)
 
 
+def cache_integration_finished_channel_state(bot, game, channel_id: int, actor_user_id: int = 0) -> None:
+    """
+    Public helper for non-web game flows (e.g. chat guesses) to preserve a final
+    integration snapshot so web participants can still see end state and retry UI.
+    """
+    try:
+        cid = int(channel_id or 0)
+        if cid <= 0:
+            return
+        uid = int(actor_user_id or 0)
+        state = _snapshot_from_game(bot, game, "channel", uid)
+        retry_meta = {
+            "scope": "channel",
+            "is_classic": bool(getattr(game, "difficulty", 0) == 1),
+            "hard_mode": bool(getattr(game, "hard_mode", False)),
+            "is_custom": bool(getattr(game, "difficulty", 0) == 2),
+            "cid": cid,
+            "uid": uid,
+        }
+        payload = {"uid": uid, "cid": cid, "scope": "channel", "exp": int(time.time()) + 7200}
+        _cache_finished_state(payload, state, retry_meta)
+    except Exception:
+        pass
+
+
 def _build_breakdown(game) -> list[Dict[str, Any]]:
     stats: Dict[int, Dict[str, Any]] = {}
     secret = str(game.secret).upper()
