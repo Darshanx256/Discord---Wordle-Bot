@@ -29,7 +29,9 @@
   --key-font:     12px;
   --kb-gap:       5px;
   --app-safe-top: 0px;
-  --side-col:     70px;
+  --side-col-left: 70px;
+  --side-col-right: 70px;
+  --name-max: 38px;
 }
 
 html, body {
@@ -66,7 +68,7 @@ header {
 }
 
 body.activity-mobile {
-  --app-safe-top: calc(env(safe-area-inset-top, 0px) + 22px);
+  --app-safe-top: calc(env(safe-area-inset-top, 0px) + 46px);
 }
 body.activity-mobile header {
   border-bottom-left-radius: 14px;
@@ -175,7 +177,7 @@ body.activity-mobile header {
 }
 
 .row-user {
-  width: var(--side-col);
+  width: var(--side-col-left);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -207,11 +209,11 @@ body.activity-mobile header {
 }
 
 .user-name {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--muted);
   letter-spacing: 0.03em;
-  max-width: 38px;
+  max-width: var(--name-max);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -219,7 +221,7 @@ body.activity-mobile header {
   line-height: 1;
 }
 
-.row-spacer { width: var(--side-col); flex-shrink: 0; }
+.row-spacer { width: var(--side-col-right); flex-shrink: 0; }
 .tile-row { display: flex; gap: var(--tile-gap); }
 
 .tile {
@@ -581,6 +583,9 @@ let carryInputPending = false;
 let revealUserLockRow = -1;
 let noActiveNoticeShown = false;
 const ICON_VERSION = "20260224b";
+let rowRefs = [];
+let enterBtn = null;
+let pollInFlight = false;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
@@ -592,6 +597,12 @@ function setLoading(on) {
 
 if (ACTIVITY_MODE && IS_PHONE) {
   document.body.classList.add('activity-mobile');
+}
+
+function applyMobileTopInset() {
+  if (!ACTIVITY_MODE || !IS_PHONE) return;
+  const dynTop = Math.max(46, Math.round(window.innerHeight * 0.062));
+  document.documentElement.style.setProperty('--app-safe-top', `calc(env(safe-area-inset-top, 0px) + ${dynTop}px)`);
 }
 
 function showToast(msg, ms = 1400) {
@@ -608,11 +619,11 @@ function showToast(msg, ms = 1400) {
 
 function clearBoardAndKeyboard() {
   for (let r = 0; r < ROWS; r++) {
-    const rowWrap = gridEl.children[r];
-    if (!rowWrap) continue;
-    const userDiv = rowWrap.querySelector('.row-user');
-    const nameEl = rowWrap.querySelector('.user-name');
-    const avatarEl = rowWrap.querySelector('.user-avatar');
+    const rowRef = rowRefs[r];
+    if (!rowRef) continue;
+    const userDiv = rowRef.userDiv;
+    const nameEl = rowRef.nameEl;
+    const avatarEl = rowRef.avatarEl;
     if (userDiv) userDiv.classList.remove('visible');
     if (nameEl) nameEl.textContent = '';
     if (avatarEl) {
@@ -671,7 +682,9 @@ async function fetchJsonWithFallback(path, options = {}) {
 function calcLayout() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const sideCol = IS_PHONE ? 56 : 70;
+  const sideColLeft = IS_PHONE ? 92 : 70;
+  const sideColRight = IS_PHONE ? 38 : 70;
+  const nameMax = IS_PHONE ? 66 : 38;
   const headerH = 52;
   const kbRows = 3;
   const kbGap = Math.min(6, Math.max(4, vh * 0.007));
@@ -680,7 +693,7 @@ function calcLayout() {
   const kbH = kbKeyH * kbRows + kbGap * (kbRows - 1) + kbPad;
   const gridPad = 10;
   const gridH = vh - headerH - kbH - gridPad * 2;
-  const sideW = sideCol * 2 + 8 * 2;
+  const sideW = sideColLeft + sideColRight + 8 * 2;
   const gridW = Math.min(vw, 500) - sideW - 16;
   const tileGap = Math.min(6, Math.max(3, vw * 0.012));
   const fromH = (gridH - tileGap * (ROWS - 1)) / ROWS;
@@ -688,13 +701,16 @@ function calcLayout() {
   const tSize = Math.floor(Math.min(fromH, fromW, IS_PHONE ? 70 : 64));
 
   const root = document.documentElement;
-  root.style.setProperty('--side-col', sideCol + 'px');
+  root.style.setProperty('--side-col-left', sideColLeft + 'px');
+  root.style.setProperty('--side-col-right', sideColRight + 'px');
+  root.style.setProperty('--name-max', nameMax + 'px');
   root.style.setProperty('--tile-size', tSize + 'px');
   root.style.setProperty('--tile-gap', tileGap + 'px');
   root.style.setProperty('--tile-font', Math.round(tSize * 0.41) + 'px');
   root.style.setProperty('--key-h', Math.round(kbKeyH) + 'px');
   root.style.setProperty('--key-font', Math.max(9, Math.round(kbKeyH * 0.26)) + 'px');
   root.style.setProperty('--kb-gap', kbGap + 'px');
+  applyMobileTopInset();
 }
 
 function initialsFrom(name) {
@@ -715,15 +731,14 @@ function escapeHtml(value) {
 }
 
 function tileAt(r, c) {
-  const rowWrap = gridEl.children[r];
-  if (!rowWrap) return null;
-  const tileRow = rowWrap.querySelector('.tile-row');
-  if (!tileRow) return null;
-  return tileRow.children[c] || null;
+  const row = rowRefs[r];
+  if (!row) return null;
+  return row.tiles[c] || null;
 }
 
 function buildGrid() {
   gridEl.innerHTML = '';
+  rowRefs = [];
   for (let r = 0; r < ROWS; r++) {
     const wrap = document.createElement('div');
     wrap.className = 'row-wrap';
@@ -739,10 +754,12 @@ function buildGrid() {
 
     const tileRow = document.createElement('div');
     tileRow.className = 'tile-row';
+    const tiles = [];
     for (let c = 0; c < COLS; c++) {
       const t = document.createElement('div');
       t.className = 'tile';
       tileRow.appendChild(t);
+      tiles.push(t);
     }
     wrap.appendChild(tileRow);
 
@@ -750,6 +767,7 @@ function buildGrid() {
     spacer.className = 'row-spacer';
     wrap.appendChild(spacer);
     gridEl.appendChild(wrap);
+    rowRefs.push({ wrap, userDiv, nameEl, avatarEl, tiles });
   }
 }
 
@@ -763,10 +781,11 @@ function refreshFromState() {
   const keyState = {};
 
   for (let r = 0; r < ROWS; r++) {
-    const rowWrap = gridEl.children[r];
-    const userDiv = rowWrap.querySelector('.row-user');
-    const nameEl = rowWrap.querySelector('.user-name');
-    const avatarEl = rowWrap.querySelector('.user-avatar');
+    const rowRef = rowRefs[r];
+    if (!rowRef) continue;
+    const userDiv = rowRef.userDiv;
+    const nameEl = rowRef.nameEl;
+    const avatarEl = rowRef.avatarEl;
 
     const rowData = state.rows && state.rows[r] ? state.rows[r] : null;
     const word = rowData ? String(rowData.word || '').toUpperCase() : '';
@@ -829,7 +848,6 @@ function refreshFromState() {
     if (ks) btn.classList.add('state-' + ks);
   });
   kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
-  const enterBtn = Array.from(kbEl.querySelectorAll('.key')).find(btn => btn.textContent === 'ENTER');
   if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
 
   const overlay = document.getElementById('win-overlay');
@@ -871,6 +889,7 @@ function refreshFromState() {
 function buildKeyboard() {
   kbEl.innerHTML = '';
   keyMap = {};
+  enterBtn = null;
   KB_ROWS.forEach(rowKeys => {
     const row = document.createElement('div');
     row.className = 'kb-row';
@@ -884,6 +903,7 @@ function buildKeyboard() {
         handleKey(k);
       });
       row.appendChild(btn);
+      if (k === 'ENTER') enterBtn = btn;
       if (k.length === 1) keyMap[k] = btn;
     });
     kbEl.appendChild(row);
@@ -924,11 +944,8 @@ function bounceRow(row) {
 async function revealRow(rowIndex, letters, states) {
   const BG = { correct: '#6aaa64', present: '#c9b458', absent: '#787c7e' };
   revealUserLockRow = rowIndex;
-  const rowWrap = gridEl.children[rowIndex];
-  if (rowWrap) {
-    const rowUser = rowWrap.querySelector('.row-user');
-    if (rowUser) rowUser.classList.remove('visible');
-  }
+  const rowRef = rowRefs[rowIndex];
+  if (rowRef && rowRef.userDiv) rowRef.userDiv.classList.remove('visible');
   for (let c = 0; c < COLS; c++) {
     const tile = tileAt(rowIndex, c);
     if (!tile) continue;
@@ -1231,6 +1248,12 @@ document.addEventListener('keydown', e => {
 
 document.getElementById('retry-btn').addEventListener('click', retryGame);
 window.addEventListener('resize', calcLayout);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && sessionToken && !submitting && !pollInFlight) {
+    pollInFlight = true;
+    fetchState(false).finally(() => { pollInFlight = false; });
+  }
+});
 
 buildGrid();
 buildKeyboard();
@@ -1242,8 +1265,10 @@ calcLayout();
   const loaded = await fetchState(true);
   if (!loaded) return;
   setInterval(() => {
-    if (!submitting) fetchState(false);
-  }, 3000);
+    if (submitting || pollInFlight) return;
+    pollInFlight = true;
+    fetchState(false).finally(() => { pollInFlight = false; });
+  }, 1400);
 })();
 </script>
 </body>
