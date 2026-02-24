@@ -23,7 +23,8 @@
   --key-bg:       #d3d6da;
   --key-text:     #1a1a1b;
   --tile-size:    52px;
-  --tile-gap:     5px;
+  --tile-gap-x:   0px;
+  --tile-gap-y:   1px;
   --tile-font:    22px;
   --key-h:        46px;
   --key-font:     12px;
@@ -81,12 +82,11 @@ body.pip-mode #disclaimer,
 body.pip-mode #toast-container {
   display: none;
 }
+body.pip-mode header {
+  display: none;
+}
 body.pip-mode #app {
   max-width: none;
-}
-body.pip-mode header {
-  height: 36px;
-  padding: 0 8px;
 }
 body.pip-mode .header-stats {
   display: none;
@@ -201,7 +201,7 @@ body.pip-square .tile {
 #grid {
   display: flex;
   flex-direction: column;
-  gap: var(--tile-gap);
+  gap: var(--tile-gap-y);
 }
 
 .row-wrap {
@@ -256,13 +256,13 @@ body.pip-square .tile {
 }
 
 .row-spacer { width: var(--side-col-right); flex-shrink: 0; }
-.tile-row { display: flex; gap: var(--tile-gap); }
+.tile-row { display: flex; gap: var(--tile-gap-x); }
 
 .tile {
   width:  var(--tile-size);
   height: var(--tile-size);
   border: 2px solid var(--border);
-  border-radius: 4px;
+  border-radius: 0;
   background: #fff;
   display: flex;
   align-items: center;
@@ -303,7 +303,7 @@ body.pip-square .tile {
   100% { transform: translateY(0) scale(1); }
 }
 @keyframes carryDown {
-  from { transform: translateY(calc(-1 * (var(--tile-size) + var(--tile-gap)))) scale(0.98); opacity: 0.35; }
+  from { transform: translateY(calc(-1 * (var(--tile-size) + var(--tile-gap-y)))) scale(0.98); opacity: 0.35; }
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
@@ -733,10 +733,12 @@ function calcLayout() {
   applySurfaceMode();
   const pipMode = document.body.classList.contains('pip-mode');
   const pipSquare = document.body.classList.contains('pip-square');
+  const tileGapX = 0;
+  const tileGapY = 1;
   const sideColLeft = pipSquare ? 0 : (IS_PHONE ? 92 : 70);
   const sideColRight = pipSquare ? 0 : (IS_PHONE ? 38 : 70);
   const nameMax = pipSquare ? 0 : (IS_PHONE ? 66 : 38);
-  const headerH = pipMode ? 36 : 52;
+  const headerH = pipMode ? 0 : 52;
   const kbRows = 3;
   const kbGap = Math.min(6, Math.max(4, vh * 0.007));
   const kbKeyH = Math.min(IS_PHONE ? 56 : 52, Math.max(IS_PHONE ? 40 : 36, vh * (IS_PHONE ? 0.072 : 0.067)));
@@ -746,9 +748,8 @@ function calcLayout() {
   const gridH = vh - headerH - kbH - gridPad * 2;
   const sideW = sideColLeft + sideColRight + 8 * 2;
   const gridW = Math.min(vw, 500) - sideW - 16;
-  const tileGap = Math.min(6, Math.max(3, vw * 0.012));
-  const fromH = (gridH - tileGap * (ROWS - 1)) / ROWS;
-  const fromW = (gridW - tileGap * (COLS - 1)) / COLS;
+  const fromH = (gridH - tileGapY * (ROWS - 1)) / ROWS;
+  const fromW = (gridW - tileGapX * (COLS - 1)) / COLS;
   const maxTile = pipSquare ? Math.min(64, Math.max(28, Math.floor(vw * 0.16))) : (IS_PHONE ? 70 : 64);
   const tSize = Math.floor(Math.min(fromH, fromW, maxTile));
 
@@ -757,8 +758,9 @@ function calcLayout() {
   root.style.setProperty('--side-col-right', sideColRight + 'px');
   root.style.setProperty('--name-max', nameMax + 'px');
   root.style.setProperty('--tile-size', tSize + 'px');
-  root.style.setProperty('--tile-gap', tileGap + 'px');
-  root.style.setProperty('--tile-font', Math.round(tSize * 0.41) + 'px');
+  root.style.setProperty('--tile-gap-x', tileGapX + 'px');
+  root.style.setProperty('--tile-gap-y', tileGapY + 'px');
+  root.style.setProperty('--tile-font', Math.round(tSize * 0.45) + 'px');
   root.style.setProperty('--key-h', Math.round(kbKeyH) + 'px');
   root.style.setProperty('--key-font', Math.max(9, Math.round(kbKeyH * 0.26)) + 'px');
   root.style.setProperty('--kb-gap', kbGap + 'px');
