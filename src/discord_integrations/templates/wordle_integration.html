@@ -244,7 +244,6 @@ body.activity-mobile header {
 .tile.shake { animation: shake 0.45s ease; }
 .tile.reveal { animation: flip3d var(--flip-dur, 460ms) ease forwards; animation-delay: var(--flip-delay, 0s); }
 .tile.bounce { animation: bounce 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards; animation-delay: var(--bounce-delay, 0s); }
-.tile.pending { animation: pulsePending 0.62s ease-in-out infinite; }
 .tile.carry-in { animation: carryDown 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--carry-delay, 0s); }
 
 @keyframes flip3d {
@@ -266,10 +265,6 @@ body.activity-mobile header {
   50% { transform: translateY(0) scale(0.97); }
   75% { transform: translateY(-4px) scale(1.02); }
   100% { transform: translateY(0) scale(1); }
-}
-@keyframes pulsePending {
-  0%, 100% { transform: scale(1); border-color: var(--border-filled); }
-  50% { transform: scale(1.04); border-color: #5f6368; }
 }
 @keyframes carryDown {
   from { transform: translateY(calc(-1 * (var(--tile-size) + var(--tile-gap)))) scale(0.98); opacity: 0.35; }
@@ -779,7 +774,6 @@ function refreshFromState() {
       } else if (!state.game_over && r === state.attempts_used && c < localInput.length) {
         t.textContent = localInput[c];
         t.classList.add('filled');
-        if (submitting) t.classList.add('pending');
         if (carryInputPending) {
           t.style.setProperty('--carry-delay', `${c * 35}ms`);
           t.classList.add('carry-in');
@@ -997,6 +991,7 @@ async function submitGuess() {
   }
 
   submitting = true;
+  let submittedOk = false;
   const rowIndex = state.attempts_used;
   const guess = localInput.join('');
   refreshFromState();
@@ -1028,10 +1023,11 @@ async function submitGuess() {
     localInput = [];
     carryInputPending = false;
     state = data.state;
+    submittedOk = true;
     refreshFromState();
   } finally {
     submitting = false;
-    refreshFromState();
+    if (!submittedOk) refreshFromState();
   }
 }
 
