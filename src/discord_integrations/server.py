@@ -320,7 +320,8 @@ async def _load_snapshot(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class _WebGuessContext:
-    def __init__(self, channel, guild, author):
+    def __init__(self, bot, channel, guild, author):
+        self.bot = bot
         self.channel = channel
         self.guild = guild
         self.author = author
@@ -336,7 +337,12 @@ class _WebGuessContext:
             elif embed is not None:
                 self.ephemeral_messages.append(embed.description or embed.title or "Request rejected.")
             return
-        await self.channel.send(content=content, embed=embed, view=view)
+        async def _deliver():
+            await self.channel.send(content=content, embed=embed, view=view)
+
+        task = asyncio.create_task(_deliver())
+        if hasattr(self.bot, "_handle_task_exception"):
+            task.add_done_callback(self.bot._handle_task_exception)
 
 
 async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict[str, Any]:
@@ -358,7 +364,7 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
         except Exception:
             return {"ok": False, "error": "Could not resolve your Discord user."}
 
-    ctx = _WebGuessContext(channel=channel, guild=channel.guild, author=author)
+    ctx = _WebGuessContext(bot=bot, channel=channel, guild=channel.guild, author=author)
     before_attempts = int(getattr(game, "attempts_used", 0))
 
     cog = bot.get_cog("GuessHandler")
@@ -372,6 +378,13 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
         return {"ok": False, "error": ctx.ephemeral_messages[-1]}
 
     state = _snapshot_from_game(bot, game, "channel", uid)
+    guess_row_index = None
+    for idx in range(len(state.get("rows", [])) - 1, -1, -1):
+        row = state["rows"][idx]
+        row_uid = int(((row.get("user") or {}).get("id", 0)) or 0)
+        if row_uid == uid and str(row.get("word", "")).upper() == str(word or "").strip().upper():
+            guess_row_index = idx
+            break
     if state.get("game_over"):
         retry_meta = {
             "scope": "channel",
@@ -382,7 +395,7 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
             "uid": uid,
         }
         _cache_finished_state(payload, state, retry_meta)
-    return {"ok": True, "state": state}
+    return {"ok": True, "state": state, "guess_row_index": guess_row_index}
 
 
 async def _submit_solo_guess(bot, payload: Dict[str, Any], word: str) -> Dict[str, Any]:
@@ -412,7 +425,7 @@ async def _submit_solo_guess(bot, payload: Dict[str, Any], word: str) -> Dict[st
         bot.solo_games.pop(uid, None)
         retry_meta = {"scope": "solo", "uid": uid}
         _cache_finished_state(payload, state, retry_meta)
-    return {"ok": True, "state": state}
+    return {"ok": True, "state": state, "guess_row_index": max(0, int(getattr(game, "attempts_used", 1)) - 1)}
 
 
 class _RetryStartContext:

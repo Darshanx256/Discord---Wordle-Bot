@@ -480,7 +480,7 @@ body.activity-mobile header {
 <div id="app">
   <header>
     <div class="logo-wrap">
-      <img class="logo-icon" id="logo-icon" src="/integration/static/logo-placeholder.svg" alt="Logo">
+      <img class="logo-icon" id="logo-icon" src="/integration/static/icon.png" alt="Logo">
       <div class="logo" id="mode-title">CLASSIC</div>
     </div>
     <div class="header-stats">
@@ -586,7 +586,7 @@ let carryInputPending = false;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
-document.getElementById("logo-icon").src = `${STATIC_BASE}/logo-placeholder.svg`;
+document.getElementById("logo-icon").src = `${STATIC_BASE}/icon.png`;
 
 function setLoading(on) {
   document.getElementById('loading-mask').classList.toggle('show', Boolean(on));
@@ -1004,13 +1004,14 @@ async function submitGuess() {
       return;
     }
 
-    const rowData = data.state.rows && data.state.rows[rowIndex] ? data.state.rows[rowIndex] : null;
+    const acceptedIndex = Number.isInteger(data.guess_row_index) ? data.guess_row_index : rowIndex;
+    const rowData = data.state.rows && data.state.rows[acceptedIndex] ? data.state.rows[acceptedIndex] : null;
     if (rowData) {
-      await revealRow(rowIndex, guess.split(''), rowData.states || []);
+      await revealRow(acceptedIndex, String(rowData.word || guess).toUpperCase().split(''), rowData.states || []);
     }
 
     if (rowData && (rowData.states || []).every(s => s === 'correct')) {
-      bounceRow(rowIndex);
+      bounceRow(acceptedIndex);
       spawnParticles();
       launchConfetti();
     }
