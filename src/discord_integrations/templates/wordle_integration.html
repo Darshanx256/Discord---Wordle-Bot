@@ -583,6 +583,7 @@ let keyMap = {};
 let submitting = false;
 let preferredApiBase = null;
 let carryInputPending = false;
+let revealUserLockRow = -1;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
@@ -739,7 +740,8 @@ function refreshFromState() {
     const states = rowData ? (rowData.states || []) : [];
 
     if (rowData && rowData.user) {
-      userDiv.classList.add('visible');
+      if (r === revealUserLockRow) userDiv.classList.remove('visible');
+      else userDiv.classList.add('visible');
       nameEl.textContent = rowData.user.name || 'Player';
       if (rowData.user.avatar_url) {
         avatarEl.style.backgroundImage = `url('${rowData.user.avatar_url}')`;
@@ -889,6 +891,12 @@ function bounceRow(row) {
 
 async function revealRow(rowIndex, letters, states) {
   const BG = { correct: '#6aaa64', present: '#c9b458', absent: '#787c7e' };
+  revealUserLockRow = rowIndex;
+  const rowWrap = gridEl.children[rowIndex];
+  if (rowWrap) {
+    const rowUser = rowWrap.querySelector('.row-user');
+    if (rowUser) rowUser.classList.remove('visible');
+  }
   for (let c = 0; c < COLS; c++) {
     const tile = tileAt(rowIndex, c);
     if (!tile) continue;
@@ -900,6 +908,7 @@ async function revealRow(rowIndex, letters, states) {
     tile.classList.add('reveal');
   }
   await new Promise(res => setTimeout(res, COLS * FLIP_STAGGER + FLIP_DUR + 40));
+  revealUserLockRow = -1;
 }
 
 function spawnParticles() {

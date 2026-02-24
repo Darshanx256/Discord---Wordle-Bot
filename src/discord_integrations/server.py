@@ -22,6 +22,9 @@ _FINISHED_STATE_CACHE: Dict[str, Dict[str, Any]] = {}
 _FINISHED_STATE_TTL_SECONDS = 7200
 _DISCORD_USER_CACHE: Dict[str, Dict[str, Any]] = {}
 _DISCORD_USER_CACHE_TTL_SECONDS = 1800
+_INTEGRATION_USER_CACHE: Dict[int, Dict[str, Any]] = {}
+_INTEGRATION_USER_CACHE_TTL_SECONDS = 86400
+_INTEGRATION_USER_CACHE_MAX = 1024
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -89,6 +92,44 @@ def _activity_client_secret() -> str:
 
 def _cache_discord_user(access_token: str, user_payload: Dict[str, Any]) -> None:
     _DISCORD_USER_CACHE[access_token] = {"payload": user_payload, "stored_at": time.time()}
+
+
+def _cache_known_integration_user(uid: int, user_payload: Dict[str, Any]) -> None:
+    if uid <= 0:
+        return
+
+    now_ts = time.time()
+    stale = [k for k, v in _INTEGRATION_USER_CACHE.items() if now_ts - float(v.get("stored_at", 0)) > _INTEGRATION_USER_CACHE_TTL_SECONDS]
+    for k in stale:
+        _INTEGRATION_USER_CACHE.pop(k, None)
+
+    name = (
+        str(user_payload.get("name") or "").strip()
+        or str(user_payload.get("global_name") or "").strip()
+        or str(user_payload.get("username") or "").strip()
+        or str(uid)
+    )
+    avatar_url = str(user_payload.get("avatar_url") or "").strip()
+    if not avatar_url:
+        avatar_hash = str(user_payload.get("avatar") or "").strip()
+        if avatar_hash:
+            avatar_url = f"https://cdn.discordapp.com/avatars/{uid}/{avatar_hash}.png?size=128"
+
+    _INTEGRATION_USER_CACHE[uid] = {"name": name, "avatar_url": avatar_url, "stored_at": now_ts}
+
+    if len(_INTEGRATION_USER_CACHE) > _INTEGRATION_USER_CACHE_MAX:
+        oldest_uid = min(_INTEGRATION_USER_CACHE, key=lambda k: float(_INTEGRATION_USER_CACHE[k].get("stored_at", 0)))
+        _INTEGRATION_USER_CACHE.pop(oldest_uid, None)
+
+
+def _get_known_integration_user(uid: int) -> Optional[Dict[str, Any]]:
+    item = _INTEGRATION_USER_CACHE.get(uid)
+    if not item:
+        return None
+    if time.time() - float(item.get("stored_at", 0)) > _INTEGRATION_USER_CACHE_TTL_SECONDS:
+        _INTEGRATION_USER_CACHE.pop(uid, None)
+        return None
+    return item
 
 
 def _get_cached_discord_user(access_token: str) -> Optional[Dict[str, Any]]:
@@ -249,11 +290,11 @@ def _row_user_payload(user_obj) -> Dict[str, Any]:
         avatar_url = str(user_obj.display_avatar.url)
     except Exception:
         avatar_url = ""
-    return {
-        "name": getattr(user_obj, "display_name", str(getattr(user_obj, "id", "Unknown"))),
-        "avatar_url": avatar_url,
-        "id": int(getattr(user_obj, "id", 0) or 0),
-    }
+    uid = int(getattr(user_obj, "id", 0) or 0)
+    name = getattr(user_obj, "display_name", str(getattr(user_obj, "id", "Unknown")))
+    payload = {"name": name, "avatar_url": avatar_url, "id": uid}
+    _cache_known_integration_user(uid, payload)
+    return payload
 
 
 def _snapshot_from_game(bot, game, scope: str, owner_user_id: int) -> Dict[str, Any]:
@@ -359,10 +400,24 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
 
     author = bot.get_user(uid)
     if author is None:
-        try:
-            author = await bot.fetch_user(uid)
-        except Exception:
-            return {"ok": False, "error": "Could not resolve your Discord user."}
+        known_user = _get_known_integration_user(uid)
+        if known_user:
+            class _AvatarProxy:
+                def __init__(self, url: str):
+                    self.url = str(url or "")
+
+            class _AuthorProxy:
+                def __init__(self, user_id: int, name: str, avatar_url: str):
+                    self.id = int(user_id)
+                    self.display_name = str(name or user_id)
+                    self.display_avatar = _AvatarProxy(avatar_url)
+
+            author = _AuthorProxy(uid, str(known_user.get("name", "")), str(known_user.get("avatar_url", "")))
+        else:
+            try:
+                author = await bot.fetch_user(uid)
+            except Exception:
+                return {"ok": False, "error": "Could not resolve your Discord user."}
 
     ctx = _WebGuessContext(bot=bot, channel=channel, guild=channel.guild, author=author)
     before_attempts = int(getattr(game, "attempts_used", 0))
@@ -655,6 +710,7 @@ user-agent: {ua}</pre>
             uid = int(me.get("id", 0))
             if uid <= 0:
                 return jsonify({"ok": False, "error": "Invalid Discord user identity."}), 401
+            _cache_known_integration_user(uid, me)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"Token validation failed: {exc}"}), 401
 
