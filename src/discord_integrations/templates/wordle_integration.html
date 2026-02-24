@@ -76,6 +76,40 @@ body.activity-mobile header {
   box-shadow: 0 4px 14px rgba(26, 26, 27, 0.08);
 }
 
+body.pip-mode #keyboard,
+body.pip-mode #disclaimer,
+body.pip-mode #toast-container {
+  display: none;
+}
+body.pip-mode #app {
+  max-width: none;
+}
+body.pip-mode header {
+  height: 36px;
+  padding: 0 8px;
+}
+body.pip-mode .header-stats {
+  display: none;
+}
+body.pip-mode .logo {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+body.pip-mode .logo-icon {
+  width: 16px;
+  height: 16px;
+}
+body.pip-square #grid-wrap {
+  padding: 6px;
+}
+body.pip-square .row-user,
+body.pip-square .row-spacer {
+  display: none;
+}
+body.pip-square .tile {
+  background: #f3f4f6;
+}
+
 .logo-wrap {
   display: flex;
   align-items: center;
@@ -586,6 +620,7 @@ const ICON_VERSION = "20260224b";
 let rowRefs = [];
 let enterBtn = null;
 let pollInFlight = false;
+let layoutModeValue = -1; // Discord SDK layout mode: 0 focused, 1 pip, 2 grid
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
@@ -603,6 +638,19 @@ function applyMobileTopInset() {
   if (!ACTIVITY_MODE || !IS_PHONE) return;
   const dynTop = Math.max(46, Math.round(window.innerHeight * 0.062));
   document.documentElement.style.setProperty('--app-safe-top', `calc(env(safe-area-inset-top, 0px) + ${dynTop}px)`);
+}
+
+function applySurfaceMode() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const aspect = vh > 0 ? (vw / vh) : 1;
+  const sdkPip = Number(layoutModeValue) === 1;
+  const viewportLikelyPip = ACTIVITY_MODE && vw <= 640 && vh <= 420;
+  const pip = sdkPip || viewportLikelyPip;
+  const square = pip && aspect <= 1.15;
+  document.body.classList.toggle('pip-mode', pip);
+  document.body.classList.toggle('pip-square', square);
+  document.body.classList.toggle('pip-wide', pip && !square);
 }
 
 function showToast(msg, ms = 1400) {
@@ -682,15 +730,18 @@ async function fetchJsonWithFallback(path, options = {}) {
 function calcLayout() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const sideColLeft = IS_PHONE ? 92 : 70;
-  const sideColRight = IS_PHONE ? 38 : 70;
-  const nameMax = IS_PHONE ? 66 : 38;
-  const headerH = 52;
+  applySurfaceMode();
+  const pipMode = document.body.classList.contains('pip-mode');
+  const pipSquare = document.body.classList.contains('pip-square');
+  const sideColLeft = pipSquare ? 0 : (IS_PHONE ? 92 : 70);
+  const sideColRight = pipSquare ? 0 : (IS_PHONE ? 38 : 70);
+  const nameMax = pipSquare ? 0 : (IS_PHONE ? 66 : 38);
+  const headerH = pipMode ? 36 : 52;
   const kbRows = 3;
   const kbGap = Math.min(6, Math.max(4, vh * 0.007));
   const kbKeyH = Math.min(IS_PHONE ? 56 : 52, Math.max(IS_PHONE ? 40 : 36, vh * (IS_PHONE ? 0.072 : 0.067)));
   const kbPad = 12;
-  const kbH = kbKeyH * kbRows + kbGap * (kbRows - 1) + kbPad;
+  const kbH = pipMode ? 0 : (kbKeyH * kbRows + kbGap * (kbRows - 1) + kbPad);
   const gridPad = 10;
   const gridH = vh - headerH - kbH - gridPad * 2;
   const sideW = sideColLeft + sideColRight + 8 * 2;
@@ -698,7 +749,8 @@ function calcLayout() {
   const tileGap = Math.min(6, Math.max(3, vw * 0.012));
   const fromH = (gridH - tileGap * (ROWS - 1)) / ROWS;
   const fromW = (gridW - tileGap * (COLS - 1)) / COLS;
-  const tSize = Math.floor(Math.min(fromH, fromW, IS_PHONE ? 70 : 64));
+  const maxTile = pipSquare ? Math.min(64, Math.max(28, Math.floor(vw * 0.16))) : (IS_PHONE ? 70 : 64);
+  const tSize = Math.floor(Math.min(fromH, fromW, maxTile));
 
   const root = document.documentElement;
   root.style.setProperty('--side-col-left', sideColLeft + 'px');
@@ -1187,6 +1239,18 @@ async function bootstrapActivitySession() {
 
     const discordSdk = new DiscordSDK(ACTIVITY_CLIENT_ID);
     await discordSdk.ready();
+    try {
+      await discordSdk.subscribe('ACTIVITY_LAYOUT_MODE_UPDATE', (payload) => {
+        const nextMode = Number(payload && payload.layout_mode);
+        if (!Number.isNaN(nextMode)) {
+          layoutModeValue = nextMode;
+          calcLayout();
+          refreshFromState();
+        }
+      });
+    } catch (_) {
+      // Some clients may not emit/allow this event; viewport heuristic remains as fallback.
+    }
 
     let channelId = String(discordSdk.channelId || '') || detectChannelIdFromUrl();
     if (!channelId) {
