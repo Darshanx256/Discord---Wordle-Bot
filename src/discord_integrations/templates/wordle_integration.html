@@ -475,7 +475,7 @@ body.activity-mobile header {
 <div id="app">
   <header>
     <div class="logo-wrap">
-      <img class="logo-icon" id="logo-icon" src="/integration/static/icon.png" alt="Logo">
+      <img class="logo-icon" id="logo-icon" src="/integration/static/icon.png?v=20260224b" alt="Logo">
       <div class="logo" id="mode-title">CLASSIC</div>
     </div>
     <div class="header-stats">
@@ -579,10 +579,11 @@ let submitting = false;
 let preferredApiBase = null;
 let carryInputPending = false;
 let revealUserLockRow = -1;
+const ICON_VERSION = "20260224b";
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
-document.getElementById("logo-icon").src = `${STATIC_BASE}/icon.png`;
+document.getElementById("logo-icon").src = `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`;
 
 function setLoading(on) {
   document.getElementById('loading-mask').classList.toggle('show', Boolean(on));
@@ -958,6 +959,8 @@ async function fetchState(showMask = false) {
   try {
     const { data, url } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
     if (!data.ok) {
+      const errLower = String(data.error || "").toLowerCase();
+      if (errLower.includes("no active channel game")) return false;
       showToast(`${data.error || 'Failed to load'} (${url})`);
       if ((data.error || "").toLowerCase().includes("token")) {
         sessionStorage.removeItem(SESSION_KEY);
@@ -1003,6 +1006,16 @@ async function submitGuess() {
       body: JSON.stringify({ token: sessionToken, word: guess })
     });
     if (!data.ok) {
+      const beforeAttempts = rowIndex;
+      const loaded = await fetchState(false);
+      const afterAttempts = Number((state && state.attempts_used) || beforeAttempts);
+      const nowOver = Boolean(state && state.game_over);
+      const advanced = loaded && afterAttempts > beforeAttempts;
+      if (advanced || nowOver) {
+        if (afterAttempts >= ROWS || nowOver) localInput = [];
+        else carryInputPending = true;
+        return;
+      }
       shakeRow(rowIndex);
       showToast(`${data.error || 'Guess rejected'} (${url})`);
       return;

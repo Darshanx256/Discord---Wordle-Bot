@@ -186,6 +186,10 @@ def _session_cache_key(payload: Dict[str, Any]) -> str:
     scope = payload.get("scope", "channel")
     uid = int(payload.get("uid", 0))
     cid = int(payload.get("cid", 0))
+    # Channel finished-state cache should be shared across participants in the same channel.
+    # Solo cache remains user-specific.
+    if scope == "channel":
+        return f"channel:{cid}"
     return f"{scope}:{uid}:{cid}"
 
 
