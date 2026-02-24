@@ -467,7 +467,12 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
     cid = int(payload.get("cid", 0))
     if cid in bot.games or cid in bot.custom_games:
         game = bot.custom_games.get(cid) or bot.games.get(cid)
-        return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid)}
+        current = _snapshot_from_game(bot, game, "channel", uid)
+        # If an active game exists, reuse it; if it is finished, replace it with a new one.
+        if not current.get("game_over"):
+            return {"ok": True, "state": current}
+        bot.custom_games.pop(cid, None)
+        bot.games.pop(cid, None)
 
     channel = bot.get_channel(cid)
     if channel is None:
@@ -491,6 +496,13 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     game = bot.custom_games.get(cid) or bot.games.get(cid)
+    if not game:
+        # start_multiplayer_game posts first and registers immediately after; allow a brief settle window.
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            game = bot.custom_games.get(cid) or bot.games.get(cid)
+            if game:
+                break
     if not game:
         return {"ok": False, "error": "Retry started but game state is unavailable."}
 

@@ -28,6 +28,8 @@
   --key-h:        46px;
   --key-font:     12px;
   --kb-gap:       5px;
+  --app-safe-top: 0px;
+  --side-col:     70px;
 }
 
 html, body {
@@ -44,10 +46,11 @@ html, body {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: calc(100dvh - var(--app-safe-top));
   width: 100%;
   max-width: 500px;
   margin: 0 auto;
+  margin-top: var(--app-safe-top);
 }
 
 header {
@@ -60,6 +63,15 @@ header {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+body.activity-mobile {
+  --app-safe-top: calc(env(safe-area-inset-top, 0px) + 22px);
+}
+body.activity-mobile header {
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+  box-shadow: 0 4px 14px rgba(26, 26, 27, 0.08);
 }
 
 .logo-wrap {
@@ -113,7 +125,7 @@ header {
 
 #toast-container {
   position: fixed;
-  top: 58px;
+  top: calc(58px + var(--app-safe-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 200;
@@ -163,7 +175,7 @@ header {
 }
 
 .row-user {
-  width: 70px;
+  width: var(--side-col);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -207,7 +219,7 @@ header {
   line-height: 1;
 }
 
-.row-spacer { width: 70px; flex-shrink: 0; }
+.row-spacer { width: var(--side-col); flex-shrink: 0; }
 .tile-row { display: flex; gap: var(--tile-gap); }
 
 .tile {
@@ -232,6 +244,8 @@ header {
 .tile.shake { animation: shake 0.45s ease; }
 .tile.reveal { animation: flip3d var(--flip-dur, 460ms) ease forwards; animation-delay: var(--flip-delay, 0s); }
 .tile.bounce { animation: bounce 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards; animation-delay: var(--bounce-delay, 0s); }
+.tile.pending { animation: pulsePending 0.62s ease-in-out infinite; }
+.tile.carry-in { animation: carryDown 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--carry-delay, 0s); }
 
 @keyframes flip3d {
   0% { transform: rotateX(0deg); }
@@ -252,6 +266,14 @@ header {
   50% { transform: translateY(0) scale(0.97); }
   75% { transform: translateY(-4px) scale(1.02); }
   100% { transform: translateY(0) scale(1); }
+}
+@keyframes pulsePending {
+  0%, 100% { transform: scale(1); border-color: var(--border-filled); }
+  50% { transform: scale(1.04); border-color: #5f6368; }
+}
+@keyframes carryDown {
+  from { transform: translateY(calc(-1 * (var(--tile-size) + var(--tile-gap)))) scale(0.98); opacity: 0.35; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 #keyboard {
@@ -304,7 +326,9 @@ header {
 .key.state-present { background: var(--present); color: #fff; }
 .key.state-absent  { background: var(--absent); color: #fff; }
 .key.state-update  { animation: keyPop 0.3s ease; }
+.key.submitting-enter { background: var(--correct-dark); color: #fff; animation: keyPending 0.65s ease-in-out infinite; }
 @keyframes keyPop { 40% { transform: scale(1.13); } 100% { transform: scale(1); } }
+@keyframes keyPending { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.15); } }
 
 #win-overlay {
   display: none;
@@ -408,13 +432,40 @@ header {
 }
 #loading-mask.show { display: flex; }
 .loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   font-family: 'Unbounded', sans-serif;
   font-size: 12px;
   letter-spacing: 0.08em;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 12px 14px;
+}
+.loading-label {
+  color: var(--text);
+}
+.loading-jump {
+  display: flex;
+  gap: 5px;
+}
+.loading-jump .dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--correct);
+  animation: loadingJump 0.9s ease-in-out infinite;
+}
+.loading-jump .dot:nth-child(2) { animation-delay: 0.08s; }
+.loading-jump .dot:nth-child(3) { animation-delay: 0.16s; }
+.loading-jump .dot:nth-child(4) { animation-delay: 0.24s; }
+.loading-jump .dot:nth-child(5) { animation-delay: 0.32s; }
+@keyframes loadingJump {
+  0%, 100% { transform: translateY(0); opacity: 0.58; }
+  40% { transform: translateY(-8px); opacity: 1; }
+  60% { transform: translateY(-4px); opacity: 0.9; }
 }
 
 #disclaimer {
@@ -462,7 +513,18 @@ header {
 
 <div id="toast-container"></div>
 <canvas id="confetti-canvas"></canvas>
-<div id="loading-mask"><div class="loading-card">SYNCING WITH DISCORD</div></div>
+<div id="loading-mask">
+  <div class="loading-card">
+    <div class="loading-label">SYNCING WITH DISCORD</div>
+    <div class="loading-jump" aria-hidden="true">
+      <span class="dot"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
+    </div>
+  </div>
+</div>
 
 <div id="win-overlay">
   <div class="win-card">
@@ -500,6 +562,8 @@ const API_BASE_CANDIDATES = Array.from(new Set([
   "/activity/api",
   "/api"
 ]));
+const URL_PARAMS = new URLSearchParams(window.location.search);
+const IS_PHONE = /iphone|ipod|android|mobile/i.test(navigator.userAgent || "") || String(URL_PARAMS.get("platform") || "").toLowerCase() === "mobile";
 
 const ROWS = 6;
 const COLS = 5;
@@ -517,6 +581,8 @@ let state = null;
 let localInput = [];
 let keyMap = {};
 let submitting = false;
+let preferredApiBase = null;
+let carryInputPending = false;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
@@ -524,6 +590,10 @@ document.getElementById("logo-icon").src = `${STATIC_BASE}/logo-placeholder.svg`
 
 function setLoading(on) {
   document.getElementById('loading-mask').classList.toggle('show', Boolean(on));
+}
+
+if (ACTIVITY_MODE && IS_PHONE) {
+  document.body.classList.add('activity-mobile');
 }
 
 function showToast(msg, ms = 1400) {
@@ -540,7 +610,10 @@ function showToast(msg, ms = 1400) {
 
 async function fetchJsonWithFallback(path, options = {}) {
   const errs = [];
-  for (const base of API_BASE_CANDIDATES) {
+  const orderedBases = preferredApiBase
+    ? [preferredApiBase, ...API_BASE_CANDIDATES.filter(base => base !== preferredApiBase)]
+    : API_BASE_CANDIDATES;
+  for (const base of orderedBases) {
     const url = `${base}${path}`;
     try {
       const res = await fetch(url, options);
@@ -552,6 +625,7 @@ async function fetchJsonWithFallback(path, options = {}) {
         errs.push(`${url} -> non-json: ${raw.slice(0, 60)}`);
         continue;
       }
+      preferredApiBase = base;
       return { data, url, status: res.status };
     } catch (e) {
       errs.push(`${url} -> fetch error: ${String(e)}`);
@@ -563,22 +637,24 @@ async function fetchJsonWithFallback(path, options = {}) {
 function calcLayout() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const sideCol = IS_PHONE ? 56 : 70;
   const headerH = 52;
   const kbRows = 3;
   const kbGap = Math.min(6, Math.max(4, vh * 0.007));
-  const kbKeyH = Math.min(52, Math.max(36, vh * 0.067));
+  const kbKeyH = Math.min(IS_PHONE ? 56 : 52, Math.max(IS_PHONE ? 40 : 36, vh * (IS_PHONE ? 0.072 : 0.067)));
   const kbPad = 12;
   const kbH = kbKeyH * kbRows + kbGap * (kbRows - 1) + kbPad;
   const gridPad = 10;
   const gridH = vh - headerH - kbH - gridPad * 2;
-  const sideW = 70 * 2 + 8 * 2;
+  const sideW = sideCol * 2 + 8 * 2;
   const gridW = Math.min(vw, 500) - sideW - 16;
   const tileGap = Math.min(6, Math.max(3, vw * 0.012));
   const fromH = (gridH - tileGap * (ROWS - 1)) / ROWS;
   const fromW = (gridW - tileGap * (COLS - 1)) / COLS;
-  const tSize = Math.floor(Math.min(fromH, fromW, 64));
+  const tSize = Math.floor(Math.min(fromH, fromW, IS_PHONE ? 70 : 64));
 
   const root = document.documentElement;
+  root.style.setProperty('--side-col', sideCol + 'px');
   root.style.setProperty('--tile-size', tSize + 'px');
   root.style.setProperty('--tile-gap', tileGap + 'px');
   root.style.setProperty('--tile-font', Math.round(tSize * 0.41) + 'px');
@@ -701,6 +777,11 @@ function refreshFromState() {
       } else if (!state.game_over && r === state.attempts_used && c < localInput.length) {
         t.textContent = localInput[c];
         t.classList.add('filled');
+        if (submitting) t.classList.add('pending');
+        if (carryInputPending) {
+          t.style.setProperty('--carry-delay', `${c * 35}ms`);
+          t.classList.add('carry-in');
+        }
       } else {
         t.textContent = '';
       }
@@ -714,6 +795,8 @@ function refreshFromState() {
     if (ks) btn.classList.add('state-' + ks);
   });
   kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
+  const enterBtn = Array.from(kbEl.querySelectorAll('.key')).find(btn => btn.textContent === 'ENTER');
+  if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
 
   const overlay = document.getElementById('win-overlay');
   if (state.game_over) {
@@ -748,6 +831,7 @@ function refreshFromState() {
   } else {
     overlay.classList.remove('show');
   }
+  carryInputPending = false;
 }
 
 function buildKeyboard() {
@@ -877,7 +961,17 @@ async function fetchState(showMask = false) {
       }
       return false;
     }
+    const prevState = state;
+    if (!submitting && prevState && !prevState.game_over && localInput.length > 0) {
+      const prevAttempts = Number(prevState.attempts_used || 0);
+      const nextAttempts = Number((data.state && data.state.attempts_used) || 0);
+      if (nextAttempts > prevAttempts) {
+        if (nextAttempts >= ROWS) localInput = [];
+        else carryInputPending = true;
+      }
+    }
     state = data.state;
+    if (state && state.game_over) localInput = [];
     refreshFromState();
     return true;
   } finally {
@@ -896,6 +990,7 @@ async function submitGuess() {
   submitting = true;
   const rowIndex = state.attempts_used;
   const guess = localInput.join('');
+  refreshFromState();
 
   try {
     const { data, url } = await fetchJsonWithFallback(`/guess`, {
@@ -921,10 +1016,12 @@ async function submitGuess() {
     }
 
     localInput = [];
+    carryInputPending = false;
     state = data.state;
     refreshFromState();
   } finally {
     submitting = false;
+    refreshFromState();
   }
 }
 
@@ -947,6 +1044,7 @@ function handleKey(key) {
 
 async function retryGame() {
   if (submitting || !state || !state.game_over) return;
+  submitting = true;
   setLoading(true);
   try {
     const { data, url } = await fetchJsonWithFallback(`/retry`, {
@@ -958,12 +1056,18 @@ async function retryGame() {
       showToast(`${data.error || 'Retry failed'} (${url})`);
       return;
     }
+    if (data.token) {
+      sessionToken = String(data.token || "");
+      if (sessionToken) sessionStorage.setItem(SESSION_KEY, sessionToken);
+    }
     localInput = [];
+    carryInputPending = false;
     state = data.state;
     document.getElementById('confetti-canvas').getContext('2d').clearRect(0, 0, window.innerWidth, window.innerHeight);
     refreshFromState();
   } finally {
     setLoading(false);
+    submitting = false;
   }
 }
 
