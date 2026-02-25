@@ -326,7 +326,7 @@ def _row_user_payload(user_obj) -> Dict[str, Any]:
     return payload
 
 
-def _snapshot_from_game(bot, game, scope: str, owner_user_id: int) -> Dict[str, Any]:
+def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_fetch: bool = False) -> Dict[str, Any]:
     history_rows = []
     winner = None
     for item in getattr(game, "history", []):
@@ -342,14 +342,17 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int) -> Dict[str, 
     if scope == "solo":
         participants = 1
 
+    # Skip profile fetch during active gameplay for faster response times
+    # Only fetch when specifically needed (e.g., retry/end state)
     wr_value = "—"
-    try:
-        profile = fetch_user_profile_v2(bot, owner_user_id, use_cache=True)
-        if profile:
-            wr_key = "solo_wr" if scope == "solo" else "multi_wr"
-            wr_value = profile.get(wr_key, "—")
-    except Exception:
-        wr_value = "—"
+    if not skip_profile_fetch:
+        try:
+            profile = fetch_user_profile_v2(bot, owner_user_id, use_cache=True)
+            if profile:
+                wr_key = "solo_wr" if scope == "solo" else "multi_wr"
+                wr_value = profile.get(wr_key, "—")
+        except Exception:
+            wr_value = "—"
 
     mode = _mode_label(game, scope)
     return {
@@ -461,7 +464,7 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
     if after_attempts == before_attempts and ctx.ephemeral_messages:
         return {"ok": False, "error": ctx.ephemeral_messages[-1]}
 
-    state = _snapshot_from_game(bot, game, "channel", uid)
+    state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
     guess_row_index = None
     for idx in range(len(state.get("rows", [])) - 1, -1, -1):
         row = state["rows"][idx]
@@ -470,6 +473,8 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
             guess_row_index = idx
             break
     if state.get("game_over"):
+        # Fetch full profile for end state (includes WR)
+        full_state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=False)
         retry_meta = {
             "scope": "channel",
             "is_classic": bool(getattr(game, "difficulty", 0) == 1),
@@ -478,7 +483,8 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
             "cid": cid,
             "uid": uid,
         }
-        _cache_finished_state(payload, state, retry_meta)
+        _cache_finished_state(payload, full_state, retry_meta)
+        state = full_state  # Use full state with WR for end state
     return {"ok": True, "state": state, "guess_row_index": guess_row_index}
 
 
@@ -504,8 +510,10 @@ async def _submit_solo_guess(bot, payload: Dict[str, Any], word: str) -> Dict[st
             return {"ok": False, "error": "Could not resolve your Discord user."}
 
     _, _, game_over = game.process_turn(guess, user)
-    state = _snapshot_from_game(bot, game, "solo", uid)
+    state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
     if game_over:
+        # Fetch full profile for end state (includes WR)
+        state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=False)
         bot.solo_games.pop(uid, None)
         retry_meta = {"scope": "solo", "uid": uid}
         _cache_finished_state(payload, state, retry_meta)
