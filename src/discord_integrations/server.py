@@ -223,13 +223,14 @@ def cache_integration_finished_channel_state(bot, game, channel_id: int, actor_u
     """
     Public helper for non-web game flows (e.g. chat guesses) to preserve a final
     integration snapshot so web participants can still see end state and retry UI.
+    Fetches full profile for accurate end-state data.
     """
     try:
         cid = int(channel_id or 0)
         if cid <= 0:
             return
         uid = int(actor_user_id or 0)
-        state = _snapshot_from_game(bot, game, "channel", uid)
+        state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=False)
         retry_meta = {
             "scope": "channel",
             "is_classic": bool(getattr(game, "difficulty", 0) == 1),
@@ -391,7 +392,7 @@ async def _load_snapshot(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
             if cached:
                 return {"ok": True, "state": cached["state"]}
             return {"ok": False, "error": "No active solo game found for this user."}
-        return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid)}
+        return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)}
 
     cid = int(payload.get("cid", 0))
     game = bot.custom_games.get(cid) or bot.games.get(cid)
@@ -400,7 +401,7 @@ async def _load_snapshot(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
         if cached:
             return {"ok": True, "state": cached["state"]}
         return {"ok": False, "error": "No active channel game in this chat."}
-    return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid)}
+    return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)}
 
 
 class _WebGuessContext:
@@ -564,7 +565,7 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
 
         if uid in bot.solo_games:
             game = bot.solo_games[uid]
-            return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid)}
+            return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)}
 
         secret_pool = bot.secrets or []
         if not secret_pool:
@@ -575,7 +576,7 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
         game = WordleGame(random.choice(secret_pool), 0, author, 0)
         bot.solo_games[uid] = game
         _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
-        return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid)}
+        return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)}
 
     if bool(retry_meta.get("is_custom", False)):
         return {"ok": False, "error": "Custom retry is not automated yet. Start custom game again in Discord."}
@@ -623,8 +624,7 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": "Retry started but game state is unavailable."}
 
     _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
-    return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid)}
-
+        return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)}
 
 def _run_on_bot_loop(bot, coro):
     fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
@@ -809,6 +809,16 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": "Invalid or expired token."}), 403
         try:
             result = _run_on_bot_loop(bot, _load_snapshot(bot, payload))
+            
+            # Spawn background profile fetch while user interacts
+            if result.get("ok") and result.get("state"):
+                try:
+                    uid = int(payload.get("uid", 0))
+                    if uid:
+                        asyncio.run_coroutine_threadsafe(_background_cache_profile(bot, uid), bot.loop)
+                except Exception:
+                    pass
+            
             return jsonify(result), (200 if result.get("ok") else 404)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"State fetch failed: {exc}"}), 500
@@ -859,6 +869,16 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": "Invalid or expired token."}), 403
         try:
             result = _run_on_bot_loop(bot, _retry_session(bot, payload))
+            
+            # Spawn background profile fetch for cache warming
+            if result.get("ok") and result.get("state"):
+                try:
+                    uid = int(payload.get("uid", 0))
+                    if uid:
+                        asyncio.run_coroutine_threadsafe(_background_cache_profile(bot, uid), bot.loop)
+                except Exception:
+                    pass
+            
             return jsonify(result), (200 if result.get("ok") else 400)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"Retry failed: {exc}"}), 500
