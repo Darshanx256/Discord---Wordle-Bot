@@ -30,9 +30,13 @@
   --key-font:     12px;
   --kb-gap:       5px;
   --app-safe-top: 0px;
-  --side-col-left: 70px;
-  --side-col-right: 70px;
+  --side-col-left: 0px;
+  --side-col-right: 0px;
   --name-max: 38px;
+}
+body.board-shifted {
+  --side-col-left: 84px;
+  --side-col-right: 34px;
 }
 
 html, body {
@@ -202,7 +206,10 @@ body.pip-square .tile {
   display: flex;
   flex-direction: column;
   gap: var(--tile-gap-y);
+  transform: translateX(0);
+  transition: transform 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 }
+body.board-shifted #grid { transform: translateX(8px); }
 
 .row-wrap {
   display: flex;
@@ -218,10 +225,12 @@ body.pip-square .tile {
   justify-content: flex-end;
   gap: 5px;
   opacity: 0;
-  transform: translateX(4px);
-  transition: opacity 0.28s ease, transform 0.28s ease;
+  transform: translateX(16px) scale(0.92);
+  transform-origin: right center;
+  transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.34s ease, transform 0.34s ease;
 }
-.row-user.visible { opacity: 1; transform: translateX(0); }
+.row-user.visible { opacity: 1; transform: translateX(0) scale(1); }
+body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
 
 .user-avatar {
   width: 24px;
@@ -255,8 +264,19 @@ body.pip-square .tile {
   line-height: 1;
 }
 
-.row-spacer { width: var(--side-col-right); flex-shrink: 0; }
+.row-spacer {
+  width: var(--side-col-right);
+  flex-shrink: 0;
+  transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+}
 .tile-row { display: flex; gap: var(--tile-gap-x); }
+.tile-row.pristine .tile {
+  border-left-width: 0;
+  border-right-width: 0;
+  border-color: var(--border);
+}
+.tile-row.pristine .tile:first-child { border-left-width: 2px; }
+.tile-row.pristine .tile:last-child { border-right-width: 2px; }
 
 .tile {
   width:  var(--tile-size);
@@ -276,7 +296,7 @@ body.pip-square .tile {
   will-change: transform;
 }
 
-.tile.filled { border-color: var(--border-filled); animation: pop 0.1s cubic-bezier(0.34,1.56,0.64,1); }
+.tile.filled { border-color: var(--border-filled); animation: popFromBelow 0.18s cubic-bezier(0.22, 1, 0.36, 1); }
 .tile.shake { animation: shake 0.45s ease; }
 .tile.reveal { animation: flip3d var(--flip-dur, 460ms) ease forwards; animation-delay: var(--flip-delay, 0s); }
 .tile.bounce { animation: bounce 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards; animation-delay: var(--bounce-delay, 0s); }
@@ -288,7 +308,16 @@ body.pip-square .tile {
   50% { transform: rotateX(-90deg); background: var(--tile-bg); border-color: var(--tile-bg); color: #fff; }
   100% { transform: rotateX(0deg); background: var(--tile-bg); border-color: var(--tile-bg); color: #fff; }
 }
-@keyframes pop { 50% { transform: scale(1.1); } }
+@keyframes popFromBelow {
+  0% { transform: translateY(12px) scale(0.9); opacity: 0.45; }
+  55% { transform: translateY(-2px) scale(1.03); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes namePopLeft {
+  0% { opacity: 0; transform: translateX(18px) scale(0.9); }
+  65% { opacity: 1; transform: translateX(-2px) scale(1.02); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
 @keyframes shake {
   15% { transform: translateX(-5px) rotate(-0.8deg); }
   30% { transform: translateX(5px)  rotate(0.8deg); }
@@ -596,7 +625,7 @@ const API_BASE_CANDIDATES = Array.from(new Set([
 const URL_PARAMS = new URLSearchParams(window.location.search);
 const IS_PHONE = /iphone|ipod|android|mobile/i.test(navigator.userAgent || "") || String(URL_PARAMS.get("platform") || "").toLowerCase() === "mobile";
 
-const ROWS = 6;
+const DEFAULT_ROWS = 6;
 const COLS = 5;
 const FLIP_DUR = 460;
 const FLIP_STAGGER = 90;
@@ -621,6 +650,8 @@ let rowRefs = [];
 let enterBtn = null;
 let pollInFlight = false;
 let layoutModeValue = -1; // Discord SDK layout mode: 0 focused, 1 pip, 2 grid
+let recoveringActivitySession = false;
+let currentRows = DEFAULT_ROWS;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
@@ -666,18 +697,21 @@ function showToast(msg, ms = 1400) {
 }
 
 function clearBoardAndKeyboard() {
-  for (let r = 0; r < ROWS; r++) {
+  document.body.classList.remove('board-shifted');
+  for (let r = 0; r < currentRows; r++) {
     const rowRef = rowRefs[r];
     if (!rowRef) continue;
     const userDiv = rowRef.userDiv;
     const nameEl = rowRef.nameEl;
     const avatarEl = rowRef.avatarEl;
+    const tileRow = rowRef.tileRow;
     if (userDiv) userDiv.classList.remove('visible');
     if (nameEl) nameEl.textContent = '';
     if (avatarEl) {
       avatarEl.style.backgroundImage = '';
       avatarEl.textContent = '';
     }
+    if (tileRow) tileRow.classList.add('pristine');
     for (let c = 0; c < COLS; c++) {
       const t = tileAt(r, c);
       if (!t) continue;
@@ -735,8 +769,9 @@ function calcLayout() {
   const pipSquare = document.body.classList.contains('pip-square');
   const tileGapX = 0;
   const tileGapY = 1;
-  const sideColLeft = pipSquare ? 0 : (IS_PHONE ? 92 : 70);
-  const sideColRight = pipSquare ? 0 : (IS_PHONE ? 38 : 70);
+  const boardShifted = document.body.classList.contains('board-shifted');
+  const sideColLeft = pipSquare ? 0 : (boardShifted ? (IS_PHONE ? 92 : 84) : 0);
+  const sideColRight = pipSquare ? 0 : (boardShifted ? (IS_PHONE ? 38 : 34) : 0);
   const nameMax = pipSquare ? 0 : (IS_PHONE ? 66 : 38);
   const headerH = pipMode ? 0 : 52;
   const kbRows = 3;
@@ -748,7 +783,7 @@ function calcLayout() {
   const gridH = vh - headerH - kbH - gridPad * 2;
   const sideW = sideColLeft + sideColRight + 8 * 2;
   const gridW = Math.min(vw, 500) - sideW - 16;
-  const fromH = (gridH - tileGapY * (ROWS - 1)) / ROWS;
+  const fromH = (gridH - tileGapY * (currentRows - 1)) / currentRows;
   const fromW = (gridW - tileGapX * (COLS - 1)) / COLS;
   const maxTile = pipSquare ? Math.min(64, Math.max(28, Math.floor(vw * 0.16))) : (IS_PHONE ? 70 : 64);
   const tSize = Math.floor(Math.min(fromH, fromW, maxTile));
@@ -790,10 +825,25 @@ function tileAt(r, c) {
   return row.tiles[c] || null;
 }
 
+function normalizeRows(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_ROWS;
+  return Math.max(4, Math.min(16, Math.round(parsed)));
+}
+
+function syncRowsFromState(nextState) {
+  const nextRows = normalizeRows(nextState && nextState.max_attempts);
+  if (nextRows === currentRows) return false;
+  currentRows = nextRows;
+  buildGrid();
+  calcLayout();
+  return true;
+}
+
 function buildGrid() {
   gridEl.innerHTML = '';
   rowRefs = [];
-  for (let r = 0; r < ROWS; r++) {
+  for (let r = 0; r < currentRows; r++) {
     const wrap = document.createElement('div');
     wrap.className = 'row-wrap';
 
@@ -808,6 +858,7 @@ function buildGrid() {
 
     const tileRow = document.createElement('div');
     tileRow.className = 'tile-row';
+    tileRow.classList.add('pristine');
     const tiles = [];
     for (let c = 0; c < COLS; c++) {
       const t = document.createElement('div');
@@ -821,12 +872,17 @@ function buildGrid() {
     spacer.className = 'row-spacer';
     wrap.appendChild(spacer);
     gridEl.appendChild(wrap);
-    rowRefs.push({ wrap, userDiv, nameEl, avatarEl, tiles });
+    rowRefs.push({ wrap, userDiv, nameEl, avatarEl, tileRow, tiles });
   }
 }
 
 function refreshFromState() {
   if (!state) return;
+  syncRowsFromState(state);
+  const submittedRows = Number(state.attempts_used || 0);
+  const hasSubmittedAny = submittedRows > 0;
+  document.body.classList.toggle('board-shifted', hasSubmittedAny);
+  calcLayout();
   document.getElementById('mode-title').textContent = String(state.mode_label || 'Classic').toUpperCase();
   document.getElementById('wr-val').textContent = state.wr ?? '—';
   document.getElementById('players-val').textContent = state.participants ?? '—';
@@ -834,16 +890,20 @@ function refreshFromState() {
   const keyPriority = { correct: 3, present: 2, absent: 1 };
   const keyState = {};
 
-  for (let r = 0; r < ROWS; r++) {
+  for (let r = 0; r < currentRows; r++) {
     const rowRef = rowRefs[r];
     if (!rowRef) continue;
     const userDiv = rowRef.userDiv;
     const nameEl = rowRef.nameEl;
     const avatarEl = rowRef.avatarEl;
+    const tileRow = rowRef.tileRow;
 
     const rowData = state.rows && state.rows[r] ? state.rows[r] : null;
     const word = rowData ? String(rowData.word || '').toUpperCase() : '';
     const states = rowData ? (rowData.states || []) : [];
+    const isActiveInputRow = !rowData && !state.game_over && r === state.attempts_used && localInput.length > 0;
+    const isPristineRow = !rowData && !isActiveInputRow;
+    if (tileRow) tileRow.classList.toggle('pristine', isPristineRow);
 
     if (rowData && rowData.user) {
       if (r === revealUserLockRow) userDiv.classList.remove('visible');
@@ -1069,6 +1129,21 @@ async function fetchState(showMask = false) {
     if (!data.ok) {
       const errLower = String(data.error || "").toLowerCase();
       if (errLower.includes("no active channel game")) {
+        // Recover stale/wrong channel-bound tokens for freshly authorized activity users.
+        if (ACTIVITY_MODE && !recoveringActivitySession) {
+          recoveringActivitySession = true;
+          try {
+            sessionToken = "";
+            sessionStorage.removeItem(SESSION_KEY);
+            const rebound = await bootstrapActivitySession();
+            if (rebound && sessionToken) {
+              const recovered = await fetchState(false);
+              if (recovered) return true;
+            }
+          } finally {
+            recoveringActivitySession = false;
+          }
+        }
         localInput = [];
         carryInputPending = false;
         state = null;
@@ -1092,10 +1167,12 @@ async function fetchState(showMask = false) {
       const prevAttempts = Number(prevState.attempts_used || 0);
       const nextAttempts = Number((data.state && data.state.attempts_used) || 0);
       if (nextAttempts > prevAttempts) {
-        if (nextAttempts >= ROWS) localInput = [];
+        const maxRows = normalizeRows(data.state && data.state.max_attempts);
+        if (nextAttempts >= maxRows) localInput = [];
         else carryInputPending = true;
       }
     }
+    syncRowsFromState(data.state);
     state = data.state;
     if (state && state.game_over) localInput = [];
     refreshFromState();
@@ -1133,7 +1210,8 @@ async function submitGuess() {
       const nowOver = Boolean(state && state.game_over);
       const advanced = loaded && afterAttempts > beforeAttempts;
       if (advanced || nowOver) {
-        if (afterAttempts >= ROWS || nowOver) localInput = [];
+        const maxRows = normalizeRows(state && state.max_attempts);
+        if (afterAttempts >= maxRows || nowOver) localInput = [];
         else carryInputPending = true;
         return;
       }
@@ -1219,10 +1297,10 @@ function detectChannelIdFromUrl() {
   const location = params.get('location_id') || '';
   if (!location) return '';
 
-  // Accept raw snowflake or extract first snowflake-like token from compound values.
+  // Accept raw snowflake or extract final snowflake token from compound values.
   if (/^\d{16,22}$/.test(location)) return location;
-  const m = String(location).match(/\d{16,22}/);
-  return m ? m[0] : '';
+  const m = String(location).match(/\d{16,22}/g);
+  return m && m.length ? m[m.length - 1] : '';
 }
 
 async function bootstrapActivitySession() {

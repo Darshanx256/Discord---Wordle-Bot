@@ -756,9 +756,11 @@ user-agent: {ua}</pre>
             if raw.isdigit():
                 return int(raw)
             import re
-            m = re.search(r"\d{16,22}", raw)
-            if m:
-                return int(m.group(0))
+            matches = re.findall(r"\d{16,22}", raw)
+            if matches:
+                # Discord compound location identifiers may contain guild + channel ids;
+                # the channel id is typically the final snowflake.
+                return int(matches[-1])
             return None
 
         cid = _coerce_channel_id(channel_id_raw)
