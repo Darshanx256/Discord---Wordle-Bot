@@ -354,6 +354,22 @@ def _cleanup_wr_cache() -> None:
         _WR_SNAPSHOT_CACHE.pop(k, None)
 
 
+def _prime_wr_start_cache(bot, owner_user_id: int, scope: str, channel_id: int = 0) -> None:
+    try:
+        profile = fetch_user_profile_v2(bot, owner_user_id, use_cache=True)
+        if not profile:
+            return
+        wr_key = "solo_wr" if scope == "solo" else "multi_wr"
+        wr_value = profile.get(wr_key, "—")
+        _WR_SNAPSHOT_CACHE[_wr_cache_key(scope, owner_user_id, channel_id)] = {
+            "value": wr_value,
+            "phase": "start",
+            "stored_at": time.time(),
+        }
+    except Exception:
+        pass
+
+
 def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_fetch: bool = False) -> Dict[str, Any]:
     history_rows = []
     winner = None
@@ -380,8 +396,8 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
     cache_key = _wr_cache_key(scope, owner_user_id, int(getattr(game, "channel_id", 0) or 0))
     cached_wr = _WR_SNAPSHOT_CACHE.get(cache_key) or {}
     cached_phase = str(cached_wr.get("phase") or "")
-    should_fetch_start = attempts_used == 0 and cached_phase != "start"
-    should_fetch_end = game_over and cached_phase != "end"
+    should_fetch_start = (not skip_profile_fetch) and attempts_used == 0 and cached_phase != "start"
+    should_fetch_end = (not skip_profile_fetch) and game_over and cached_phase != "end"
     should_fetch = should_fetch_start or should_fetch_end or (not cached_wr and not skip_profile_fetch)
 
     if should_fetch:
@@ -401,6 +417,8 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
         wr_value = cached_wr.get("value", "—")
 
     mode = _mode_label(game, scope)
+    is_custom_mode = bool(getattr(game, "difficulty", None) == 2 or getattr(game, "custom_dict", None) is not None)
+    can_retry = bool(scope == "solo" or not is_custom_mode)
     return {
         "mode_label": mode,
         "custom_title": str(getattr(game, "title", "") or ""),
@@ -413,7 +431,7 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
         "winner": winner,
         "secret": str(game.secret).upper() if game_over else "",
         "breakdown": _build_breakdown(game),
-        "can_retry": bool(mode in {"Classic", "Hard", "Solo"}),
+        "can_retry": can_retry,
     }
 
 
@@ -800,6 +818,7 @@ user-agent: {ua}</pre>
         if scope == "solo" or (scope == "channel" and not channel_id_raw and uid in bot.solo_games):
             if uid not in bot.solo_games:
                 return jsonify({"ok": False, "error": "No active solo game for this user."}), 404
+            _prime_wr_start_cache(bot, uid, "solo", 0)
             payload = {"uid": uid, "scope": "solo", "exp": int(time.time()) + 7200}
             return jsonify({"ok": True, "token": _sign_token(payload), "scope": "solo"})
 
@@ -830,6 +849,7 @@ user-agent: {ua}</pre>
         if cid not in bot.games and cid not in bot.custom_games:
             return jsonify({"ok": False, "error": "No active channel/custom game found."}), 404
 
+        _prime_wr_start_cache(bot, uid, "channel", cid)
         payload = {"uid": uid, "cid": cid, "scope": "channel", "exp": int(time.time()) + 7200}
         return jsonify({"ok": True, "token": _sign_token(payload), "scope": "channel"})
 
