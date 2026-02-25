@@ -25,6 +25,8 @@ _DISCORD_USER_CACHE_TTL_SECONDS = 1800
 _INTEGRATION_USER_CACHE: Dict[int, Dict[str, Any]] = {}
 _INTEGRATION_USER_CACHE_TTL_SECONDS = 86400
 _INTEGRATION_USER_CACHE_MAX = 1024
+_WR_SNAPSHOT_CACHE: Dict[str, Dict[str, Any]] = {}
+_WR_SNAPSHOT_CACHE_TTL_SECONDS = 7200
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -330,12 +332,24 @@ def _row_user_payload(user_obj) -> Dict[str, Any]:
 async def _background_cache_profile(bot, user_id: int) -> None:
     """Fetch and cache user profile in background while animations play (~550ms)."""
     try:
-        # Fetch with cache=True to avoid re-fetching if already cached
-        from src.database import fetch_user_profile_v2
-        fetch_user_profile_v2(bot, user_id, use_cache=True)
+        # Run blocking DB fetch off the bot loop to avoid starving integration state requests.
+        await asyncio.to_thread(fetch_user_profile_v2, bot, user_id, True)
     except Exception:
         # Silently fail - this is background work, don't block anything
         pass
+
+
+def _wr_cache_key(scope: str, owner_user_id: int, channel_id: int) -> str:
+    if scope == "solo":
+        return f"solo:{int(owner_user_id)}"
+    return f"channel:{int(owner_user_id)}:{int(channel_id)}"
+
+
+def _cleanup_wr_cache() -> None:
+    now_ts = time.time()
+    stale = [k for k, v in _WR_SNAPSHOT_CACHE.items() if now_ts - float(v.get("stored_at", 0)) > _WR_SNAPSHOT_CACHE_TTL_SECONDS]
+    for k in stale:
+        _WR_SNAPSHOT_CACHE.pop(k, None)
 
 
 def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_fetch: bool = False) -> Dict[str, Any]:
@@ -354,29 +368,47 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
     if scope == "solo":
         participants = 1
 
-    # Skip profile fetch during active gameplay for faster response times
-    # Only fetch when specifically needed (e.g., retry/end state)
+    attempts_used = int(getattr(game, "attempts_used", 0))
+    max_attempts = int(getattr(game, "max_attempts", 6))
+    game_over = winner is not None or attempts_used >= max_attempts
+
+    # Fetch WR once when game starts and once when it finishes, reuse cached value in-between.
+    _cleanup_wr_cache()
     wr_value = "—"
-    if not skip_profile_fetch:
+    cache_key = _wr_cache_key(scope, owner_user_id, int(getattr(game, "channel_id", 0) or 0))
+    cached_wr = _WR_SNAPSHOT_CACHE.get(cache_key) or {}
+    cached_phase = str(cached_wr.get("phase") or "")
+    should_fetch_start = attempts_used == 0 and cached_phase != "start"
+    should_fetch_end = game_over and cached_phase != "end"
+    should_fetch = should_fetch_start or should_fetch_end or (not cached_wr and not skip_profile_fetch)
+
+    if should_fetch:
         try:
             profile = fetch_user_profile_v2(bot, owner_user_id, use_cache=True)
             if profile:
                 wr_key = "solo_wr" if scope == "solo" else "multi_wr"
                 wr_value = profile.get(wr_key, "—")
+                _WR_SNAPSHOT_CACHE[cache_key] = {
+                    "value": wr_value,
+                    "phase": "end" if game_over else "start",
+                    "stored_at": time.time(),
+                }
         except Exception:
-            wr_value = "—"
+            wr_value = cached_wr.get("value", "—")
+    elif cached_wr:
+        wr_value = cached_wr.get("value", "—")
 
     mode = _mode_label(game, scope)
     return {
         "mode_label": mode,
         "wr": wr_value,
         "participants": participants,
-        "attempts_used": int(getattr(game, "attempts_used", 0)),
-        "max_attempts": int(getattr(game, "max_attempts", 6)),
+        "attempts_used": attempts_used,
+        "max_attempts": max_attempts,
         "rows": history_rows,
-        "game_over": winner is not None or int(getattr(game, "attempts_used", 0)) >= int(getattr(game, "max_attempts", 6)),
+        "game_over": game_over,
         "winner": winner,
-        "secret": str(game.secret).upper() if winner is not None or int(getattr(game, "attempts_used", 0)) >= int(getattr(game, "max_attempts", 6)) else "",
+        "secret": str(game.secret).upper() if game_over else "",
         "breakdown": _build_breakdown(game),
         "can_retry": bool(mode in {"Classic", "Hard", "Solo"}),
     }
@@ -809,16 +841,6 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": "Invalid or expired token."}), 403
         try:
             result = _run_on_bot_loop(bot, _load_snapshot(bot, payload))
-            
-            # Spawn background profile fetch while user interacts
-            if result.get("ok") and result.get("state"):
-                try:
-                    uid = int(payload.get("uid", 0))
-                    if uid:
-                        asyncio.run_coroutine_threadsafe(_background_cache_profile(bot, uid), bot.loop)
-                except Exception:
-                    pass
-            
             return jsonify(result), (200 if result.get("ok") else 404)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"State fetch failed: {exc}"}), 500

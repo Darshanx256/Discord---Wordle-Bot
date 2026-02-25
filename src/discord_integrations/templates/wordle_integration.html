@@ -212,6 +212,7 @@ body.pip-square .tile {
   transition: transform 0.62s cubic-bezier(0.22, 1, 0.36, 1);
 }
 body.board-shifted #grid { transform: translateX(8px); }
+body.pip-mode #grid { transform: translateX(0) !important; }
 
 .row-wrap {
   display: flex;
@@ -279,6 +280,15 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
 }
 .tile-row.pristine .tile:first-child { border-left-width: 2px; }
 .tile-row.pristine .tile:last-child { border-right-width: 2px; }
+.tile-row.live-input .tile {
+  border-left-width: 1px;
+  border-right-width: 1px;
+  border-color: var(--border);
+}
+.tile-row.live-input .tile.filled { border-color: var(--border); }
+.tile-row.live-input .tile:first-child { border-left-width: 2px; }
+.tile-row.live-input .tile:last-child { border-right-width: 2px; }
+.tile-row.row-shake { animation: rowShakeClean 0.34s ease; }
 
 .tile {
   width:  var(--tile-size);
@@ -325,6 +335,14 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   50% { transform: translateX(-4px); }
   70% { transform: translateX(4px); }
   90% { transform: translateX(-2px); }
+}
+@keyframes rowShakeClean {
+  0% { transform: translateX(0); }
+  22% { transform: translateX(-6px); }
+  44% { transform: translateX(6px); }
+  66% { transform: translateX(-4px); }
+  88% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
 }
 @keyframes bounce {
   25% { transform: translateY(-11px) scale(1.07); }
@@ -628,8 +646,8 @@ const IS_PHONE = /iphone|ipod|android|mobile/i.test(navigator.userAgent || "") |
 
 const DEFAULT_ROWS = 6;
 const COLS = 5;
-const FLIP_DUR = 280;
-const FLIP_STAGGER = 50;
+const FLIP_DUR = 540;
+const FLIP_STAGGER = 105;
 const COLORS = ['#6aaa64','#c9b458','#538d4e','#b59f3b','#4a90d9','#e67e22','#e74c3c'];
 const KB_ROWS = [
   ['Q','W','E','R','T','Y','U','I','O','P'],
@@ -905,6 +923,7 @@ function refreshFromState() {
     const isActiveInputRow = !rowData && !state.game_over && r === state.attempts_used && localInput.length > 0;
     const isPristineRow = !rowData && !isActiveInputRow;
     if (tileRow) tileRow.classList.toggle('pristine', isPristineRow);
+    if (tileRow) tileRow.classList.toggle('live-input', isActiveInputRow);
 
     if (rowData && rowData.user) {
       if (r === revealUserLockRow) userDiv.classList.remove('visible');
@@ -1036,13 +1055,12 @@ function addRipple(btn, e) {
 }
 
 function shakeRow(row) {
-  for (let c = 0; c < COLS; c++) {
-    const t = tileAt(row, c);
-    if (!t) continue;
-    t.classList.remove('shake');
-    void t.offsetWidth;
-    t.classList.add('shake');
-  }
+  const rowRef = rowRefs[row];
+  if (!rowRef || !rowRef.tileRow) return;
+  const rowEl = rowRef.tileRow;
+  rowEl.classList.remove('row-shake');
+  void rowEl.offsetWidth;
+  rowEl.classList.add('row-shake');
 }
 
 function bounceRow(row) {
@@ -1204,6 +1222,19 @@ async function submitGuess() {
       body: JSON.stringify({ token: sessionToken, word: guess })
     });
     if (!data.ok) {
+      const errText = String(data.error || 'Guess rejected');
+      const errLower = errText.toLowerCase();
+      const instantReject =
+        errLower.includes('not in dictionary') ||
+        errLower.includes('already guessed') ||
+        errLower.includes('5 letters only') ||
+        errLower.includes('hard mode');
+      if (instantReject) {
+        shakeRow(rowIndex);
+        showToast(`${errText} (${url})`);
+        return;
+      }
+
       const beforeAttempts = rowIndex;
       const loaded = await fetchState(false);
       if (!loaded && !state) return;
@@ -1217,7 +1248,7 @@ async function submitGuess() {
         return;
       }
       shakeRow(rowIndex);
-      showToast(`${data.error || 'Guess rejected'} (${url})`);
+      showToast(`${errText} (${url})`);
       return;
     }
 
