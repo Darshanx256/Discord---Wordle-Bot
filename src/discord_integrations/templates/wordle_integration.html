@@ -33,10 +33,50 @@
   --side-col-left: 0px;
   --side-col-right: 0px;
   --name-max: 38px;
+  --theme-pill-bg: #eef0f2;
+  --theme-pill-border: #d3d6da;
+  --theme-pill-text: #1a1a1b;
+  --theme-pill-active-bg: #1a1a1b;
+  --theme-pill-active-text: #ffffff;
 }
 body.board-shifted {
   --side-col-left: 84px;
   --side-col-right: 34px;
+}
+body.theme-dark {
+  --bg: #121416;
+  --surface: #191c1f;
+  --border: #2b3138;
+  --border-filled:#4a5460;
+  --text: #ecf0f3;
+  --muted: #9ca8b3;
+  --key-bg: #2b3138;
+  --key-text: #ecf0f3;
+  --theme-pill-bg: #23282e;
+  --theme-pill-border: #3a424c;
+  --theme-pill-text: #dce3e9;
+  --theme-pill-active-bg: #ecf0f3;
+  --theme-pill-active-text: #15191d;
+}
+body.theme-contrast {
+  --bg: #000000;
+  --surface: #000000;
+  --border: #ffffff;
+  --border-filled:#ffffff;
+  --text: #ffffff;
+  --muted: #ffffff;
+  --correct: #00ff66;
+  --correct-dark: #00d957;
+  --present: #ffd800;
+  --present-dark: #e6c200;
+  --absent: #6f7a87;
+  --key-bg: #000000;
+  --key-text: #ffffff;
+  --theme-pill-bg: #000000;
+  --theme-pill-border: #ffffff;
+  --theme-pill-text: #ffffff;
+  --theme-pill-active-bg: #ffffff;
+  --theme-pill-active-text: #000000;
 }
 
 html, body {
@@ -144,6 +184,29 @@ body.pip-square .tile {
   gap: 6px;
   flex-shrink: 0;
 }
+.theme-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.theme-btn {
+  border: 1px solid var(--theme-pill-border);
+  background: var(--theme-pill-bg);
+  color: var(--theme-pill-text);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+.theme-btn.active {
+  background: var(--theme-pill-active-bg);
+  color: var(--theme-pill-active-text);
+  border-color: var(--theme-pill-active-bg);
+}
 
 .stat-chip {
   display: flex;
@@ -163,7 +226,6 @@ body.pip-square .tile {
 .stat-chip .chip-label { color: var(--muted); }
 .stat-chip .chip-val { font-family: 'Unbounded', sans-serif; font-size: 11px; font-weight: 900; }
 .chip-wr .chip-val { color: var(--correct-dark); }
-.chip-players .chip-val { color: #2563eb; }
 
 #toast-container {
   position: fixed;
@@ -624,15 +686,9 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
         <span class="chip-label">WR</span>
         <span class="chip-val" id="wr-val">—</span>
       </div>
-      <div class="stat-chip chip-players">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-          <circle cx="9" cy="7" r="4"></circle>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-        </svg>
-        <span class="chip-val" id="players-val">—</span>
-        <span class="chip-label">participants</span>
+      <div class="theme-controls">
+        <button class="theme-btn" id="theme-dark-btn" type="button">Dark</button>
+        <button class="theme-btn" id="theme-contrast-btn" type="button">High Contrast</button>
       </div>
     </div>
   </header>
@@ -678,6 +734,7 @@ const ACTIVITY_MODE = {{ activity_mode|tojson }};
 const ACTIVITY_CLIENT_ID = {{ activity_client_id|tojson }};
 const SESSION_KEY = "wordle_integration_session_token";
 const LOADER_MODE_KEY = "wordle_integration_loader_mode";
+const THEME_KEY = "wordle_integration_theme";
 
 function computeIntegrationBase() {
   const p = window.location.pathname || "";
@@ -737,6 +794,8 @@ const kbEl = document.getElementById('keyboard');
 document.getElementById("logo-icon").src = `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`;
 document.getElementById("loading-logo").src = `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`;
 const loadingModeEl = document.getElementById('loading-mode');
+const darkBtn = document.getElementById('theme-dark-btn');
+const contrastBtn = document.getElementById('theme-contrast-btn');
 
 function deriveModeDisplay(nextState) {
   if (!nextState) return "WORDLE";
@@ -761,6 +820,42 @@ try {
 function setLoading(on) {
   const mask = document.getElementById('loading-mask');
   mask.classList.toggle('show', Boolean(on));
+}
+
+function updateThemeButtons() {
+  if (!darkBtn || !contrastBtn) return;
+  darkBtn.classList.toggle('active', document.body.classList.contains('theme-dark'));
+  contrastBtn.classList.toggle('active', document.body.classList.contains('theme-contrast'));
+}
+
+function applyTheme(theme) {
+  document.body.classList.remove('theme-dark', 'theme-contrast');
+  if (theme === 'dark') document.body.classList.add('theme-dark');
+  if (theme === 'contrast') document.body.classList.add('theme-contrast');
+  try {
+    if (theme) localStorage.setItem(THEME_KEY, theme);
+    else localStorage.removeItem(THEME_KEY);
+  } catch (_) {}
+  updateThemeButtons();
+}
+
+try {
+  applyTheme(String(localStorage.getItem(THEME_KEY) || "").trim().toLowerCase());
+} catch (_) {
+  updateThemeButtons();
+}
+
+if (darkBtn) {
+  darkBtn.addEventListener('click', () => {
+    const isActive = document.body.classList.contains('theme-dark');
+    applyTheme(isActive ? '' : 'dark');
+  });
+}
+if (contrastBtn) {
+  contrastBtn.addEventListener('click', () => {
+    const isActive = document.body.classList.contains('theme-contrast');
+    applyTheme(isActive ? '' : 'contrast');
+  });
 }
 
 if (ACTIVITY_MODE && IS_PHONE) {
@@ -995,7 +1090,6 @@ function refreshFromState() {
   calcLayout();
   document.getElementById('mode-title').textContent = String(state.mode_label || 'Classic').toUpperCase();
   document.getElementById('wr-val').textContent = state.wr ?? '—';
-  document.getElementById('players-val').textContent = state.participants ?? '—';
 
   const keyPriority = { correct: 3, present: 2, absent: 1 };
   const keyState = {};
@@ -1412,7 +1506,7 @@ function handleKey(key) {
   }
 }
 
-async function retryGame() {
+async function retryGame(fromRecovery = false) {
   if (submitting || !state || !state.game_over) return;
   submitting = true;
   setLoading(true);
@@ -1423,6 +1517,19 @@ async function retryGame() {
       body: JSON.stringify({ token: sessionToken })
     });
     if (!data.ok) {
+      const errLower = String(data.error || "").toLowerCase();
+      if (!fromRecovery && ACTIVITY_MODE && (errLower.includes("token") || errLower.includes("expired"))) {
+        sessionToken = "";
+        sessionStorage.removeItem(SESSION_KEY);
+        const rebound = await bootstrapActivitySession();
+        if (rebound && sessionToken) {
+          await fetchState(true);
+          submitting = false;
+          setLoading(false);
+          await retryGame(true);
+          return;
+        }
+      }
       showToast(`${data.error || 'Retry failed'} (${url})`);
       return;
     }
