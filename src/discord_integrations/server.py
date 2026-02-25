@@ -624,7 +624,7 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"ok": False, "error": "Retry started but game state is unavailable."}
 
     _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
-        return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)}
+    return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)}
 
 def _run_on_bot_loop(bot, coro):
     fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
