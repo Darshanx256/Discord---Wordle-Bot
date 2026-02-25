@@ -501,39 +501,78 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
 }
 
 #loading-mask {
-  display: none;
+  display: flex;
   position: fixed;
   inset: 0;
-  z-index: 201;
+  z-index: 240;
   align-items: center;
   justify-content: center;
-  background: rgba(249,249,246,0.92);
+  background:
+    radial-gradient(circle at 22% 18%, rgba(106,170,100,0.18) 0%, rgba(106,170,100,0) 48%),
+    radial-gradient(circle at 82% 76%, rgba(37,99,235,0.12) 0%, rgba(37,99,235,0) 42%),
+    linear-gradient(180deg, #fbfbf8 0%, #f2f4f6 100%);
+  transition: opacity 0.32s ease, visibility 0.32s ease;
+  opacity: 0;
+  visibility: hidden;
 }
-#loading-mask.show { display: flex; }
+#loading-mask.show {
+  opacity: 1;
+  visibility: visible;
+}
 .loading-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-family: 'Unbounded', sans-serif;
   font-size: 12px;
   letter-spacing: 0.08em;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(26,26,27,0.08);
+  border-radius: 16px;
+  padding: 20px 22px 18px;
+  min-width: 230px;
+  box-shadow: 0 16px 44px rgba(0,0,0,0.08);
 }
 .loading-label {
   color: var(--text);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.13em;
+}
+.loading-sub {
+  margin-top: -2px;
+  color: #6b7280;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+.loading-logo-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(26,26,27,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 22px rgba(26,26,27,0.09);
+}
+.loading-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  animation: logoBreath 1.5s ease-in-out infinite;
 }
 .loading-jump {
   display: flex;
   gap: 5px;
+  margin-top: 2px;
 }
 .loading-jump .dot {
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
   background: var(--correct);
   animation: loadingJump 0.9s ease-in-out infinite;
 }
@@ -545,6 +584,10 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   0%, 100% { transform: translateY(0); opacity: 0.58; }
   40% { transform: translateY(-8px); opacity: 1; }
   60% { transform: translateY(-4px); opacity: 0.9; }
+}
+@keyframes logoBreath {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.07); opacity: 1; }
 }
 
 #disclaimer {
@@ -592,9 +635,13 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
 
 <div id="toast-container"></div>
 <canvas id="confetti-canvas"></canvas>
-<div id="loading-mask">
+<div id="loading-mask" class="show">
   <div class="loading-card">
-    <div class="loading-label">SYNCING WITH DISCORD</div>
+    <div class="loading-logo-wrap">
+      <img class="loading-logo" id="loading-logo" src="/integration/static/icon.png?v=20260224b" alt="Wordle">
+    </div>
+    <div class="loading-label">LOADING WORDLE</div>
+    <div class="loading-sub">Preparing your board...</div>
     <div class="loading-jump" aria-hidden="true">
       <span class="dot"></span>
       <span class="dot"></span>
@@ -671,13 +718,20 @@ let pollInFlight = false;
 let layoutModeValue = -1; // Discord SDK layout mode: 0 focused, 1 pip, 2 grid
 let recoveringActivitySession = false;
 let currentRows = DEFAULT_ROWS;
+let bootReady = false;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
 document.getElementById("logo-icon").src = `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`;
+document.getElementById("loading-logo").src = `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`;
 
 function setLoading(on) {
-  document.getElementById('loading-mask').classList.toggle('show', Boolean(on));
+  const mask = document.getElementById('loading-mask');
+  if (on) {
+    mask.classList.add('show');
+    return;
+  }
+  if (bootReady) mask.classList.remove('show');
 }
 
 if (ACTIVITY_MODE && IS_PHONE) {
@@ -1194,7 +1248,9 @@ async function fetchState(showMask = false) {
     syncRowsFromState(data.state);
     state = data.state;
     if (state && state.game_over) localInput = [];
+    bootReady = true;
     refreshFromState();
+    setLoading(false);
     return true;
   } finally {
     if (showMask) setLoading(false);
@@ -1259,7 +1315,6 @@ async function submitGuess() {
     }
 
     if (rowData && (rowData.states || []).every(s => s === 'correct')) {
-      bounceRow(acceptedIndex);
       spawnParticles();
       launchConfetti();
     }
