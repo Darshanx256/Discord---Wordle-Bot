@@ -274,12 +274,14 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
 }
 .tile-row { display: flex; gap: var(--tile-gap-x); }
 .tile-row.pristine .tile {
-  border-left-width: 0;
-  border-right-width: 0;
-  border-color: var(--border);
+  border-left-width: 1px;
+  border-right-width: 1px;
+  border-color: transparent;
 }
 .tile-row.pristine .tile:first-child { border-left-width: 2px; }
 .tile-row.pristine .tile:last-child { border-right-width: 2px; }
+.tile-row.pristine .tile:first-child { border-left-color: var(--border); }
+.tile-row.pristine .tile:last-child { border-right-color: var(--border); }
 .tile-row.live-input .tile {
   border-left-width: 1px;
   border-right-width: 1px;
