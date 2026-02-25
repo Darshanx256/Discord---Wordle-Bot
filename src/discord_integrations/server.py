@@ -70,14 +70,16 @@ def _verify_token(token: str) -> Optional[Dict[str, Any]]:
 
 def _mode_label(game, scope: str) -> str:
     if scope == "solo":
-        return "Solo"
-    if getattr(game, "difficulty", None) == 2:
-        return "Custom"
+        return "Solo Mode"
     if getattr(game, "hard_mode", False):
-        return "Hard"
+        return "Hard Mode"
+    if getattr(game, "difficulty", None) == 0:
+        return "Simple Wordle"
+    if getattr(game, "difficulty", None) == 2:
+        return "Custom Mode"
     if getattr(game, "custom_dict", None) is not None:
-        return "Custom"
-    return "Classic"
+        return "Custom Mode"
+    return "Classic Mode"
 
 
 def _discord_api_base() -> str:
@@ -401,6 +403,7 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
     mode = _mode_label(game, scope)
     return {
         "mode_label": mode,
+        "custom_title": str(getattr(game, "title", "") or ""),
         "wr": wr_value,
         "participants": participants,
         "attempts_used": attempts_used,
