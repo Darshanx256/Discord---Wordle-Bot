@@ -702,6 +702,7 @@ const URL_PARAMS = new URLSearchParams(window.location.search);
 const IS_PHONE = /iphone|ipod|android|mobile/i.test(navigator.userAgent || "") || String(URL_PARAMS.get("platform") || "").toLowerCase() === "mobile";
 
 const DEFAULT_ROWS = 6;
+const MINI_VISIBLE_ROWS = 5;
 const COLS = 5;
 const FLIP_DUR = 540;
 const FLIP_STAGGER = 105;
@@ -884,7 +885,8 @@ function calcLayout() {
   const gridH = vh - headerH - kbH - gridPad * 2;
   const sideW = sideColLeft + sideColRight + 8 * 2;
   const gridW = Math.min(vw, 500) - sideW - 16;
-  const fromH = (gridH - tileGapY * (currentRows - 1)) / currentRows;
+  const layoutRows = pipMode ? Math.max(1, Math.min(currentRows, MINI_VISIBLE_ROWS)) : Math.max(1, currentRows);
+  const fromH = (gridH - tileGapY * (layoutRows - 1)) / layoutRows;
   const fromW = (gridW - tileGapX * (COLS - 1)) / COLS;
   const maxTile = pipSquare ? Math.min(64, Math.max(28, Math.floor(vw * 0.16))) : (IS_PHONE ? 70 : 64);
   const tSize = Math.floor(Math.min(fromH, fromW, maxTile));
@@ -929,7 +931,7 @@ function tileAt(r, c) {
 function normalizeRows(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_ROWS;
-  return Math.max(4, Math.min(16, Math.round(parsed)));
+  return Math.max(4, Math.min(64, Math.round(parsed)));
 }
 
 function syncRowsFromState(nextState) {
@@ -997,10 +999,19 @@ function refreshFromState() {
 
   const keyPriority = { correct: 3, present: 2, absent: 1 };
   const keyState = {};
+  const pipMode = document.body.classList.contains('pip-mode');
+  const visibleRows = pipMode ? Math.min(currentRows, MINI_VISIBLE_ROWS) : currentRows;
+  const attemptAnchor = state.game_over
+    ? Math.max(0, Number(state.attempts_used || 0) - 1)
+    : Number(state.attempts_used || 0);
+  const rowOffset = pipMode ? Math.max(0, attemptAnchor - visibleRows + 1) : 0;
 
   for (let r = 0; r < currentRows; r++) {
     const rowRef = rowRefs[r];
     if (!rowRef) continue;
+    const rowVisible = !pipMode || (r >= rowOffset && r < rowOffset + visibleRows);
+    if (rowRef.wrap) rowRef.wrap.style.display = rowVisible ? '' : 'none';
+    if (!rowVisible) continue;
     const userDiv = rowRef.userDiv;
     const nameEl = rowRef.nameEl;
     const avatarEl = rowRef.avatarEl;
@@ -1238,6 +1249,22 @@ async function fetchState(showMask = false) {
     const { data, url } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
     if (!data.ok) {
       const errLower = String(data.error || "").toLowerCase();
+      if (errLower.includes("invalid or expired token") || errLower.includes("token")) {
+        sessionStorage.removeItem(SESSION_KEY);
+        if (ACTIVITY_MODE && !recoveringActivitySession) {
+          recoveringActivitySession = true;
+          try {
+            sessionToken = "";
+            const rebound = await bootstrapActivitySession();
+            if (rebound && sessionToken) {
+              const recovered = await fetchState(false);
+              if (recovered) return true;
+            }
+          } finally {
+            recoveringActivitySession = false;
+          }
+        }
+      }
       if (errLower.includes("no active channel game")) {
         // Recover stale/wrong channel-bound tokens for freshly authorized activity users.
         if (ACTIVITY_MODE && !recoveringActivitySession) {
@@ -1287,6 +1314,9 @@ async function fetchState(showMask = false) {
     if (state && state.game_over) localInput = [];
     refreshFromState();
     return true;
+  } catch (err) {
+    showToast(`Network error: ${String(err && err.message ? err.message : err)}`);
+    return false;
   } finally {
     if (showMask) setLoading(false);
   }
@@ -1427,7 +1457,19 @@ function detectChannelIdFromUrl() {
 
 async function bootstrapActivitySession() {
   if (!ACTIVITY_MODE) return Boolean(sessionToken);
-  if (sessionToken) return true;
+  if (sessionToken) {
+    try {
+      const { data } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
+      if (data && data.ok) return true;
+      const errLower = String((data && data.error) || "").toLowerCase();
+      if (!errLower.includes("token")) return true;
+    } catch (_) {
+      // If network is flaky, keep current token and let normal polling recover.
+      return true;
+    }
+    sessionToken = "";
+    sessionStorage.removeItem(SESSION_KEY);
+  }
   if (!ACTIVITY_CLIENT_ID) {
     showToast('Missing activity client id');
     return false;

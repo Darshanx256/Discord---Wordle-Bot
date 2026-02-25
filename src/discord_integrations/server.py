@@ -16,6 +16,7 @@ from src.database import fetch_user_profile_v2
 
 
 _SERVER_LOCK = threading.Lock()
+_CACHE_LOCK = threading.Lock()
 _SERVER_THREAD = None
 _SERVER_STARTED = False
 _FINISHED_STATE_CACHE: Dict[str, Dict[str, Any]] = {}
@@ -39,10 +40,17 @@ def _b64url_decode(raw: str) -> bytes:
 
 
 def _token_secret() -> str:
-    return (
-        os.getenv("INTEGRATION_TOKEN_SECRET")
-        or os.getenv("DISCORD_TOKEN")
-        or "local-dev-integration-secret"
+    secret = os.getenv("INTEGRATION_TOKEN_SECRET") or os.getenv("DISCORD_TOKEN")
+    if secret:
+        return secret
+
+    # Fail closed by default. Allow explicit local/dev override only.
+    allow_insecure = str(os.getenv("INTEGRATION_ALLOW_INSECURE_SECRET", "0")).strip().lower() in {"1", "true", "yes", "on"}
+    if allow_insecure:
+        return "local-dev-integration-secret"
+    raise RuntimeError(
+        "Missing INTEGRATION_TOKEN_SECRET (or DISCORD_TOKEN). "
+        "Set INTEGRATION_ALLOW_INSECURE_SECRET=1 only for local development."
     )
 
 
@@ -95,7 +103,8 @@ def _activity_client_secret() -> str:
 
 
 def _cache_discord_user(access_token: str, user_payload: Dict[str, Any]) -> None:
-    _DISCORD_USER_CACHE[access_token] = {"payload": user_payload, "stored_at": time.time()}
+    with _CACHE_LOCK:
+        _DISCORD_USER_CACHE[access_token] = {"payload": user_payload, "stored_at": time.time()}
 
 
 def _cache_known_integration_user(uid: int, user_payload: Dict[str, Any]) -> None:
@@ -103,9 +112,10 @@ def _cache_known_integration_user(uid: int, user_payload: Dict[str, Any]) -> Non
         return
 
     now_ts = time.time()
-    stale = [k for k, v in _INTEGRATION_USER_CACHE.items() if now_ts - float(v.get("stored_at", 0)) > _INTEGRATION_USER_CACHE_TTL_SECONDS]
-    for k in stale:
-        _INTEGRATION_USER_CACHE.pop(k, None)
+    with _CACHE_LOCK:
+        stale = [k for k, v in _INTEGRATION_USER_CACHE.items() if now_ts - float(v.get("stored_at", 0)) > _INTEGRATION_USER_CACHE_TTL_SECONDS]
+        for k in stale:
+            _INTEGRATION_USER_CACHE.pop(k, None)
 
     name = (
         str(user_payload.get("name") or "").strip()
@@ -119,31 +129,33 @@ def _cache_known_integration_user(uid: int, user_payload: Dict[str, Any]) -> Non
         if avatar_hash:
             avatar_url = f"https://cdn.discordapp.com/avatars/{uid}/{avatar_hash}.png?size=128"
 
-    _INTEGRATION_USER_CACHE[uid] = {"name": name, "avatar_url": avatar_url, "stored_at": now_ts}
-
-    if len(_INTEGRATION_USER_CACHE) > _INTEGRATION_USER_CACHE_MAX:
-        oldest_uid = min(_INTEGRATION_USER_CACHE, key=lambda k: float(_INTEGRATION_USER_CACHE[k].get("stored_at", 0)))
-        _INTEGRATION_USER_CACHE.pop(oldest_uid, None)
+    with _CACHE_LOCK:
+        _INTEGRATION_USER_CACHE[uid] = {"name": name, "avatar_url": avatar_url, "stored_at": now_ts}
+        if len(_INTEGRATION_USER_CACHE) > _INTEGRATION_USER_CACHE_MAX:
+            oldest_uid = min(_INTEGRATION_USER_CACHE, key=lambda k: float(_INTEGRATION_USER_CACHE[k].get("stored_at", 0)))
+            _INTEGRATION_USER_CACHE.pop(oldest_uid, None)
 
 
 def _get_known_integration_user(uid: int) -> Optional[Dict[str, Any]]:
-    item = _INTEGRATION_USER_CACHE.get(uid)
-    if not item:
-        return None
-    if time.time() - float(item.get("stored_at", 0)) > _INTEGRATION_USER_CACHE_TTL_SECONDS:
-        _INTEGRATION_USER_CACHE.pop(uid, None)
-        return None
-    return item
+    with _CACHE_LOCK:
+        item = _INTEGRATION_USER_CACHE.get(uid)
+        if not item:
+            return None
+        if time.time() - float(item.get("stored_at", 0)) > _INTEGRATION_USER_CACHE_TTL_SECONDS:
+            _INTEGRATION_USER_CACHE.pop(uid, None)
+            return None
+        return dict(item)
 
 
 def _get_cached_discord_user(access_token: str) -> Optional[Dict[str, Any]]:
-    item = _DISCORD_USER_CACHE.get(access_token)
-    if not item:
-        return None
-    if time.time() - float(item.get("stored_at", 0)) > _DISCORD_USER_CACHE_TTL_SECONDS:
-        _DISCORD_USER_CACHE.pop(access_token, None)
-        return None
-    return item.get("payload")
+    with _CACHE_LOCK:
+        item = _DISCORD_USER_CACHE.get(access_token)
+        if not item:
+            return None
+        if time.time() - float(item.get("stored_at", 0)) > _DISCORD_USER_CACHE_TTL_SECONDS:
+            _DISCORD_USER_CACHE.pop(access_token, None)
+            return None
+        return item.get("payload")
 
 
 def _fetch_discord_user(access_token: str) -> Dict[str, Any]:
@@ -199,28 +211,31 @@ def _session_cache_key(payload: Dict[str, Any]) -> str:
 
 def _cleanup_finished_cache() -> None:
     now_ts = time.time()
-    stale_keys = []
-    for key, value in _FINISHED_STATE_CACHE.items():
-        if now_ts - float(value.get("stored_at", 0)) > _FINISHED_STATE_TTL_SECONDS:
-            stale_keys.append(key)
-    for key in stale_keys:
-        _FINISHED_STATE_CACHE.pop(key, None)
+    with _CACHE_LOCK:
+        stale_keys = []
+        for key, value in _FINISHED_STATE_CACHE.items():
+            if now_ts - float(value.get("stored_at", 0)) > _FINISHED_STATE_TTL_SECONDS:
+                stale_keys.append(key)
+        for key in stale_keys:
+            _FINISHED_STATE_CACHE.pop(key, None)
 
 
 def _cache_finished_state(payload: Dict[str, Any], state: Dict[str, Any], retry_meta: Optional[Dict[str, Any]]) -> None:
     _cleanup_finished_cache()
     key = _session_cache_key(payload)
-    _FINISHED_STATE_CACHE[key] = {
-        "state": state,
-        "retry_meta": retry_meta or {},
-        "stored_at": time.time(),
-    }
+    with _CACHE_LOCK:
+        _FINISHED_STATE_CACHE[key] = {
+            "state": state,
+            "retry_meta": retry_meta or {},
+            "stored_at": time.time(),
+        }
 
 
 def _load_finished_state(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     _cleanup_finished_cache()
     key = _session_cache_key(payload)
-    return _FINISHED_STATE_CACHE.get(key)
+    with _CACHE_LOCK:
+        return _FINISHED_STATE_CACHE.get(key)
 
 
 def cache_integration_finished_channel_state(bot, game, channel_id: int, actor_user_id: int = 0) -> None:
@@ -331,16 +346,6 @@ def _row_user_payload(user_obj) -> Dict[str, Any]:
     return payload
 
 
-async def _background_cache_profile(bot, user_id: int) -> None:
-    """Fetch and cache user profile in background while animations play (~550ms)."""
-    try:
-        # Run blocking DB fetch off the bot loop to avoid starving integration state requests.
-        await asyncio.to_thread(fetch_user_profile_v2, bot, user_id, True)
-    except Exception:
-        # Silently fail - this is background work, don't block anything
-        pass
-
-
 def _wr_cache_key(scope: str, owner_user_id: int, channel_id: int) -> str:
     if scope == "solo":
         return f"solo:{int(owner_user_id)}"
@@ -349,9 +354,10 @@ def _wr_cache_key(scope: str, owner_user_id: int, channel_id: int) -> str:
 
 def _cleanup_wr_cache() -> None:
     now_ts = time.time()
-    stale = [k for k, v in _WR_SNAPSHOT_CACHE.items() if now_ts - float(v.get("stored_at", 0)) > _WR_SNAPSHOT_CACHE_TTL_SECONDS]
-    for k in stale:
-        _WR_SNAPSHOT_CACHE.pop(k, None)
+    with _CACHE_LOCK:
+        stale = [k for k, v in _WR_SNAPSHOT_CACHE.items() if now_ts - float(v.get("stored_at", 0)) > _WR_SNAPSHOT_CACHE_TTL_SECONDS]
+        for k in stale:
+            _WR_SNAPSHOT_CACHE.pop(k, None)
 
 
 def _prime_wr_start_cache(bot, owner_user_id: int, scope: str, channel_id: int = 0) -> None:
@@ -361,13 +367,25 @@ def _prime_wr_start_cache(bot, owner_user_id: int, scope: str, channel_id: int =
             return
         wr_key = "solo_wr" if scope == "solo" else "multi_wr"
         wr_value = profile.get(wr_key, "—")
-        _WR_SNAPSHOT_CACHE[_wr_cache_key(scope, owner_user_id, channel_id)] = {
-            "value": wr_value,
-            "phase": "start",
-            "stored_at": time.time(),
-        }
+        with _CACHE_LOCK:
+            _WR_SNAPSHOT_CACHE[_wr_cache_key(scope, owner_user_id, channel_id)] = {
+                "value": wr_value,
+                "phase": "start",
+                "stored_at": time.time(),
+            }
     except Exception:
         pass
+
+
+def _prime_wr_start_cache_async(bot, owner_user_id: int, scope: str, channel_id: int = 0) -> None:
+    # Avoid blocking session-token response path on DB/profile calls.
+    t = threading.Thread(
+        target=_prime_wr_start_cache,
+        args=(bot, owner_user_id, scope, channel_id),
+        name="wr-start-cache-prime",
+        daemon=True,
+    )
+    t.start()
 
 
 def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_fetch: bool = False) -> Dict[str, Any]:
@@ -394,11 +412,12 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
     _cleanup_wr_cache()
     wr_value = "—"
     cache_key = _wr_cache_key(scope, owner_user_id, int(getattr(game, "channel_id", 0) or 0))
-    cached_wr = _WR_SNAPSHOT_CACHE.get(cache_key) or {}
+    with _CACHE_LOCK:
+        cached_wr = (_WR_SNAPSHOT_CACHE.get(cache_key) or {}).copy()
     cached_phase = str(cached_wr.get("phase") or "")
     should_fetch_start = (not skip_profile_fetch) and attempts_used == 0 and cached_phase != "start"
     should_fetch_end = (not skip_profile_fetch) and game_over and cached_phase != "end"
-    should_fetch = should_fetch_start or should_fetch_end or (not cached_wr and not skip_profile_fetch)
+    should_fetch = should_fetch_start or should_fetch_end
 
     if should_fetch:
         try:
@@ -406,11 +425,12 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
             if profile:
                 wr_key = "solo_wr" if scope == "solo" else "multi_wr"
                 wr_value = profile.get(wr_key, "—")
-                _WR_SNAPSHOT_CACHE[cache_key] = {
-                    "value": wr_value,
-                    "phase": "end" if game_over else "start",
-                    "stored_at": time.time(),
-                }
+                with _CACHE_LOCK:
+                    _WR_SNAPSHOT_CACHE[cache_key] = {
+                        "value": wr_value,
+                        "phase": "end" if game_over else "start",
+                        "stored_at": time.time(),
+                    }
         except Exception:
             wr_value = cached_wr.get("value", "—")
     elif cached_wr:
@@ -628,7 +648,8 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
 
         game = WordleGame(random.choice(secret_pool), 0, author, 0)
         bot.solo_games[uid] = game
-        _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
+        with _CACHE_LOCK:
+            _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
         return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)}
 
     if bool(retry_meta.get("is_custom", False)):
@@ -676,7 +697,8 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not game:
         return {"ok": False, "error": "Retry started but game state is unavailable."}
 
-    _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
+    with _CACHE_LOCK:
+        _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
     return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)}
 
 def _run_on_bot_loop(bot, coro):
@@ -818,7 +840,7 @@ user-agent: {ua}</pre>
         if scope == "solo" or (scope == "channel" and not channel_id_raw and uid in bot.solo_games):
             if uid not in bot.solo_games:
                 return jsonify({"ok": False, "error": "No active solo game for this user."}), 404
-            _prime_wr_start_cache(bot, uid, "solo", 0)
+            _prime_wr_start_cache_async(bot, uid, "solo", 0)
             payload = {"uid": uid, "scope": "solo", "exp": int(time.time()) + 7200}
             return jsonify({"ok": True, "token": _sign_token(payload), "scope": "solo"})
 
@@ -849,7 +871,7 @@ user-agent: {ua}</pre>
         if cid not in bot.games and cid not in bot.custom_games:
             return jsonify({"ok": False, "error": "No active channel/custom game found."}), 404
 
-        _prime_wr_start_cache(bot, uid, "channel", cid)
+        _prime_wr_start_cache_async(bot, uid, "channel", cid)
         payload = {"uid": uid, "cid": cid, "scope": "channel", "exp": int(time.time()) + 7200}
         return jsonify({"ok": True, "token": _sign_token(payload), "scope": "channel"})
 
@@ -887,17 +909,6 @@ user-agent: {ua}</pre>
             else:
                 result = _run_on_bot_loop(bot, _submit_channel_guess(bot, payload, word))
             
-            # Spawn background profile fetch while animations play (~550ms)
-            # This will populate cache by the time next request comes in
-            if result.get("ok") and result.get("state"):
-                try:
-                    uid = int(payload.get("uid", 0))
-                    if uid:
-                        # Fire and forget: fetch profile in background on bot's event loop
-                        asyncio.run_coroutine_threadsafe(_background_cache_profile(bot, uid), bot.loop)
-                except Exception:
-                    pass  # Don't let background task errors affect response
-            
             return jsonify(result), (200 if result.get("ok") else 400)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"Guess submit failed: {exc}"}), 500
@@ -914,16 +925,6 @@ user-agent: {ua}</pre>
             return jsonify({"ok": False, "error": "Invalid or expired token."}), 403
         try:
             result = _run_on_bot_loop(bot, _retry_session(bot, payload))
-            
-            # Spawn background profile fetch for cache warming
-            if result.get("ok") and result.get("state"):
-                try:
-                    uid = int(payload.get("uid", 0))
-                    if uid:
-                        asyncio.run_coroutine_threadsafe(_background_cache_profile(bot, uid), bot.loop)
-                except Exception:
-                    pass
-            
             return jsonify(result), (200 if result.get("ok") else 400)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"Retry failed: {exc}"}), 500
@@ -973,6 +974,8 @@ def start_integration_server(bot):
             port = int(port_raw)
         except ValueError:
             raise RuntimeError(f"Invalid integration port value: {port_raw!r}")
+        # Fail fast on misconfigured token secret instead of serving always-invalid auth.
+        _token_secret()
         from waitress import serve
         app = _create_app(bot)
 
