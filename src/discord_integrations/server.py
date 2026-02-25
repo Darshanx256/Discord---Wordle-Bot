@@ -326,6 +326,17 @@ def _row_user_payload(user_obj) -> Dict[str, Any]:
     return payload
 
 
+async def _background_cache_profile(bot, user_id: int) -> None:
+    """Fetch and cache user profile in background while animations play (~550ms)."""
+    try:
+        # Fetch with cache=True to avoid re-fetching if already cached
+        from src.database import fetch_user_profile_v2
+        fetch_user_profile_v2(bot, user_id, use_cache=True)
+    except Exception:
+        # Silently fail - this is background work, don't block anything
+        pass
+
+
 def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_fetch: bool = False) -> Dict[str, Any]:
     history_rows = []
     winner = None
@@ -820,6 +831,18 @@ user-agent: {ua}</pre>
                 result = _run_on_bot_loop(bot, _submit_solo_guess(bot, payload, word))
             else:
                 result = _run_on_bot_loop(bot, _submit_channel_guess(bot, payload, word))
+            
+            # Spawn background profile fetch while animations play (~550ms)
+            # This will populate cache by the time next request comes in
+            if result.get("ok") and result.get("state"):
+                try:
+                    uid = int(payload.get("uid", 0))
+                    if uid:
+                        # Fire and forget: fetch profile in background on bot's event loop
+                        asyncio.run_coroutine_threadsafe(_background_cache_profile(bot, uid), bot.loop)
+                except Exception:
+                    pass  # Don't let background task errors affect response
+            
             return jsonify(result), (200 if result.get("ok") else 400)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"Guess submit failed: {exc}"}), 500

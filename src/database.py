@@ -12,9 +12,9 @@ import datetime
 import time
 
 # --- PROFILE CACHE (Industry-Grade TTLCache) ---
-# Bounded cache with auto-eviction: max 1000 profiles, 5-min TTL
+# Bounded cache with auto-eviction: max 2000 profiles, 8-min TTL for better warmup
 from cachetools import TTLCache
-_PROFILE_CACHE = TTLCache(maxsize=1000, ttl=300)  # Much better than unbounded dict
+_PROFILE_CACHE = TTLCache(maxsize=2000, ttl=480)  # 8 min TTL for better cache reuse
 _CHANNEL_ACCESS_TABLE = 'guild_channel_access_v1'
 
 # --- WORD CACHE FOR LATENCY OPTIMIZATION ---
