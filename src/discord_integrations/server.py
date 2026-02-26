@@ -28,6 +28,8 @@ _INTEGRATION_USER_CACHE_TTL_SECONDS = 86400
 _INTEGRATION_USER_CACHE_MAX = 1024
 _WR_SNAPSHOT_CACHE: Dict[str, Dict[str, Any]] = {}
 _WR_SNAPSHOT_CACHE_TTL_SECONDS = 7200
+_VALID_WORDS_CACHE: Dict[str, Any] = {"version": "", "payload": "", "loaded_at": 0.0}
+_VALID_WORDS_LOCK = threading.Lock()
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -242,14 +244,14 @@ def cache_integration_finished_channel_state(bot, game, channel_id: int, actor_u
     """
     Public helper for non-web game flows (e.g. chat guesses) to preserve a final
     integration snapshot so web participants can still see end state and retry UI.
-    Fetches full profile for accurate end-state data.
+    WR is finalized asynchronously to keep the win flow snappy.
     """
     try:
         cid = int(channel_id or 0)
         if cid <= 0:
             return
         uid = int(actor_user_id or 0)
-        state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=False)
+        state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
         retry_meta = {
             "scope": "channel",
             "is_classic": bool(getattr(game, "difficulty", 0) == 1),
@@ -388,6 +390,66 @@ def _prime_wr_start_cache_async(bot, owner_user_id: int, scope: str, channel_id:
     t.start()
 
 
+def _prime_wr_end_cache(bot, owner_user_id: int, scope: str, channel_id: int = 0) -> None:
+    try:
+        profile = fetch_user_profile_v2(bot, owner_user_id, use_cache=True)
+        wr_key = "solo_wr" if scope == "solo" else "multi_wr"
+        wr_value = profile.get(wr_key, "—") if profile else "—"
+        with _CACHE_LOCK:
+            _WR_SNAPSHOT_CACHE[_wr_cache_key(scope, owner_user_id, channel_id)] = {
+                "value": wr_value,
+                "phase": "end",
+                "stored_at": time.time(),
+            }
+    except Exception:
+        pass
+
+
+def _prime_wr_end_cache_async(bot, owner_user_id: int, scope: str, channel_id: int = 0) -> None:
+    t = threading.Thread(
+        target=_prime_wr_end_cache,
+        args=(bot, owner_user_id, scope, channel_id),
+        name="wr-end-cache-prime",
+        daemon=True,
+    )
+    t.start()
+
+
+def _load_valid_words_payload() -> Dict[str, Any]:
+    from src.config import VALID_FILE, SECRET_FILE
+
+    paths = [Path(VALID_FILE), Path(SECRET_FILE)]
+    sig_parts = []
+    for path in paths:
+        try:
+            stat = path.stat()
+            sig_parts.append(f"{path.name}:{stat.st_mtime_ns}:{stat.st_size}")
+        except FileNotFoundError:
+            sig_parts.append(f"{path.name}:missing")
+    version = "|".join(sig_parts)
+
+    with _VALID_WORDS_LOCK:
+        if _VALID_WORDS_CACHE.get("version") == version and _VALID_WORDS_CACHE.get("payload"):
+            return dict(_VALID_WORDS_CACHE)
+
+    words = set()
+    for path in paths:
+        if not path.exists():
+            continue
+        try:
+            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                w = line.strip().lower()
+                if len(w) == 5 and w.isalpha():
+                    words.add(w)
+        except Exception:
+            continue
+
+    payload = "\n".join(sorted(words))
+    with _VALID_WORDS_LOCK:
+        _VALID_WORDS_CACHE.update({"version": version, "payload": payload, "loaded_at": time.time()})
+        return dict(_VALID_WORDS_CACHE)
+
+
 def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_fetch: bool = False) -> Dict[str, Any]:
     history_rows = []
     winner = None
@@ -411,7 +473,9 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
     # Fetch WR once when game starts and once when it finishes, reuse cached value in-between.
     _cleanup_wr_cache()
     wr_value = "—"
-    cache_key = _wr_cache_key(scope, owner_user_id, int(getattr(game, "channel_id", 0) or 0))
+    finalizing = False
+    channel_id = int(getattr(game, "channel_id", 0) or 0)
+    cache_key = _wr_cache_key(scope, owner_user_id, channel_id)
     with _CACHE_LOCK:
         cached_wr = (_WR_SNAPSHOT_CACHE.get(cache_key) or {}).copy()
     cached_phase = str(cached_wr.get("phase") or "")
@@ -436,6 +500,17 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
     elif cached_wr:
         wr_value = cached_wr.get("value", "—")
 
+    if skip_profile_fetch and game_over and cached_phase != "end":
+        finalizing = True
+        if cached_phase != "pending":
+            with _CACHE_LOCK:
+                _WR_SNAPSHOT_CACHE[cache_key] = {
+                    "value": cached_wr.get("value", "—"),
+                    "phase": "pending",
+                    "stored_at": time.time(),
+                }
+            _prime_wr_end_cache_async(bot, owner_user_id, scope, channel_id=channel_id)
+
     mode = _mode_label(game, scope)
     is_custom_mode = bool(getattr(game, "difficulty", None) == 2 or getattr(game, "custom_dict", None) is not None)
     can_retry = bool(scope == "solo" or not is_custom_mode)
@@ -452,7 +527,28 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
         "secret": str(game.secret).upper() if game_over else "",
         "breakdown": _build_breakdown(game),
         "can_retry": can_retry,
+        "finalizing": finalizing,
     }
+
+
+def _finalize_cached_state(payload: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+    if not state or not state.get("game_over") or not state.get("finalizing"):
+        return state
+    try:
+        scope = payload.get("scope", "channel")
+        uid = int(payload.get("uid", 0))
+        cid = int(payload.get("cid", 0))
+        cache_key = _wr_cache_key(scope, uid, cid)
+        with _CACHE_LOCK:
+            cached_wr = (_WR_SNAPSHOT_CACHE.get(cache_key) or {}).copy()
+        if cached_wr.get("phase") == "end":
+            updated = dict(state)
+            updated["wr"] = cached_wr.get("value", updated.get("wr", "—"))
+            updated["finalizing"] = False
+            return updated
+    except Exception:
+        pass
+    return state
 
 
 async def _load_snapshot(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -463,7 +559,7 @@ async def _load_snapshot(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
         if not game:
             cached = _load_finished_state(payload)
             if cached:
-                return {"ok": True, "state": cached["state"]}
+                return {"ok": True, "state": _finalize_cached_state(payload, cached["state"])}
             return {"ok": False, "error": "No active solo game found for this user."}
         return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)}
 
@@ -472,7 +568,7 @@ async def _load_snapshot(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not game:
         cached = _load_finished_state(payload)
         if cached:
-            return {"ok": True, "state": cached["state"]}
+            return {"ok": True, "state": _finalize_cached_state(payload, cached["state"])}
         return {"ok": False, "error": "No active channel game in this chat."}
     return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)}
 
@@ -558,8 +654,8 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
             guess_row_index = idx
             break
     if state.get("game_over"):
-        # Fetch full profile for end state (includes WR)
-        full_state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=False)
+        # Return fast end state and finalize WR asynchronously.
+        full_state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
         retry_meta = {
             "scope": "channel",
             "is_classic": bool(getattr(game, "difficulty", 0) == 1),
@@ -597,8 +693,8 @@ async def _submit_solo_guess(bot, payload: Dict[str, Any], word: str) -> Dict[st
     _, _, game_over = game.process_turn(guess, user)
     state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
     if game_over:
-        # Fetch full profile for end state (includes WR)
-        state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=False)
+        # Return fast end state and finalize WR asynchronously.
+        state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
         bot.solo_games.pop(uid, None)
         retry_meta = {"scope": "solo", "uid": uid}
         _cache_finished_state(payload, state, retry_meta)
@@ -889,6 +985,19 @@ user-agent: {ua}</pre>
             return jsonify(result), (200 if result.get("ok") else 404)
         except Exception as exc:
             return jsonify({"ok": False, "error": f"State fetch failed: {exc}"}), 500
+
+    @app.get("/integration/api/valid-words")
+    @app.get("/integration/activity/api/valid-words")
+    @app.get("/api/valid-words")
+    @app.get("/activity/api/valid-words")
+    def api_valid_words():
+        try:
+            payload = _load_valid_words_payload()
+            res = jsonify({"ok": True, "version": payload.get("version", ""), "words": payload.get("payload", "")})
+            res.headers["Cache-Control"] = "public, max-age=86400"
+            return res
+        except Exception:
+            return jsonify({"ok": False, "error": "Could not load word list."}), 500
 
     @app.post("/integration/api/guess")
     @app.post("/integration/activity/api/guess")

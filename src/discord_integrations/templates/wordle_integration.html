@@ -166,6 +166,7 @@ body.pip-square .tile {
   width: 20px;
   height: 20px;
   object-fit: contain;
+  display: block;
   flex-shrink: 0;
 }
 
@@ -524,6 +525,20 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   margin-bottom: 12px;
   font-size: 11px;
 }
+#breakdown.skeleton {
+  background: #f1f3f4;
+  border-color: #e1e4e8;
+}
+.skel-line {
+  height: 10px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  background: linear-gradient(90deg, #e6e9ee 25%, #f5f7fa 45%, #e6e9ee 65%);
+  background-size: 220% 100%;
+  animation: shimmer 1.05s ease-in-out infinite;
+}
+.skel-line:last-child { margin-bottom: 0; width: 70%; }
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 .break-row {
   display: flex;
   justify-content: space-between;
@@ -618,6 +633,7 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   width: 40px;
   height: 40px;
   object-fit: contain;
+  display: block;
 }
 .loading-mode {
   color: #111827;
@@ -650,15 +666,11 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
 }
 .loading-progress > span {
   display: block;
-  width: 40%;
+  width: 0%;
   height: 100%;
   border-radius: 999px;
   background: #111827;
-  animation: bootSlide 1.05s ease-in-out infinite;
-}
-@keyframes bootSlide {
-  0% { transform: translateX(-130%); }
-  100% { transform: translateX(340%); }
+  transition: width 0.16s linear;
 }
 
 #disclaimer {
@@ -667,13 +679,25 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   font-size: 10px;
   padding-bottom: 8px;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  #confetti-canvas,
+  .particle {
+    display: none !important;
+  }
+}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <div class="logo-wrap">
-      <img class="logo-icon" id="logo-icon" src="/integration/static/icon.png?v=20260224b" alt="Logo">
+      <img class="logo-icon" id="logo-icon" src="/integration/static/icon.png?v=20260224b" alt="Logo" loading="eager" decoding="async">
       <div class="logo" id="mode-title">CLASSIC</div>
     </div>
     <div class="header-stats">
@@ -704,21 +728,21 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   <div class="loading-card">
     <div class="loading-top">
       <div class="loading-logo-wrap">
-        <img class="loading-logo" id="loading-logo" src="/integration/static/icon.png?v=20260224b" alt="Wordle">
+        <img class="loading-logo" id="loading-logo" src="/integration/static/icon.png?v=20260224b" alt="Wordle" loading="eager" decoding="async">
       </div>
       <div class="loading-mode" id="loading-mode">WORDLE</div>
     </div>
     <div class="loading-bottom">
       <div class="loading-status">Connecting to Discord</div>
       <div class="loading-progress" aria-hidden="true">
-        <span></span>
+        <span id="loading-progress-fill"></span>
       </div>
     </div>
   </div>
 </div>
 
 <div id="win-overlay">
-  <div class="win-card">
+  <div class="win-card" id="win-card">
     <div class="winner-avatar" id="winner-avatar"></div>
     <div class="win-title" id="win-title">BRILLIANT!</div>
     <div class="win-sub" id="win-sub">Solved in <strong id="win-attempts">?</strong> attempts</div>
@@ -761,8 +785,11 @@ const IS_PHONE = /iphone|ipod|android|mobile/i.test(navigator.userAgent || "") |
 const DEFAULT_ROWS = 6;
 const MINI_VISIBLE_ROWS = 5;
 const COLS = 5;
-const FLIP_DUR = 540;
-const FLIP_STAGGER = 105;
+const REDUCE_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const LITE_MOTION = REDUCE_MOTION || IS_PHONE || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+const FLIP_DUR = LITE_MOTION ? 360 : 460;
+const FLIP_STAGGER = LITE_MOTION ? 70 : 90;
+const PARTICLE_COUNT = LITE_MOTION ? 12 : 26;
 const COLORS = ['#6aaa64','#c9b458','#538d4e','#b59f3b','#4a90d9','#e67e22','#e74c3c'];
 const KB_ROWS = [
   ['Q','W','E','R','T','Y','U','I','O','P'],
@@ -788,14 +815,45 @@ let recoveringActivitySession = false;
 let currentRows = DEFAULT_ROWS;
 let animatedInputAttempt = -1;
 let animatedInputLen = 0;
+const VALID_WORDS_KEY = "wordle_integration_valid_words_v2";
+const VALID_WORDS_VERSION_KEY = "wordle_integration_valid_words_version_v2";
+let validWords = null;
+let validWordsReady = false;
+let validWordsPromise = null;
 
 const gridEl = document.getElementById('grid');
 const kbEl = document.getElementById('keyboard');
-document.getElementById("logo-icon").src = `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`;
-document.getElementById("loading-logo").src = `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`;
+const headerLogoEl = document.getElementById("logo-icon");
+const loadingLogoEl = document.getElementById("loading-logo");
 const loadingModeEl = document.getElementById('loading-mode');
 const darkBtn = document.getElementById('theme-dark-btn');
 const contrastBtn = document.getElementById('theme-contrast-btn');
+const loadingMaskEl = document.getElementById('loading-mask');
+const loadingProgressFillEl = document.getElementById('loading-progress-fill');
+let loaderProgress = 0;
+let loaderRampTimer = null;
+let loaderHideTimer = null;
+let loaderVisible = false;
+if (LITE_MOTION) document.body.classList.add('lite-motion');
+
+function bindLogoWithFallback(imgEl) {
+  if (!imgEl) return;
+  const fallbacks = [
+    `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`,
+    `/integration/static/icon.png?v=${ICON_VERSION}`,
+    `/integration/static/icon.png`,
+    `/static/icon.png`,
+  ];
+  let idx = 0;
+  imgEl.onerror = () => {
+    idx += 1;
+    if (idx < fallbacks.length) imgEl.src = fallbacks[idx];
+    else imgEl.onerror = null;
+  };
+  imgEl.src = fallbacks[idx];
+}
+bindLogoWithFallback(headerLogoEl);
+bindLogoWithFallback(loadingLogoEl);
 
 function deriveModeDisplay(nextState) {
   if (!nextState) return "WORDLE";
@@ -818,8 +876,108 @@ try {
 } catch (_) {}
 
 function setLoading(on) {
-  const mask = document.getElementById('loading-mask');
-  mask.classList.toggle('show', Boolean(on));
+  const setProgress = (value) => {
+    loaderProgress = Math.max(0, Math.min(100, Number(value) || 0));
+    if (loadingProgressFillEl) loadingProgressFillEl.style.width = `${loaderProgress}%`;
+  };
+  const stopRamp = () => {
+    if (loaderRampTimer) {
+      clearInterval(loaderRampTimer);
+      loaderRampTimer = null;
+    }
+  };
+  const startRamp = () => {
+    stopRamp();
+    const startedAt = Date.now();
+    const cap = 88;
+    const durationMs = 4000;
+    loaderRampTimer = setInterval(() => {
+      const t = Math.min(1, (Date.now() - startedAt) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 2);
+      setProgress(cap * eased);
+      if (t >= 1) stopRamp();
+    }, 50);
+  };
+
+  if (on) {
+    if (loaderHideTimer) {
+      clearTimeout(loaderHideTimer);
+      loaderHideTimer = null;
+    }
+    if (!loaderVisible) {
+      loaderVisible = true;
+      setProgress(0);
+    }
+    if (loadingMaskEl) loadingMaskEl.classList.add('show');
+    startRamp();
+    return;
+  }
+
+  if (!loaderVisible) return;
+  stopRamp();
+  setProgress(100);
+  loaderHideTimer = setTimeout(() => {
+    if (loadingMaskEl) loadingMaskEl.classList.remove('show');
+    loaderVisible = false;
+    setProgress(0);
+    loaderHideTimer = null;
+  }, 180);
+}
+
+function isCustomMode(nextState) {
+  if (!nextState) return false;
+  const mode = String(nextState.mode_label || "").toLowerCase();
+  return mode.includes("custom");
+}
+
+function skeletonMarkup() {
+  return [
+    '<div class="skel-line" style="width: 86%"></div>',
+    '<div class="skel-line" style="width: 72%"></div>',
+    '<div class="skel-line" style="width: 64%"></div>',
+    '<div class="skel-line" style="width: 78%"></div>'
+  ].join('');
+}
+
+function setValidWordsFromPayload(version, payload) {
+  if (!payload) return;
+  const list = payload.split('\n').map(w => w.trim()).filter(Boolean);
+  validWords = new Set(list);
+  validWordsReady = true;
+  try {
+    localStorage.setItem(VALID_WORDS_KEY, payload);
+    localStorage.setItem(VALID_WORDS_VERSION_KEY, version || "");
+  } catch (_) {}
+}
+
+function loadValidWords() {
+  if (validWordsPromise) return validWordsPromise;
+  validWordsPromise = (async () => {
+    let cachedPayload = "";
+    let cachedVersion = "";
+    try {
+      cachedPayload = localStorage.getItem(VALID_WORDS_KEY) || "";
+      cachedVersion = localStorage.getItem(VALID_WORDS_VERSION_KEY) || "";
+    } catch (_) {}
+
+    if (cachedPayload) setValidWordsFromPayload(cachedVersion, cachedPayload);
+
+    try {
+      const { data } = await fetchJsonWithFallback(`/valid-words`);
+      if (data && data.ok && typeof data.words === "string") {
+        if (!validWordsReady || String(data.version || "") !== cachedVersion) {
+          setValidWordsFromPayload(String(data.version || ""), data.words);
+        }
+      }
+    } catch (_) {}
+    return validWords;
+  })();
+  return validWordsPromise;
+}
+
+function maybePrimeValidWords(nextState) {
+  if (!nextState || isCustomMode(nextState)) return;
+  if (!validWordsReady) loadValidWords();
 }
 
 function updateThemeButtons() {
@@ -1074,9 +1232,62 @@ function buildGrid() {
   }
 }
 
+function renderWinOverlay(nextState) {
+  const overlay = document.getElementById('win-overlay');
+  if (!nextState || !nextState.game_over) {
+    overlay.classList.remove('show');
+    return;
+  }
+  overlay.classList.add('show');
+  const isFinalizing = Boolean(nextState.finalizing);
+  const winCard = document.getElementById('win-card');
+  if (winCard) winCard.classList.toggle('loading', isFinalizing);
+
+  const winTitle = document.getElementById('win-title');
+  const winSub = document.getElementById('win-sub');
+  const winWord = document.getElementById('win-word');
+  const winAttempts = document.getElementById('win-attempts');
+  const winnerAvatar = document.getElementById('winner-avatar');
+  const retryBtn = document.getElementById('retry-btn');
+  const breakdown = document.getElementById('breakdown');
+
+  if (nextState.winner) {
+    winTitle.className = 'win-title';
+    winTitle.textContent = `${nextState.winner.name} WON!`;
+    winSub.innerHTML = `Solved in <strong id="win-attempts">${nextState.attempts_used}</strong> attempts`;
+    winWord.textContent = nextState.secret || '';
+    if (nextState.winner.avatar_url) winnerAvatar.style.backgroundImage = `url('${nextState.winner.avatar_url}')`;
+    if (nextState.winner.avatar_url) winnerAvatar.textContent = '';
+    else winnerAvatar.textContent = initialsFrom(nextState.winner.name);
+  } else {
+    winTitle.className = 'win-title lose-title';
+    winTitle.textContent = 'GAME OVER';
+    winSub.textContent = 'The word was:';
+    winWord.textContent = nextState.secret || '';
+    winnerAvatar.style.backgroundImage = '';
+    winnerAvatar.textContent = '💀';
+  }
+  if (winAttempts) winAttempts.textContent = String(nextState.attempts_used || '?');
+
+  if (breakdown) {
+    if (isFinalizing) {
+      breakdown.classList.add('skeleton');
+      breakdown.innerHTML = skeletonMarkup();
+    } else {
+      breakdown.classList.remove('skeleton');
+      breakdown.innerHTML = breakdownMarkup(nextState.breakdown);
+    }
+  }
+  if (retryBtn) {
+    retryBtn.disabled = !nextState.can_retry || isFinalizing;
+    retryBtn.textContent = isFinalizing ? 'FINALIZING...' : 'PLAY AGAIN';
+  }
+}
+
 function refreshFromState() {
   if (!state) return;
   setLoadingModeFromState(state);
+  maybePrimeValidWords(state);
   syncRowsFromState(state);
   const activeAttempt = Number(state.attempts_used || 0);
   if (activeAttempt !== animatedInputAttempt) {
@@ -1088,7 +1299,7 @@ function refreshFromState() {
   const hasSubmittedAny = submittedRows > 0;
   document.body.classList.toggle('board-shifted', hasSubmittedAny);
   calcLayout();
-  document.getElementById('mode-title').textContent = String(state.mode_label || 'Classic').toUpperCase();
+  document.getElementById('mode-title').textContent = deriveModeDisplay(state);
   document.getElementById('wr-val').textContent = state.wr ?? '—';
 
   const keyPriority = { correct: 3, present: 2, absent: 1 };
@@ -1179,39 +1390,8 @@ function refreshFromState() {
   kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
   if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
 
-  const overlay = document.getElementById('win-overlay');
-  if (state.game_over) {
-    overlay.classList.add('show');
-    const winTitle = document.getElementById('win-title');
-    const winSub = document.getElementById('win-sub');
-    const winWord = document.getElementById('win-word');
-    const winAttempts = document.getElementById('win-attempts');
-    const winnerAvatar = document.getElementById('winner-avatar');
-    const retryBtn = document.getElementById('retry-btn');
-    const breakdown = document.getElementById('breakdown');
-
-    if (state.winner) {
-      winTitle.className = 'win-title';
-      winTitle.textContent = `${state.winner.name} WON!`;
-      winSub.innerHTML = `Solved in <strong id="win-attempts">${state.attempts_used}</strong> attempts`;
-      winWord.textContent = state.secret || '';
-      if (state.winner.avatar_url) winnerAvatar.style.backgroundImage = `url('${state.winner.avatar_url}')`;
-      if (state.winner.avatar_url) winnerAvatar.textContent = '';
-      else winnerAvatar.textContent = initialsFrom(state.winner.name);
-    } else {
-      winTitle.className = 'win-title lose-title';
-      winTitle.textContent = 'GAME OVER';
-      winSub.textContent = 'The word was:';
-      winWord.textContent = state.secret || '';
-      winnerAvatar.style.backgroundImage = '';
-      winnerAvatar.textContent = '💀';
-    }
-    if (winAttempts) winAttempts.textContent = String(state.attempts_used || '?');
-    breakdown.innerHTML = breakdownMarkup(state.breakdown);
-    retryBtn.disabled = !state.can_retry;
-  } else {
-    overlay.classList.remove('show');
-  }
+  renderWinOverlay(state);
+  if (state.game_over) submitting = false;
   if (!state.game_over) animatedInputLen = localInput.length;
   carryInputPending = false;
 }
@@ -1290,7 +1470,8 @@ async function revealRow(rowIndex, letters, states) {
 }
 
 function spawnParticles() {
-  for (let i = 0; i < 30; i++) {
+  if (REDUCE_MOTION) return;
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
     const p = document.createElement('div');
     p.className = 'particle';
     const ang = Math.random() * 360;
@@ -1303,11 +1484,13 @@ function spawnParticles() {
 }
 
 function launchConfetti() {
+  if (REDUCE_MOTION) return;
   const cv = document.getElementById('confetti-canvas');
   const ctx = cv.getContext('2d');
   cv.width = window.innerWidth;
   cv.height = window.innerHeight;
-  const pp = Array.from({ length: 90 }, () => ({
+  const count = LITE_MOTION ? 55 : 90;
+  const pp = Array.from({ length: count }, () => ({
     x: Math.random()*cv.width, y: -10-Math.random()*80,
     vx: (Math.random()-.5)*3.5, vy: 2+Math.random()*3.5,
     rot: Math.random()*360, vrot: (Math.random()-.5)*7,
@@ -1428,6 +1611,14 @@ async function submitGuess() {
   let submittedOk = false;
   const rowIndex = state.attempts_used;
   const guess = localInput.join('');
+  const guessLower = guess.toLowerCase();
+  if (!isCustomMode(state) && validWordsReady && validWords && !validWords.has(guessLower)) {
+    submitting = false;
+    shakeRow(rowIndex);
+    showToast(`${guess} is not in dictionary.`);
+    return;
+  }
+  if (!isCustomMode(state) && !validWordsReady) loadValidWords();
   refreshFromState();
 
   try {
@@ -1469,20 +1660,26 @@ async function submitGuess() {
 
     const acceptedIndex = Number.isInteger(data.guess_row_index) ? data.guess_row_index : rowIndex;
     const rowData = data.state.rows && data.state.rows[acceptedIndex] ? data.state.rows[acceptedIndex] : null;
+    const rowStates = rowData ? (rowData.states || []) : [];
+    const isWinningRow = rowStates.length && rowStates.every(s => s === 'correct');
+    const winNow = Boolean(data.state && data.state.game_over);
+
+    state = data.state;
+    localInput = [];
+    carryInputPending = false;
+    refreshFromState();
+
     if (rowData) {
-      await revealRow(acceptedIndex, String(rowData.word || guess).toUpperCase().split(''), rowData.states || []);
+      const revealPromise = revealRow(acceptedIndex, String(rowData.word || guess).toUpperCase().split(''), rowStates);
+      if (!winNow) await revealPromise;
     }
 
-    if (rowData && (rowData.states || []).every(s => s === 'correct')) {
+    if (isWinningRow) {
       spawnParticles();
       launchConfetti();
     }
 
-    localInput = [];
-    carryInputPending = false;
-    state = data.state;
     submittedOk = true;
-    refreshFromState();
   } finally {
     submitting = false;
     if (!submittedOk) refreshFromState();
