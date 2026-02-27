@@ -1100,7 +1100,16 @@ async function fetchJsonWithFallback(path, options = {}) {
   for (const base of orderedBases) {
     const url = `${base}${path}`;
     try {
-      const res = await fetch(url, options);
+      const timeoutMs = 9000;
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), timeoutMs);
+      let res = null;
+      try {
+        const reqOptions = { ...options, signal: options.signal || ac.signal };
+        res = await fetch(url, reqOptions);
+      } finally {
+        clearTimeout(tid);
+      }
       const raw = await res.text();
       let data = null;
       try {
@@ -1801,6 +1810,11 @@ async function recoverActivitySession() {
 
 function initSocket() {
     if (!sessionToken) return;
+    if (typeof io !== 'function') {
+        socketConnected = false;
+        setLoading(false);
+        return;
+    }
     if (socket) {
         socket.disconnect();
     }
@@ -1859,7 +1873,13 @@ calcLayout();
 
 (async () => {
   const ok = await bootstrapActivitySession();
-  if (!ok) return;
+  if (!ok) {
+    setLoading(false);
+    if (!ACTIVITY_MODE && !sessionToken) {
+      showToast('Missing or invalid integration token');
+    }
+    return;
+  }
   setLoading(true);
   initSocket();
   const loaded = await fetchState(false);
