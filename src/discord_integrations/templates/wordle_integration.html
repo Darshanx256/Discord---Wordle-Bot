@@ -1288,6 +1288,7 @@ function renderWinOverlay(nextState) {
 
 function processState(data) {
     if (!data || typeof data !== 'object') {
+      setLoading(false);
       return false;
     }
     if (!data.ok) {
@@ -1295,6 +1296,7 @@ function processState(data) {
       if (errLower.includes("invalid or expired token") || errLower.includes("token")) {
         sessionStorage.removeItem(SESSION_KEY);
         if (ACTIVITY_MODE) void recoverActivitySession();
+        setLoading(false);
         return false;
       }
       if (errLower.includes("no active channel game")) {
@@ -1305,12 +1307,14 @@ function processState(data) {
         clearBoardAndKeyboard();
         if (!noActiveNoticeShown) showToast('Waiting for a game in this channel', 1200);
         noActiveNoticeShown = true;
+        setLoading(false);
         return false;
       }
       showToast(`${data.error || 'Failed to load'}`);
       if ((data.error || "").toLowerCase().includes("token")) {
         sessionStorage.removeItem(SESSION_KEY);
       }
+      setLoading(false);
       return false;
     }
     if (noActiveNoticeShown) {
@@ -1809,8 +1813,16 @@ function initSocket() {
         socketConnected = true;
         console.log('Connected to server');
         setLoading(true);
+        let joinAcked = false;
+        const joinAckTimeout = setTimeout(() => {
+            if (joinAcked) return;
+            fetchState(false).finally(() => setLoading(false));
+        }, 2500);
         socket.emit('join', { token: sessionToken }, (data) => {
-            processState(data || { ok: false, error: 'Join acknowledgement missing.' });
+            joinAcked = true;
+            clearTimeout(joinAckTimeout);
+            const ok = processState(data || { ok: false, error: 'Join acknowledgement missing.' });
+            if (!ok) setLoading(false);
         });
     });
 
@@ -1821,6 +1833,7 @@ function initSocket() {
 
     socket.on('connect_error', () => {
         socketConnected = false;
+        setLoading(false);
     });
 
     socket.on('state_update', (data) => {
