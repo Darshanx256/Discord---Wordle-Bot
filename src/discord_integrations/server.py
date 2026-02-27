@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 from urllib.parse import quote
 
 import requests
+from flask_socketio import SocketIO, join_room
 
 from src.database import fetch_user_profile_v2
 
@@ -30,6 +31,9 @@ _WR_SNAPSHOT_CACHE: Dict[str, Dict[str, Any]] = {}
 _WR_SNAPSHOT_CACHE_TTL_SECONDS = 7200
 _VALID_WORDS_CACHE: Dict[str, Any] = {"version": "", "payload": "", "loaded_at": 0.0}
 _VALID_WORDS_LOCK = threading.Lock()
+socketio: Optional[SocketIO] = None
+_FINALIZE_WATCH_LOCK = threading.Lock()
+_FINALIZE_WATCH_KEYS: set[str] = set()
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -233,6 +237,41 @@ def _cache_finished_state(payload: Dict[str, Any], state: Dict[str, Any], retry_
         }
 
 
+def _schedule_finalized_state_emit(payload: Dict[str, Any], state: Dict[str, Any]) -> None:
+    """
+    Emit a follow-up state_update once async WR finalization completes.
+    This preserves fast win UX (instant finalizing state) while still pushing
+    finalized WR/breakdown without requiring polling.
+    """
+    if not state or not state.get("game_over") or not state.get("finalizing"):
+        return
+
+    watch_key = _session_cache_key(payload)
+    with _FINALIZE_WATCH_LOCK:
+        if watch_key in _FINALIZE_WATCH_KEYS:
+            return
+        _FINALIZE_WATCH_KEYS.add(watch_key)
+
+    def _watch():
+        try:
+            deadline = time.time() + 20.0
+            while time.time() < deadline:
+                cached = _load_finished_state(payload) or {}
+                base_state = dict(cached.get("state") or state)
+                retry_meta = cached.get("retry_meta", {})
+                updated = _finalize_cached_state(payload, base_state)
+                if updated and not bool(updated.get("finalizing", False)):
+                    _cache_finished_state(payload, updated, retry_meta)
+                    _emit_state_update(payload, updated)
+                    return
+                time.sleep(0.25)
+        finally:
+            with _FINALIZE_WATCH_LOCK:
+                _FINALIZE_WATCH_KEYS.discard(watch_key)
+
+    threading.Thread(target=_watch, name=f"wr-finalize-watch-{watch_key}", daemon=True).start()
+
+
 def _load_finished_state(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     _cleanup_finished_cache()
     key = _session_cache_key(payload)
@@ -262,6 +301,25 @@ def cache_integration_finished_channel_state(bot, game, channel_id: int, actor_u
         }
         payload = {"uid": uid, "cid": cid, "scope": "channel", "exp": int(time.time()) + 7200}
         _cache_finished_state(payload, state, retry_meta)
+        _emit_state_update(payload, state)
+        _schedule_finalized_state_emit(payload, state)
+    except Exception:
+        pass
+
+
+def emit_integration_live_channel_state(bot, game, channel_id: int, actor_user_id: int = 0) -> None:
+    """
+    Push an in-progress channel snapshot to integration websocket clients so
+    browser activity stays in sync with main Discord gameplay.
+    """
+    try:
+        cid = int(channel_id or 0)
+        if cid <= 0:
+            return
+        uid = int(actor_user_id or 0)
+        payload = {"uid": uid, "cid": cid, "scope": "channel", "exp": int(time.time()) + 7200}
+        state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
+        _emit_state_update(payload, state)
     except Exception:
         pass
 
@@ -646,13 +704,8 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
         return {"ok": False, "error": ctx.ephemeral_messages[-1]}
 
     state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
-    guess_row_index = None
-    for idx in range(len(state.get("rows", [])) - 1, -1, -1):
-        row = state["rows"][idx]
-        row_uid = int(((row.get("user") or {}).get("id", 0)) or 0)
-        if row_uid == uid and str(row.get("word", "")).upper() == str(word or "").strip().upper():
-            guess_row_index = idx
-            break
+    _emit_state_update(payload, state)
+    
     if state.get("game_over"):
         # Return fast end state and finalize WR asynchronously.
         full_state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
@@ -665,8 +718,9 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
             "uid": uid,
         }
         _cache_finished_state(payload, full_state, retry_meta)
-        state = full_state  # Use full state with WR for end state
-    return {"ok": True, "state": state, "guess_row_index": guess_row_index}
+        _emit_state_update(payload, full_state)
+        _schedule_finalized_state_emit(payload, full_state)
+    return {"ok": True}
 
 
 async def _submit_solo_guess(bot, payload: Dict[str, Any], word: str) -> Dict[str, Any]:
@@ -692,13 +746,29 @@ async def _submit_solo_guess(bot, payload: Dict[str, Any], word: str) -> Dict[st
 
     _, _, game_over = game.process_turn(guess, user)
     state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
+    _emit_state_update(payload, state)
+
     if game_over:
         # Return fast end state and finalize WR asynchronously.
         state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
         bot.solo_games.pop(uid, None)
         retry_meta = {"scope": "solo", "uid": uid}
         _cache_finished_state(payload, state, retry_meta)
-    return {"ok": True, "state": state, "guess_row_index": max(0, int(getattr(game, "attempts_used", 1)) - 1)}
+        _emit_state_update(payload, state)
+        _schedule_finalized_state_emit(payload, state)
+    return {"ok": True}
+
+
+def _emit_state_update(payload: Dict[str, Any], state: Dict[str, Any]):
+    global socketio
+    if not socketio:
+        return
+    room = _get_session_room(payload)
+    try:
+        socketio.emit("state_update", {"ok": True, "state": state}, room=room)
+    except Exception as exc:
+        # Real-time transport failures must not block game flow.
+        print(f"[SIO] state_update emit failed for room {room}: {exc}")
 
 
 class _RetryStartContext:
@@ -734,7 +804,9 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
 
         if uid in bot.solo_games:
             game = bot.solo_games[uid]
-            return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)}
+            state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
+            _emit_state_update(payload, state)
+            return {"ok": True}
 
         secret_pool = bot.secrets or []
         if not secret_pool:
@@ -746,7 +818,10 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
         bot.solo_games[uid] = game
         with _CACHE_LOCK:
             _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
-        return {"ok": True, "state": _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)}
+        
+        state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
+        _emit_state_update(payload, state)
+        return {"ok": True}
 
     if bool(retry_meta.get("is_custom", False)):
         return {"ok": False, "error": "Custom retry is not automated yet. Start custom game again in Discord."}
@@ -757,7 +832,8 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
         current = _snapshot_from_game(bot, game, "channel", uid)
         # If an active game exists, reuse it; if it is finished, replace it with a new one.
         if not current.get("game_over"):
-            return {"ok": True, "state": current}
+            _emit_state_update(payload, current)
+            return {"ok": True}
         bot.custom_games.pop(cid, None)
         bot.games.pop(cid, None)
 
@@ -795,15 +871,26 @@ async def _retry_session(bot, payload: Dict[str, Any]) -> Dict[str, Any]:
 
     with _CACHE_LOCK:
         _FINISHED_STATE_CACHE.pop(_session_cache_key(payload), None)
-    return {"ok": True, "state": _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)}
+    
+    state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
+    _emit_state_update(payload, state)
+    return {"ok": True}
 
 def _run_on_bot_loop(bot, coro):
     fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
     return fut.result(timeout=20)
 
 
+def _get_session_room(payload: Dict[str, Any]) -> str:
+    scope = payload.get("scope", "channel")
+    if scope == "solo":
+        return f"solo_{int(payload.get('uid', 0))}"
+    return f"channel_{int(payload.get('cid', 0))}"
+
+
 def _create_app(bot):
     from flask import Flask, jsonify, redirect, render_template, request
+    global socketio
 
     base_dir = Path(__file__).resolve().parent
     app = Flask(
@@ -814,6 +901,8 @@ def _create_app(bot):
     )
     # Accept both `/path` and `/path/` so Discord path normalization doesn't 404.
     app.url_map.strict_slashes = False
+    cors_origins = os.getenv("INTEGRATION_WS_CORS_ORIGINS", "*").strip() or "*"
+    socketio = SocketIO(app, async_mode="gevent", cors_allowed_origins=cors_origins)
 
     @app.before_request
     def _integration_debug_request_log():
@@ -1050,8 +1139,37 @@ user-agent: {ua}</pre>
                 return jsonify({"ok": False, "error": f"Endpoint not found: {request.path}"}), 404
             return "Not Found", 404
         return _render_debug_echo("unmatched-path")
+    
+    @socketio.on("connect")
+    def handle_connect():
+        print("[SIO] Client connected")
 
-    return app
+    @socketio.on("disconnect")
+    def handle_disconnect():
+        print("[SIO] Client disconnected")
+
+    @socketio.on("join")
+    def handle_join(data):
+        if not isinstance(data, dict):
+            return {"ok": False, "error": "Invalid join payload."}
+        token = data.get("token", "")
+        payload = _verify_token(token)
+        if not payload:
+            return {"ok": False, "error": "Invalid or expired token."}
+
+        room = _get_session_room(payload)
+        join_room(room)
+        print(f"[SIO] Client joined room: {room}")
+
+        try:
+            result = _run_on_bot_loop(bot, _load_snapshot(bot, payload))
+            if bool(result.get("ok")) and bool((result.get("state") or {}).get("finalizing")):
+                _schedule_finalized_state_emit(payload, result.get("state") or {})
+            return result
+        except Exception as exc:
+            return {"ok": False, "error": f"State fetch failed: {exc}"}
+
+    return app, socketio
 
 
 def integration_base_url() -> str:
@@ -1085,12 +1203,11 @@ def start_integration_server(bot):
             raise RuntimeError(f"Invalid integration port value: {port_raw!r}")
         # Fail fast on misconfigured token secret instead of serving always-invalid auth.
         _token_secret()
-        from waitress import serve
-        app = _create_app(bot)
+        app, socketio_instance = _create_app(bot)
 
         def _run():
             print(f"🌐 Integration server running on http://{host}:{port}")
-            serve(app, host=host, port=port, threads=4)
+            socketio_instance.run(app, host=host, port=port)
 
         _SERVER_THREAD = threading.Thread(target=_run, name="wordle-integration-server", daemon=True)
         _SERVER_THREAD.start()

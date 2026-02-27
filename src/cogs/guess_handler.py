@@ -268,6 +268,11 @@ class GuessHandler(commands.Cog):
                     await ctx.send(embed=embed)
 
                 else:
+                    try:
+                        from src.discord_integrations.server import emit_integration_live_channel_state
+                        emit_integration_live_channel_state(self.bot, game, cid, getattr(ctx.author, "id", 0))
+                    except Exception:
+                        pass
                     embed = self._build_game_embed(
                         title=None,
                         color=discord.Color.gold(),
@@ -393,6 +398,11 @@ class GuessHandler(commands.Cog):
 
             else:
                 # Just a turn (REGULAR GAME)
+                try:
+                    from src.discord_integrations.server import emit_integration_live_channel_state
+                    emit_integration_live_channel_state(self.bot, game, cid, getattr(ctx.author, "id", 0))
+                except Exception:
+                    pass
                 embed = self._build_game_embed(
                     title=None,
                     color=discord.Color.gold(),

@@ -752,6 +752,7 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   </div>
 </div>
 
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
 const INITIAL_TOKEN = {{ token|tojson }};
 const ACTIVITY_MODE = {{ activity_mode|tojson }};
@@ -809,7 +810,8 @@ let noActiveNoticeShown = false;
 const ICON_VERSION = "20260224b";
 let rowRefs = [];
 let enterBtn = null;
-let pollInFlight = false;
+let socket = null;
+let socketConnected = false;
 let layoutModeValue = -1; // Discord SDK layout mode: 0 focused, 1 pip, 2 grid
 let recoveringActivitySession = false;
 let currentRows = DEFAULT_ROWS;
@@ -1284,6 +1286,55 @@ function renderWinOverlay(nextState) {
   }
 }
 
+function processState(data) {
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+    if (!data.ok) {
+      const errLower = String(data.error || "").toLowerCase();
+      if (errLower.includes("invalid or expired token") || errLower.includes("token")) {
+        sessionStorage.removeItem(SESSION_KEY);
+        if (ACTIVITY_MODE) void recoverActivitySession();
+        return false;
+      }
+      if (errLower.includes("no active channel game")) {
+        if (ACTIVITY_MODE) void recoverActivitySession();
+        localInput = [];
+        carryInputPending = false;
+        state = null;
+        clearBoardAndKeyboard();
+        if (!noActiveNoticeShown) showToast('Waiting for a game in this channel', 1200);
+        noActiveNoticeShown = true;
+        return false;
+      }
+      showToast(`${data.error || 'Failed to load'}`);
+      if ((data.error || "").toLowerCase().includes("token")) {
+        sessionStorage.removeItem(SESSION_KEY);
+      }
+      return false;
+    }
+    if (noActiveNoticeShown) {
+      showToast('New game started', 900);
+      noActiveNoticeShown = false;
+    }
+    const prevState = state;
+    if (!submitting && prevState && !prevState.game_over && localInput.length > 0) {
+      const prevAttempts = Number(prevState.attempts_used || 0);
+      const nextAttempts = Number((data.state && data.state.attempts_used) || 0);
+      if (nextAttempts > prevAttempts) {
+        const maxRows = normalizeRows(data.state && data.state.max_attempts);
+        if (nextAttempts >= maxRows) localInput = [];
+        else carryInputPending = true;
+      }
+    }
+    syncRowsFromState(data.state);
+    state = data.state;
+    if (state && state.game_over) localInput = [];
+    refreshFromState();
+    setLoading(false);
+    return true;
+}
+
 function refreshFromState() {
   if (!state) return;
   setLoadingModeFromState(state);
@@ -1517,82 +1568,13 @@ function launchConfetti() {
 }
 
 async function fetchState(showMask = false) {
-  if (!sessionToken) {
-    showToast('Session not ready');
-    return false;
-  }
+  if (!sessionToken) return false;
   if (showMask) setLoading(true);
   try {
-    const { data, url } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
-    if (!data.ok) {
-      const errLower = String(data.error || "").toLowerCase();
-      if (errLower.includes("invalid or expired token") || errLower.includes("token")) {
-        sessionStorage.removeItem(SESSION_KEY);
-        if (ACTIVITY_MODE && !recoveringActivitySession) {
-          recoveringActivitySession = true;
-          try {
-            sessionToken = "";
-            const rebound = await bootstrapActivitySession();
-            if (rebound && sessionToken) {
-              const recovered = await fetchState(false);
-              if (recovered) return true;
-            }
-          } finally {
-            recoveringActivitySession = false;
-          }
-        }
-      }
-      if (errLower.includes("no active channel game")) {
-        // Recover stale/wrong channel-bound tokens for freshly authorized activity users.
-        if (ACTIVITY_MODE && !recoveringActivitySession) {
-          recoveringActivitySession = true;
-          try {
-            sessionToken = "";
-            sessionStorage.removeItem(SESSION_KEY);
-            const rebound = await bootstrapActivitySession();
-            if (rebound && sessionToken) {
-              const recovered = await fetchState(false);
-              if (recovered) return true;
-            }
-          } finally {
-            recoveringActivitySession = false;
-          }
-        }
-        localInput = [];
-        carryInputPending = false;
-        state = null;
-        clearBoardAndKeyboard();
-        if (!noActiveNoticeShown) showToast('Waiting for a game in this channel', 1200);
-        noActiveNoticeShown = true;
-        return false;
-      }
-      showToast(`${data.error || 'Failed to load'} (${url})`);
-      if ((data.error || "").toLowerCase().includes("token")) {
-        sessionStorage.removeItem(SESSION_KEY);
-      }
-      return false;
-    }
-    if (noActiveNoticeShown) {
-      showToast('New game started', 900);
-      noActiveNoticeShown = false;
-    }
-    const prevState = state;
-    if (!submitting && prevState && !prevState.game_over && localInput.length > 0) {
-      const prevAttempts = Number(prevState.attempts_used || 0);
-      const nextAttempts = Number((data.state && data.state.attempts_used) || 0);
-      if (nextAttempts > prevAttempts) {
-        const maxRows = normalizeRows(data.state && data.state.max_attempts);
-        if (nextAttempts >= maxRows) localInput = [];
-        else carryInputPending = true;
-      }
-    }
-    syncRowsFromState(data.state);
-    state = data.state;
-    if (state && state.game_over) localInput = [];
-    refreshFromState();
-    return true;
+    const { data } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
+    return processState(data);
   } catch (err) {
-    showToast(`Network error: ${String(err && err.message ? err.message : err)}`);
+    if (showMask) showToast(`Network error: ${String(err && err.message ? err.message : err)}`);
     return false;
   } finally {
     if (showMask) setLoading(false);
@@ -1608,7 +1590,6 @@ async function submitGuess() {
   }
 
   submitting = true;
-  let submittedOk = false;
   const rowIndex = state.attempts_used;
   const guess = localInput.join('');
   const guessLower = guess.toLowerCase();
@@ -1622,67 +1603,21 @@ async function submitGuess() {
   refreshFromState();
 
   try {
-    const { data, url } = await fetchJsonWithFallback(`/guess`, {
+    const { data } = await fetchJsonWithFallback(`/guess`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: sessionToken, word: guess })
     });
     if (!data.ok) {
-      const errText = String(data.error || 'Guess rejected');
-      const errLower = errText.toLowerCase();
-      const instantReject =
-        errLower.includes('not in dictionary') ||
-        errLower.includes('already guessed') ||
-        errLower.includes('5 letters only') ||
-        errLower.includes('hard mode');
-      if (instantReject) {
-        shakeRow(rowIndex);
-        showToast(`${errText} (${url})`);
-        return;
-      }
-
-      const beforeAttempts = rowIndex;
-      const loaded = await fetchState(false);
-      if (!loaded && !state) return;
-      const afterAttempts = Number((state && state.attempts_used) || beforeAttempts);
-      const nowOver = Boolean(state && state.game_over);
-      const advanced = loaded && afterAttempts > beforeAttempts;
-      if (advanced || nowOver) {
-        const maxRows = normalizeRows(state && state.max_attempts);
-        if (afterAttempts >= maxRows || nowOver) localInput = [];
-        else carryInputPending = true;
-        return;
-      }
       shakeRow(rowIndex);
-      showToast(`${errText} (${url})`);
-      return;
+      showToast(String(data.error || 'Guess rejected'));
+    } else {
+      localInput = [];
+      carryInputPending = false;
     }
-
-    const acceptedIndex = Number.isInteger(data.guess_row_index) ? data.guess_row_index : rowIndex;
-    const rowData = data.state.rows && data.state.rows[acceptedIndex] ? data.state.rows[acceptedIndex] : null;
-    const rowStates = rowData ? (rowData.states || []) : [];
-    const isWinningRow = rowStates.length && rowStates.every(s => s === 'correct');
-    const winNow = Boolean(data.state && data.state.game_over);
-
-    state = data.state;
-    localInput = [];
-    carryInputPending = false;
-    refreshFromState();
-
-    if (rowData) {
-      const revealPromise = revealRow(acceptedIndex, String(rowData.word || guess).toUpperCase().split(''), rowStates);
-      if (!winNow) await revealPromise;
-    }
-
-    if (isWinningRow) {
-      spawnParticles();
-      launchConfetti();
-    }
-
-    submittedOk = true;
   } finally {
     submitting = false;
-    if (!submittedOk) refreshFromState();
+    refreshFromState();
   }
 }
 
@@ -1720,7 +1655,6 @@ async function retryGame(fromRecovery = false) {
         sessionStorage.removeItem(SESSION_KEY);
         const rebound = await bootstrapActivitySession();
         if (rebound && sessionToken) {
-          await fetchState(true);
           submitting = false;
           setLoading(false);
           await retryGame(true);
@@ -1733,12 +1667,11 @@ async function retryGame(fromRecovery = false) {
     if (data.token) {
       sessionToken = String(data.token || "");
       if (sessionToken) sessionStorage.setItem(SESSION_KEY, sessionToken);
+      initSocket();
     }
     localInput = [];
     carryInputPending = false;
-    state = data.state;
     document.getElementById('confetti-canvas').getContext('2d').clearRect(0, 0, window.innerWidth, window.innerHeight);
-    refreshFromState();
   } finally {
     setLoading(false);
     submitting = false;
@@ -1762,17 +1695,7 @@ function detectChannelIdFromUrl() {
 async function bootstrapActivitySession() {
   if (!ACTIVITY_MODE) return Boolean(sessionToken);
   if (sessionToken) {
-    try {
-      const { data } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
-      if (data && data.ok) return true;
-      const errLower = String((data && data.error) || "").toLowerCase();
-      if (!errLower.includes("token")) return true;
-    } catch (_) {
-      // If network is flaky, keep current token and let normal polling recover.
-      return true;
-    }
-    sessionToken = "";
-    sessionStorage.removeItem(SESSION_KEY);
+     return true;
   }
   if (!ACTIVITY_CLIENT_ID) {
     showToast('Missing activity client id');
@@ -1842,12 +1765,67 @@ async function bootstrapActivitySession() {
     sessionStorage.setItem(SESSION_KEY, sessionToken);
     return true;
   } catch (err) {
+    sessionToken = "";
     sessionStorage.removeItem(SESSION_KEY);
     showToast(String(err && err.message ? err.message : err));
     return false;
   } finally {
     setLoading(false);
   }
+}
+
+async function recoverActivitySession() {
+  if (!ACTIVITY_MODE || recoveringActivitySession) return false;
+  recoveringActivitySession = true;
+  try {
+    if (socket) {
+      socket.disconnect();
+      socket = null;
+    }
+    socketConnected = false;
+    sessionToken = "";
+    sessionStorage.removeItem(SESSION_KEY);
+    const ok = await bootstrapActivitySession();
+    if (!ok || !sessionToken) return false;
+    initSocket();
+    await fetchState(false);
+    return true;
+  } finally {
+    recoveringActivitySession = false;
+  }
+}
+
+function initSocket() {
+    if (!sessionToken) return;
+    if (socket) {
+        socket.disconnect();
+    }
+    socket = io({
+        reconnection: true,
+        reconnectionDelay: 1000,
+    });
+
+    socket.on('connect', () => {
+        socketConnected = true;
+        console.log('Connected to server');
+        setLoading(true);
+        socket.emit('join', { token: sessionToken }, (data) => {
+            processState(data || { ok: false, error: 'Join acknowledgement missing.' });
+        });
+    });
+
+    socket.on('disconnect', () => {
+        socketConnected = false;
+        console.log('Disconnected from server');
+    });
+
+    socket.on('connect_error', () => {
+        socketConnected = false;
+    });
+
+    socket.on('state_update', (data) => {
+        processState(data);
+    });
 }
 
 document.addEventListener('keydown', e => {
@@ -1860,12 +1838,7 @@ document.addEventListener('keydown', e => {
 
 document.getElementById('retry-btn').addEventListener('click', retryGame);
 window.addEventListener('resize', calcLayout);
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && sessionToken && !submitting && !pollInFlight) {
-    pollInFlight = true;
-    fetchState(false).finally(() => { pollInFlight = false; });
-  }
-});
+
 
 buildGrid();
 buildKeyboard();
@@ -1874,13 +1847,14 @@ calcLayout();
 (async () => {
   const ok = await bootstrapActivitySession();
   if (!ok) return;
-  const loaded = await fetchState(true);
-  if (!loaded) return;
+  setLoading(true);
+  initSocket();
+  const loaded = await fetchState(false);
+  if (!loaded) setLoading(false);
   setInterval(() => {
-    if (submitting || pollInFlight) return;
-    pollInFlight = true;
-    fetchState(false).finally(() => { pollInFlight = false; });
-  }, 1400);
+    if (submitting || !sessionToken || socketConnected) return;
+    fetchState(false);
+  }, 4000);
 })();
 </script>
 </body>
