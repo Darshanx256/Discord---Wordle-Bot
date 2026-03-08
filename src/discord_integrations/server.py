@@ -185,6 +185,31 @@ def _cache_known_integration_user(uid: int, user_payload: Dict[str, Any]) -> Non
             _INTEGRATION_USER_CACHE.pop(oldest_uid, None)
 
 
+def _author_proxy_from_payload(uid: int, payload: Dict[str, Any]):
+    class _AvatarProxy:
+        def __init__(self, url: str):
+            self.url = str(url or "")
+
+    class _AuthorProxy:
+        def __init__(self, user_id: int, name: str, avatar_url: str):
+            self.id = int(user_id)
+            self.display_name = str(name or user_id)
+            self.display_avatar = _AvatarProxy(avatar_url)
+
+    name = (
+        str(payload.get("name") or "").strip()
+        or str(payload.get("global_name") or "").strip()
+        or str(payload.get("username") or "").strip()
+        or str(uid)
+    )
+    avatar_url = str(payload.get("avatar_url") or "").strip()
+    if not avatar_url:
+        avatar_hash = str(payload.get("avatar") or "").strip()
+        if avatar_hash:
+            avatar_url = f"https://cdn.discordapp.com/avatars/{uid}/{avatar_hash}.png?size=128"
+    return _AuthorProxy(uid, name, avatar_url)
+
+
 def _get_known_integration_user(uid: int) -> Optional[Dict[str, Any]]:
     with _CACHE_LOCK:
         item = _INTEGRATION_USER_CACHE.get(uid)
@@ -1074,7 +1099,20 @@ user-agent: {ua}</pre>
 
         if scope == "solo" or (scope == "channel" and not channel_id_raw and uid in bot.solo_games):
             if uid not in bot.solo_games:
-                return jsonify({"ok": False, "error": "No active solo game for this user."}), 404
+                try:
+                    from src.game import WordleGame
+                    import random
+
+                    secret_pool = getattr(bot, "secrets", None) or []
+                    if not secret_pool:
+                        return jsonify({"ok": False, "error": "No solo word list available."}), 500
+
+                    author = _author_proxy_from_payload(uid, me)
+                    game = WordleGame(random.choice(secret_pool), 0, author, 0)
+                    bot.solo_games[uid] = game
+                except Exception as exc:
+                    return jsonify({"ok": False, "error": f"Failed to start solo game: {exc}"}), 500
+
             _prime_wr_start_cache_async(bot, uid, "solo", 0)
             payload = {"uid": uid, "scope": "solo", "exp": int(time.time()) + 7200}
             return jsonify({"ok": True, "token": _sign_token(payload), "scope": "solo"})

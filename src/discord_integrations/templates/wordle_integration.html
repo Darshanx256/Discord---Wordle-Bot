@@ -596,6 +596,60 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   opacity: 1;
   visibility: visible;
 }
+.entry-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 230;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.12), rgba(10, 10, 10, 0.88));
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+.entry-screen.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.entry-card {
+  width: min(92vw, 420px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  text-align: center;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+.entry-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.entry-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+.entry-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.entry-btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.entry-hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 12px;
+  line-height: 1.4;
+}
 .loading-card {
   width: min(520px, 92vw);
   height: min(520px, 78vh);
@@ -741,6 +795,16 @@ body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier
   </div>
 </div>
 
+<div id="entry-screen" class="entry-screen">
+  <div class="entry-card">
+    <div class="entry-title">Play Wordle</div>
+    <div class="entry-sub">Choose where you want to play.</div>
+    <button class="btn entry-btn" id="entry-server" type="button">Server Game</button>
+    <button class="btn entry-btn secondary" id="entry-solo" type="button">Solo (Private)</button>
+    <div class="entry-hint">Server games post guesses in chat. Solo stays private and can be reopened with <code>/show_solo</code>.</div>
+  </div>
+</div>
+
 <div id="win-overlay">
   <div class="win-card" id="win-card">
     <div class="winner-avatar" id="winner-avatar"></div>
@@ -822,6 +886,10 @@ let layoutPending = false;
 const modeTitleEl = document.getElementById('mode-title');
 const wrValEl = document.getElementById('wr-val');
 const confettiCanvas = document.getElementById('confetti-canvas');
+const entryScreenEl = document.getElementById('entry-screen');
+const entryServerBtn = document.getElementById('entry-server');
+const entrySoloBtn = document.getElementById('entry-solo');
+let activityScope = "channel";
 const VALID_WORDS_VERSION_KEY = "wordle_integration_valid_words_version_v2";
 let validWords = null;
 let validWordsReady = false;
@@ -1136,6 +1204,14 @@ function isAuthError(data, status) {
   if (statusNum === 401 || statusNum === 403) return true;
   const errLower = String((data && data.error) || "").toLowerCase();
   return errLower.includes("token") || errLower.includes("expired") || errLower.includes("invalid");
+}
+
+function showEntryScreen() {
+  if (entryScreenEl) entryScreenEl.classList.add('show');
+}
+
+function hideEntryScreen() {
+  if (entryScreenEl) entryScreenEl.classList.remove('show');
 }
 
 function calcLayout() {
@@ -1772,7 +1848,7 @@ function detectChannelIdFromUrl() {
   return m && m.length ? m[m.length - 1] : '';
 }
 
-async function bootstrapActivitySession() {
+async function bootstrapActivitySession(scope = "channel") {
   if (!ACTIVITY_MODE) return Boolean(sessionToken);
   if (sessionToken) {
      return true;
@@ -1833,6 +1909,7 @@ async function bootstrapActivitySession() {
 
     await discordSdk.commands.authenticate({ access_token: oauthData.access_token });
 
+    const nextScope = scope || "channel";
     const { data: sessData, url: sessUrl } = await fetchJsonWithFallback(`/activity/session-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1840,7 +1917,7 @@ async function bootstrapActivitySession() {
         access_token: oauthData.access_token,
         channel_id: channelId || null,
         location_id: new URLSearchParams(window.location.search).get('location_id') || null,
-        scope: 'channel'
+        scope: nextScope
       })
     });
     if (!sessData.ok) throw new Error(`${sessData.error || 'Session token failed'} (${sessUrl})`);
@@ -1868,7 +1945,7 @@ async function recoverActivitySession() {
     socketConnected = false;
     sessionToken = "";
     sessionStorage.removeItem(SESSION_KEY);
-    const ok = await bootstrapActivitySession();
+    const ok = await bootstrapActivitySession(activityScope);
     if (!ok || !sessionToken) return false;
     initSocket();
     await fetchState(false, false);
@@ -1876,6 +1953,20 @@ async function recoverActivitySession() {
   } finally {
     recoveringActivitySession = false;
   }
+}
+
+async function startActivityFlow(scope = "channel") {
+  activityScope = scope || "channel";
+  hideEntryScreen();
+  const ok = await bootstrapActivitySession(activityScope);
+  if (!ok || !sessionToken) {
+    showEntryScreen();
+    return;
+  }
+  setLoading(true);
+  initSocket();
+  const loaded = await fetchState(false);
+  if (!loaded) setLoading(false);
 }
 
 function initSocket() {
@@ -1939,6 +2030,8 @@ document.addEventListener('keydown', e => {
 });
 
 document.getElementById('retry-btn').addEventListener('click', retryGame);
+if (entryServerBtn) entryServerBtn.addEventListener('click', () => startActivityFlow('channel'));
+if (entrySoloBtn) entrySoloBtn.addEventListener('click', () => startActivityFlow('solo'));
 window.addEventListener('resize', scheduleLayout);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && !socketConnected) {
@@ -1952,7 +2045,12 @@ buildKeyboard();
 calcLayout();
 
 (async () => {
-  const ok = await bootstrapActivitySession();
+  if (ACTIVITY_MODE && !sessionToken) {
+    setLoading(false);
+    showEntryScreen();
+    return;
+  }
+  const ok = await bootstrapActivitySession(activityScope);
   if (!ok) {
     setLoading(false);
     if (!ACTIVITY_MODE && !sessionToken) {
