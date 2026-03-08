@@ -40,3 +40,8 @@ If you prefer using the Google Cloud Console UI:
     *   **Min number of instances**: Set to **1**.
 5.  Under **Variables**:
     *   Add `DISCORD_TOKEN`, `SUPABASE_URL`, `SUPABASE_KEY`.
+
+## 4. Integration / Activity Notes (Web UI)
+- Set `INTEGRATION_BASE_URL` to your Cloud Run public URL (HTTPS).
+- Set `INTEGRATION_WS_CORS_ORIGINS` to the same origin (e.g. `https://your-service-xyz.run.app`).
+- The integration server uses Socket.IO; ensure `gevent` is installed (included in `requirements.txt`).

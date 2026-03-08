@@ -818,6 +818,10 @@ let currentRows = DEFAULT_ROWS;
 let animatedInputAttempt = -1;
 let animatedInputLen = 0;
 const VALID_WORDS_KEY = "wordle_integration_valid_words_v2";
+let layoutPending = false;
+const modeTitleEl = document.getElementById('mode-title');
+const wrValEl = document.getElementById('wr-val');
+const confettiCanvas = document.getElementById('confetti-canvas');
 const VALID_WORDS_VERSION_KEY = "wordle_integration_valid_words_version_v2";
 let validWords = null;
 let validWordsReady = false;
@@ -1127,6 +1131,13 @@ async function fetchJsonWithFallback(path, options = {}) {
   throw new Error(`All API bases failed for ${path}: ${errs.join(" | ")}`);
 }
 
+function isAuthError(data, status) {
+  const statusNum = Number(status || 0);
+  if (statusNum === 401 || statusNum === 403) return true;
+  const errLower = String((data && data.error) || "").toLowerCase();
+  return errLower.includes("token") || errLower.includes("expired") || errLower.includes("invalid");
+}
+
 function calcLayout() {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -1169,6 +1180,15 @@ function calcLayout() {
   applyMobileTopInset();
 }
 
+function scheduleLayout() {
+  if (layoutPending) return;
+  layoutPending = true;
+  requestAnimationFrame(() => {
+    layoutPending = false;
+    calcLayout();
+  });
+}
+
 function initialsFrom(name) {
   const n = String(name || 'P').trim();
   return n.slice(0, 2).toUpperCase();
@@ -1203,7 +1223,7 @@ function syncRowsFromState(nextState) {
   if (nextRows === currentRows) return false;
   currentRows = nextRows;
   buildGrid();
-  calcLayout();
+  scheduleLayout();
   return true;
 }
 
@@ -1340,7 +1360,6 @@ function processState(data) {
         else carryInputPending = true;
       }
     }
-    syncRowsFromState(data.state);
     state = data.state;
     if (state && state.game_over) localInput = [];
     refreshFromState();
@@ -1362,9 +1381,9 @@ function refreshFromState() {
   const submittedRows = Number(state.attempts_used || 0);
   const hasSubmittedAny = submittedRows > 0;
   document.body.classList.toggle('board-shifted', hasSubmittedAny);
-  calcLayout();
-  document.getElementById('mode-title').textContent = deriveModeDisplay(state);
-  document.getElementById('wr-val').textContent = state.wr ?? '—';
+  scheduleLayout();
+  if (modeTitleEl) modeTitleEl.textContent = deriveModeDisplay(state);
+  if (wrValEl) wrValEl.textContent = state.wr ?? '—';
 
   const keyPriority = { correct: 3, present: 2, absent: 1 };
   const keyState = {};
@@ -1451,12 +1470,48 @@ function refreshFromState() {
     btn.className = 'key';
     if (ks) btn.classList.add('state-' + ks);
   });
-  kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
   if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
 
   renderWinOverlay(state);
   if (state.game_over) submitting = false;
   if (!state.game_over) animatedInputLen = localInput.length;
+  carryInputPending = false;
+}
+
+function refreshLocalInput() {
+  if (!state || state.game_over) return;
+  const r = Number(state.attempts_used || 0);
+  if (state.rows && state.rows[r]) {
+    refreshFromState();
+    return;
+  }
+  const rowRef = rowRefs[r];
+  if (!rowRef || !rowRef.tileRow) {
+    refreshFromState();
+    return;
+  }
+  if (localInput.length < animatedInputLen) animatedInputLen = localInput.length;
+  rowRef.tileRow.classList.remove('pristine');
+  rowRef.tileRow.classList.add('live-input');
+  for (let c = 0; c < COLS; c++) {
+    const t = tileAt(r, c);
+    if (!t) continue;
+    t.className = 'tile';
+    if (c < localInput.length) {
+      t.textContent = localInput[c];
+      t.classList.add('filled');
+      if (c >= animatedInputLen) t.classList.add('input-pop');
+      if (carryInputPending) {
+        t.style.setProperty('--carry-delay', `${c * 35}ms`);
+        t.classList.add('carry-in');
+      }
+    } else {
+      t.textContent = '';
+    }
+  }
+  if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
+  else if (enterBtn) enterBtn.classList.remove('submitting-enter');
+  animatedInputLen = localInput.length;
   carryInputPending = false;
 }
 
@@ -1580,11 +1635,17 @@ function launchConfetti() {
   })();
 }
 
-async function fetchState(showMask = false) {
+async function fetchState(showMask = false, allowRecover = true) {
   if (!sessionToken) return false;
   if (showMask) setLoading(true);
   try {
-    const { data } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
+    const { data, status } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
+    if (!data.ok && allowRecover && ACTIVITY_MODE && isAuthError(data, status)) {
+      const recovered = await recoverActivitySession();
+      if (recovered) {
+        return await fetchState(showMask, false);
+      }
+    }
     return processState(data);
   } catch (err) {
     if (showMask) showToast(`Network error: ${String(err && err.message ? err.message : err)}`);
@@ -1594,7 +1655,7 @@ async function fetchState(showMask = false) {
   }
 }
 
-async function submitGuess() {
+async function submitGuess(allowRecover = true) {
   if (submitting || !state || state.game_over) return;
   if (localInput.length < COLS) {
     shakeRow(state.attempts_used);
@@ -1616,12 +1677,19 @@ async function submitGuess() {
   refreshFromState();
 
   try {
-    const { data } = await fetchJsonWithFallback(`/guess`, {
+    const { data, status } = await fetchJsonWithFallback(`/guess`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: sessionToken, word: guess })
     });
     if (!data.ok) {
+      if (allowRecover && ACTIVITY_MODE && isAuthError(data, status)) {
+        submitting = false;
+        const recovered = await recoverActivitySession();
+        if (recovered) {
+          return await submitGuess(false);
+        }
+      }
       shakeRow(rowIndex);
       showToast(String(data.error || 'Guess rejected'));
     } else {
@@ -1638,7 +1706,7 @@ function handleKey(key) {
   if (!state || state.game_over || submitting) return;
   if (key === '⌫' || key === 'BACKSPACE') {
     if (localInput.length > 0) localInput.pop();
-    refreshFromState();
+    refreshLocalInput();
     return;
   }
   if (key === 'ENTER') {
@@ -1647,7 +1715,7 @@ function handleKey(key) {
   }
   if (/^[A-Z]$/.test(key) && localInput.length < COLS) {
     localInput.push(key);
-    refreshFromState();
+    refreshLocalInput();
   }
 }
 
@@ -1656,14 +1724,13 @@ async function retryGame(fromRecovery = false) {
   submitting = true;
   setLoading(true);
   try {
-    const { data, url } = await fetchJsonWithFallback(`/retry`, {
+    const { data, url, status } = await fetchJsonWithFallback(`/retry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: sessionToken })
     });
     if (!data.ok) {
-      const errLower = String(data.error || "").toLowerCase();
-      if (!fromRecovery && ACTIVITY_MODE && (errLower.includes("token") || errLower.includes("expired"))) {
+      if (!fromRecovery && ACTIVITY_MODE && isAuthError(data, status)) {
         sessionToken = "";
         sessionStorage.removeItem(SESSION_KEY);
         const rebound = await bootstrapActivitySession();
@@ -1684,7 +1751,7 @@ async function retryGame(fromRecovery = false) {
     }
     localInput = [];
     carryInputPending = false;
-    document.getElementById('confetti-canvas').getContext('2d').clearRect(0, 0, window.innerWidth, window.innerHeight);
+    if (confettiCanvas) confettiCanvas.getContext('2d').clearRect(0, 0, window.innerWidth, window.innerHeight);
   } finally {
     setLoading(false);
     submitting = false;
@@ -1713,6 +1780,9 @@ async function bootstrapActivitySession() {
   if (!ACTIVITY_CLIENT_ID) {
     showToast('Missing activity client id');
     return false;
+  }
+  if (window.location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname || "")) {
+    showToast('Discord Activity requires HTTPS and a public redirect URL.');
   }
 
   setLoading(true);
@@ -1801,7 +1871,7 @@ async function recoverActivitySession() {
     const ok = await bootstrapActivitySession();
     if (!ok || !sessionToken) return false;
     initSocket();
-    await fetchState(false);
+    await fetchState(false, false);
     return true;
   } finally {
     recoveringActivitySession = false;
@@ -1835,7 +1905,12 @@ function initSocket() {
         socket.emit('join', { token: sessionToken }, (data) => {
             joinAcked = true;
             clearTimeout(joinAckTimeout);
-            const ok = processState(data || { ok: false, error: 'Join acknowledgement missing.' });
+            const payload = data || { ok: false, error: 'Join acknowledgement missing.' };
+            if (!payload.ok && ACTIVITY_MODE && isAuthError(payload, 403)) {
+                recoverActivitySession();
+                return;
+            }
+            const ok = processState(payload);
             if (!ok) setLoading(false);
         });
     });
@@ -1864,7 +1939,12 @@ document.addEventListener('keydown', e => {
 });
 
 document.getElementById('retry-btn').addEventListener('click', retryGame);
-window.addEventListener('resize', calcLayout);
+window.addEventListener('resize', scheduleLayout);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !socketConnected) {
+    fetchState(false);
+  }
+});
 
 
 buildGrid();
@@ -1885,7 +1965,7 @@ calcLayout();
   const loaded = await fetchState(false);
   if (!loaded) setLoading(false);
   setInterval(() => {
-    if (submitting || !sessionToken || socketConnected) return;
+    if (document.hidden || submitting || !sessionToken || socketConnected) return;
     fetchState(false);
   }, 4000);
 })();

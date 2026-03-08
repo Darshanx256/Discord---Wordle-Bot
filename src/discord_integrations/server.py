@@ -108,6 +108,49 @@ def _activity_client_secret() -> str:
     return os.getenv("DISCORD_CLIENT_SECRET") or os.getenv("ACTIVITY_CLIENT_SECRET") or ""
 
 
+def _parse_origin(base_url: str) -> str:
+    if not base_url:
+        return ""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(base_url)
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        pass
+    return ""
+
+
+def _normalize_cors_origins(raw: str):
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    if raw == "*":
+        return "*"
+    items = [part.strip() for part in raw.split(",") if part.strip()]
+    return items or ""
+
+
+def _resolve_ws_cors_origins():
+    raw = os.getenv("INTEGRATION_WS_CORS_ORIGINS", "").strip()
+    if raw:
+        return _normalize_cors_origins(raw)
+    base = os.getenv("INTEGRATION_BASE_URL", "http://127.0.0.1:8787").rstrip("/")
+    origin = _parse_origin(base)
+    return origin or "*"
+
+
+def _select_socketio_async_mode() -> str:
+    override = os.getenv("INTEGRATION_ASYNC_MODE", "").strip().lower()
+    if override:
+        return override
+    try:
+        import gevent  # noqa: F401
+        return "gevent"
+    except Exception:
+        return "threading"
+
+
 def _cache_discord_user(access_token: str, user_payload: Dict[str, Any]) -> None:
     with _CACHE_LOCK:
         _DISCORD_USER_CACHE[access_token] = {"payload": user_payload, "stored_at": time.time()}
@@ -511,13 +554,16 @@ def _load_valid_words_payload() -> Dict[str, Any]:
 def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_fetch: bool = False) -> Dict[str, Any]:
     history_rows = []
     winner = None
-    for item in getattr(game, "history", []):
+    history = getattr(game, "history", []) or []
+    secret = getattr(game, "secret", "")
+    secret_upper = str(secret).upper()
+    append_row = history_rows.append
+    for item in history:
         word = (item.get("word") or "").upper()
-        states = _evaluate_guess(word, game.secret)
+        states = _evaluate_guess(word, secret)
         user_payload = _row_user_payload(item.get("user"))
-        row = {"word": word, "states": states, "user": user_payload}
-        history_rows.append(row)
-        if word == str(game.secret).upper():
+        append_row({"word": word, "states": states, "user": user_payload})
+        if word == secret_upper:
             winner = user_payload
 
     participants = len(getattr(game, "participants", set()) or set())
@@ -582,7 +628,7 @@ def _snapshot_from_game(bot, game, scope: str, owner_user_id: int, skip_profile_
         "rows": history_rows,
         "game_over": game_over,
         "winner": winner,
-        "secret": str(game.secret).upper() if game_over else "",
+        "secret": secret_upper if game_over else "",
         "breakdown": _build_breakdown(game),
         "can_retry": can_retry,
         "finalizing": finalizing,
@@ -704,11 +750,8 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
         return {"ok": False, "error": ctx.ephemeral_messages[-1]}
 
     state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
-    _emit_state_update(payload, state)
-    
     if state.get("game_over"):
         # Return fast end state and finalize WR asynchronously.
-        full_state = _snapshot_from_game(bot, game, "channel", uid, skip_profile_fetch=True)
         retry_meta = {
             "scope": "channel",
             "is_classic": bool(getattr(game, "difficulty", 0) == 1),
@@ -717,9 +760,12 @@ async def _submit_channel_guess(bot, payload: Dict[str, Any], word: str) -> Dict
             "cid": cid,
             "uid": uid,
         }
-        _cache_finished_state(payload, full_state, retry_meta)
-        _emit_state_update(payload, full_state)
-        _schedule_finalized_state_emit(payload, full_state)
+        _cache_finished_state(payload, state, retry_meta)
+        _emit_state_update(payload, state)
+        _schedule_finalized_state_emit(payload, state)
+        return {"ok": True}
+
+    _emit_state_update(payload, state)
     return {"ok": True}
 
 
@@ -746,16 +792,16 @@ async def _submit_solo_guess(bot, payload: Dict[str, Any], word: str) -> Dict[st
 
     _, _, game_over = game.process_turn(guess, user)
     state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
-    _emit_state_update(payload, state)
-
     if game_over:
         # Return fast end state and finalize WR asynchronously.
-        state = _snapshot_from_game(bot, game, "solo", uid, skip_profile_fetch=True)
         bot.solo_games.pop(uid, None)
         retry_meta = {"scope": "solo", "uid": uid}
         _cache_finished_state(payload, state, retry_meta)
         _emit_state_update(payload, state)
         _schedule_finalized_state_emit(payload, state)
+        return {"ok": True}
+
+    _emit_state_update(payload, state)
     return {"ok": True}
 
 
@@ -901,8 +947,12 @@ def _create_app(bot):
     )
     # Accept both `/path` and `/path/` so Discord path normalization doesn't 404.
     app.url_map.strict_slashes = False
-    cors_origins = os.getenv("INTEGRATION_WS_CORS_ORIGINS", "*").strip() or "*"
-    socketio = SocketIO(app, async_mode="gevent", cors_allowed_origins=cors_origins)
+    cors_origins = _resolve_ws_cors_origins()
+    async_mode = _select_socketio_async_mode()
+    if async_mode == "threading":
+        print("⚠️ Integration Socket.IO running in threading mode (no WebSocket). Install gevent for production.")
+    socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins=cors_origins or "*")
+    app.config["INTEGRATION_ASYNC_MODE"] = async_mode
 
     @app.before_request
     def _integration_debug_request_log():
@@ -1207,7 +1257,10 @@ def start_integration_server(bot):
 
         def _run():
             print(f"🌐 Integration server running on http://{host}:{port}")
-            socketio_instance.run(app, host=host, port=port)
+            if app.config.get("INTEGRATION_ASYNC_MODE") == "threading":
+                socketio_instance.run(app, host=host, port=port, allow_unsafe_werkzeug=True)
+            else:
+                socketio_instance.run(app, host=host, port=port)
 
         _SERVER_THREAD = threading.Thread(target=_run, name="wordle-integration-server", daemon=True)
         _SERVER_THREAD.start()

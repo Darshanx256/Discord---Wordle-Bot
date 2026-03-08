@@ -52,9 +52,9 @@ Discord---Wordle-Bot/
 - **Anti-Grind**: Daily soft-caps to encourage consistency over spam.
 - **Discord Integration UI**: Open a live browser board from the in-chat game buttons (Flask + Waitress).
 
-## 🌐 Discord Integration UI (Flask + Waitress)
+## 🌐 Discord Integration UI (Flask-SocketIO + gevent)
 
-The bot now starts a lightweight web server for in-browser gameplay integration.
+The bot now starts a lightweight web server for in-browser gameplay integration with live Socket.IO updates.
 
 ### What it does
 - Adds an **Open Integration UI** button next to the modal guess button.
@@ -67,6 +67,8 @@ The bot now starts a lightweight web server for in-browser gameplay integration.
 - `INTEGRATION_HOST` (default: `0.0.0.0`)
 - `INTEGRATION_PORT` (default: `8787`)
 - `INTEGRATION_TOKEN_SECRET` (recommended in production)
+- `INTEGRATION_WS_CORS_ORIGINS` (comma-separated list of allowed origins for Socket.IO; defaults to the origin of `INTEGRATION_BASE_URL`)
+- `INTEGRATION_ASYNC_MODE` (optional override: `gevent` or `threading`)
 
 ### Run locally
 1. Install deps: `pip install -r requirements.txt`
@@ -78,6 +80,7 @@ The bot now starts a lightweight web server for in-browser gameplay integration.
 ### Important deploy note
 - If users outside your machine should access the UI, `INTEGRATION_BASE_URL` must point to a reachable public domain or tunnel URL that routes to `INTEGRATION_HOST:INTEGRATION_PORT`.
 - Replace `src/discord_integrations/static/logo-placeholder.svg` with your own logo file when ready.
+- Socket.IO requires a WebSocket-capable server. Install `gevent` (included in requirements) for production.
 
 ## 🎯 Discord Activity Mode (Embedded App)
 
