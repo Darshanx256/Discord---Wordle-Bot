@@ -1,2072 +1,2477 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Discord Wordle Integration</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Discord Wordle Integration</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap"
+    rel="stylesheet">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-:root {
-  --bg:           #f9f9f6;
-  --surface:      #ffffff;
-  --border:       #d3d6da;
-  --border-filled:#878a8c;
-  --text:         #1a1a1b;
-  --muted:        #878a8c;
-  --correct:      #6aaa64;
-  --correct-dark: #538d4e;
-  --present:      #c9b458;
-  --present-dark: #b59f3b;
-  --absent:       #787c7e;
-  --key-bg:       #d3d6da;
-  --key-text:     #1a1a1b;
-  --tile-size:    52px;
-  --tile-gap-x:   0px;
-  --tile-gap-y:   1px;
-  --tile-font:    22px;
-  --key-h:        46px;
-  --key-font:     12px;
-  --kb-gap:       5px;
-  --app-safe-top: 0px;
-  --side-col-left: 0px;
-  --side-col-right: 0px;
-  --name-max: 38px;
-  --theme-pill-bg: #eef0f2;
-  --theme-pill-border: #d3d6da;
-  --theme-pill-text: #1a1a1b;
-  --theme-pill-active-bg: #1a1a1b;
-  --theme-pill-active-text: #ffffff;
-}
-body.board-shifted {
-  --side-col-left: 84px;
-  --side-col-right: 34px;
-}
-body.theme-dark {
-  --bg: #121416;
-  --surface: #191c1f;
-  --border: #2b3138;
-  --border-filled:#4a5460;
-  --text: #ecf0f3;
-  --muted: #9ca8b3;
-  --key-bg: #2b3138;
-  --key-text: #ecf0f3;
-  --theme-pill-bg: #23282e;
-  --theme-pill-border: #3a424c;
-  --theme-pill-text: #dce3e9;
-  --theme-pill-active-bg: #ecf0f3;
-  --theme-pill-active-text: #15191d;
-}
-body.theme-contrast {
-  --bg: #000000;
-  --surface: #000000;
-  --border: #ffffff;
-  --border-filled:#ffffff;
-  --text: #ffffff;
-  --muted: #ffffff;
-  --correct: #00ff66;
-  --correct-dark: #00d957;
-  --present: #ffd800;
-  --present-dark: #e6c200;
-  --absent: #6f7a87;
-  --key-bg: #000000;
-  --key-text: #ffffff;
-  --theme-pill-bg: #000000;
-  --theme-pill-border: #ffffff;
-  --theme-pill-text: #ffffff;
-  --theme-pill-active-bg: #ffffff;
-  --theme-pill-active-text: #000000;
-}
+    :root {
+      --bg: #f9f9f6;
+      --surface: #ffffff;
+      --border: #d3d6da;
+      --border-filled: #878a8c;
+      --text: #1a1a1b;
+      --muted: #878a8c;
+      --correct: #6aaa64;
+      --correct-dark: #538d4e;
+      --present: #c9b458;
+      --present-dark: #b59f3b;
+      --absent: #787c7e;
+      --key-bg: #d3d6da;
+      --key-text: #1a1a1b;
+      --tile-size: 52px;
+      --tile-gap-x: 0px;
+      --tile-gap-y: 1px;
+      --tile-font: 22px;
+      --key-h: 46px;
+      --key-font: 12px;
+      --kb-gap: 5px;
+      --app-safe-top: 0px;
+      --side-col-left: 0px;
+      --side-col-right: 0px;
+      --name-max: 38px;
+      --theme-pill-bg: #eef0f2;
+      --theme-pill-border: #d3d6da;
+      --theme-pill-text: #1a1a1b;
+      --theme-pill-active-bg: #1a1a1b;
+      --theme-pill-active-text: #ffffff;
+    }
 
-html, body {
-  height: 100%;
-  height: 100dvh;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Space Mono', monospace;
-  overflow: hidden;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
+    body.board-shifted {
+      --side-col-left: 84px;
+      --side-col-right: 34px;
+    }
 
-#app {
-  display: flex;
-  flex-direction: column;
-  height: calc(100dvh - var(--app-safe-top));
-  width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
-  margin-top: var(--app-safe-top);
-}
+    body.theme-dark {
+      --bg: #121416;
+      --surface: #191c1f;
+      --border: #2b3138;
+      --border-filled: #4a5460;
+      --text: #ecf0f3;
+      --muted: #9ca8b3;
+      --key-bg: #2b3138;
+      --key-text: #ecf0f3;
+      --theme-pill-bg: #23282e;
+      --theme-pill-border: #3a424c;
+      --theme-pill-text: #dce3e9;
+      --theme-pill-active-bg: #ecf0f3;
+      --theme-pill-active-text: #15191d;
+    }
 
-header {
-  flex-shrink: 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 14px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
+    body.theme-contrast {
+      --bg: #000000;
+      --surface: #000000;
+      --border: #ffffff;
+      --border-filled: #ffffff;
+      --text: #ffffff;
+      --muted: #ffffff;
+      --correct: #00ff66;
+      --correct-dark: #00d957;
+      --present: #ffd800;
+      --present-dark: #e6c200;
+      --absent: #6f7a87;
+      --key-bg: #000000;
+      --key-text: #ffffff;
+      --theme-pill-bg: #000000;
+      --theme-pill-border: #ffffff;
+      --theme-pill-text: #ffffff;
+      --theme-pill-active-bg: #ffffff;
+      --theme-pill-active-text: #000000;
+    }
 
-body.activity-mobile {
-  --app-safe-top: calc(env(safe-area-inset-top, 0px) + 46px);
-}
-body.activity-mobile header {
-  border-bottom-left-radius: 14px;
-  border-bottom-right-radius: 14px;
-  box-shadow: 0 4px 14px rgba(26, 26, 27, 0.08);
-}
+    html,
+    body {
+      height: 100%;
+      height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
 
-body.pip-mode #keyboard,
-body.pip-mode #disclaimer,
-body.pip-mode #toast-container {
-  display: none;
-}
-body.pip-mode header {
-  display: none;
-}
-body.pip-mode #app {
-  max-width: none;
-  margin-top: 0;
-  height: 100dvh;
-}
-body.pip-mode .header-stats {
-  display: none;
-}
-body.pip-mode .logo {
-  font-size: 13px;
-  letter-spacing: 0.1em;
-}
-body.pip-mode .logo-icon {
-  width: 16px;
-  height: 16px;
-}
-body.pip-square #grid-wrap {
-  padding: 6px;
-}
-body.pip-square .row-user,
-body.pip-square .row-spacer {
-  display: none;
-}
-body.pip-square .tile {
-  background: #f3f4f6;
-}
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: calc(100dvh - var(--app-safe-top));
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      margin-top: var(--app-safe-top);
+    }
 
-.logo-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+    header {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 14px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
 
-.logo-icon {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-  display: block;
-  flex-shrink: 0;
-}
+    body.activity-mobile {
+      --app-safe-top: calc(env(safe-area-inset-top, 0px) + 46px);
+    }
 
-.logo {
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 900;
-  font-size: 17px;
-  letter-spacing: 0.16em;
-  color: var(--text);
-  flex-shrink: 0;
-}
+    body.activity-mobile header {
+      border-bottom-left-radius: 14px;
+      border-bottom-right-radius: 14px;
+      box-shadow: 0 4px 14px rgba(26, 26, 27, 0.08);
+    }
 
-.header-stats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.theme-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.theme-btn {
-  border: 1px solid var(--theme-pill-border);
-  background: var(--theme-pill-bg);
-  color: var(--theme-pill-text);
-  border-radius: 999px;
-  padding: 5px 10px;
-  font-family: 'Space Mono', monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
-}
-.theme-btn.active {
-  background: var(--theme-pill-active-bg);
-  color: var(--theme-pill-active-text);
-  border-color: var(--theme-pill-active-bg);
-}
+    body.pip-mode #keyboard,
+    body.pip-mode #disclaimer,
+    body.pip-mode #toast-container {
+      display: none;
+    }
 
-.stat-chip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: #f0f0ed;
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 4px 10px 4px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-}
+    body.pip-mode header {
+      display: none;
+    }
 
-.stat-chip svg { width: 13px; height: 13px; flex-shrink: 0; }
-.stat-chip .chip-label { color: var(--muted); }
-.stat-chip .chip-val { font-family: 'Unbounded', sans-serif; font-size: 11px; font-weight: 900; }
-.chip-wr .chip-val { color: var(--correct-dark); }
+    body.pip-mode #app {
+      max-width: none;
+      margin-top: 0;
+      height: 100dvh;
+    }
 
-#toast-container {
-  position: fixed;
-  top: calc(58px + var(--app-safe-top));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  pointer-events: none;
-}
+    body.pip-mode .header-stats {
+      display: none;
+    }
 
-.toast {
-  background: #1a1a1b;
-  color: #fff;
-  font-family: 'Unbounded', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  padding: 8px 16px;
-  border-radius: 4px;
-  white-space: nowrap;
-  animation: toastIn 0.18s cubic-bezier(0.34,1.56,0.64,1) forwards;
-}
-.toast.out { animation: toastOut 0.22s ease forwards; }
-@keyframes toastIn { from { opacity:0; transform:translateY(-8px) scale(0.9); } to { opacity:1; transform:translateY(0) scale(1); } }
-@keyframes toastOut { from { opacity:1; } to { opacity:0; transform:translateY(-6px); } }
+    body.pip-mode .logo {
+      font-size: 13px;
+      letter-spacing: 0.1em;
+    }
 
-#grid-wrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 8px;
-  overflow: hidden;
-}
+    body.pip-mode .logo-icon {
+      width: 16px;
+      height: 16px;
+    }
 
-#grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tile-gap-y);
-  transform: translateX(0);
-  transition: transform 0.62s cubic-bezier(0.22, 1, 0.36, 1);
-}
-body.board-shifted #grid { transform: translateX(8px); }
-body.pip-mode #grid { transform: translateX(0) !important; }
+    body.pip-square #grid-wrap {
+      padding: 6px;
+    }
 
-.row-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+    body.pip-square .row-user,
+    body.pip-square .row-spacer {
+      display: none;
+    }
 
-.row-user {
-  width: var(--side-col-left);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  opacity: 0;
-  transform: translateX(16px) scale(0.92);
-  transform-origin: right center;
-  transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.34s ease, transform 0.34s ease;
-}
-.row-user.visible { opacity: 1; transform: translateX(0) scale(1); }
-body.board-shifted .row-user.visible { animation: namePopLeft 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
+    body.pip-square .tile {
+      background: #f3f4f6;
+    }
 
-.user-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--correct);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Unbounded', sans-serif;
-  font-size: 8px;
-  font-weight: 900;
-  color: #fff;
-  flex-shrink: 0;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-  border: 2px solid #fff;
-  background-size: cover;
-  background-position: center;
-}
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-.user-name {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--muted);
-  letter-spacing: 0.03em;
-  max-width: var(--name-max);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: right;
-  line-height: 1;
-}
+    .logo-icon {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      display: block;
+      flex-shrink: 0;
+    }
 
-.row-spacer {
-  width: var(--side-col-right);
-  flex-shrink: 0;
-  transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.tile-row { display: flex; gap: var(--tile-gap-x); }
-.tile-row.pristine .tile {
-  border-left-width: 1px;
-  border-right-width: 1px;
-  border-color: transparent;
-}
-.tile-row.pristine .tile:first-child { border-left-width: 2px; }
-.tile-row.pristine .tile:last-child { border-right-width: 2px; }
-.tile-row.pristine .tile:first-child { border-left-color: var(--border); }
-.tile-row.pristine .tile:last-child { border-right-color: var(--border); }
-.tile-row.live-input .tile {
-  border-left-width: 1px;
-  border-right-width: 1px;
-  border-color: var(--border);
-}
-.tile-row.live-input .tile.filled { border-color: var(--border); }
-.tile-row.live-input .tile:first-child { border-left-width: 2px; }
-.tile-row.live-input .tile:last-child { border-right-width: 2px; }
-.tile-row.row-shake { animation: rowShakeClean 0.34s ease; }
+    .logo {
+      font-family: 'Unbounded', sans-serif;
+      font-weight: 900;
+      font-size: 17px;
+      letter-spacing: 0.16em;
+      color: var(--text);
+      flex-shrink: 0;
+    }
 
-.tile {
-  width:  var(--tile-size);
-  height: var(--tile-size);
-  border: 2px solid var(--border);
-  border-radius: 0;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Unbounded', sans-serif;
-  font-weight: 700;
-  font-size: var(--tile-font);
-  color: var(--text);
-  transform-style: preserve-3d;
-  perspective: 600px;
-  will-change: transform;
-}
+    .header-stats {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
 
-.tile.filled { border-color: var(--border-filled); }
-.tile.input-pop { animation: popFromBelow 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-.tile.shake { animation: shake 0.45s ease; }
-.tile.reveal { animation: flip3d var(--flip-dur, 460ms) ease forwards; animation-delay: var(--flip-delay, 0s); }
-.tile.bounce { animation: bounce 0.55s cubic-bezier(0.34,1.56,0.64,1) forwards; animation-delay: var(--bounce-delay, 0s); }
-.tile.carry-in { animation: carryDown 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--carry-delay, 0s); }
+    .theme-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
-@keyframes flip3d {
-  0% { transform: rotateX(0deg); }
-  49% { transform: rotateX(-90deg); }
-  50% { transform: rotateX(-90deg); background: var(--tile-bg); border-color: var(--tile-bg); color: #fff; }
-  100% { transform: rotateX(0deg); background: var(--tile-bg); border-color: var(--tile-bg); color: #fff; }
-}
-@keyframes popFromBelow {
-  0% { transform: translateY(20px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-@keyframes namePopLeft {
-  0% { opacity: 0; transform: translateX(18px) scale(0.9); }
-  65% { opacity: 1; transform: translateX(-2px) scale(1.02); }
-  100% { opacity: 1; transform: translateX(0) scale(1); }
-}
-@keyframes shake {
-  15% { transform: translateX(-5px) rotate(-0.8deg); }
-  30% { transform: translateX(5px)  rotate(0.8deg); }
-  50% { transform: translateX(-4px); }
-  70% { transform: translateX(4px); }
-  90% { transform: translateX(-2px); }
-}
-@keyframes rowShakeClean {
-  0% { transform: translateX(0); }
-  22% { transform: translateX(-6px); }
-  44% { transform: translateX(6px); }
-  66% { transform: translateX(-4px); }
-  88% { transform: translateX(4px); }
-  100% { transform: translateX(0); }
-}
-@keyframes bounce {
-  25% { transform: translateY(-11px) scale(1.07); }
-  50% { transform: translateY(0) scale(0.97); }
-  75% { transform: translateY(-4px) scale(1.02); }
-  100% { transform: translateY(0) scale(1); }
-}
-@keyframes carryDown {
-  from { transform: translateY(calc(-1 * (var(--tile-size) + var(--tile-gap-y)))) scale(0.98); opacity: 0.35; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
-}
+    .theme-btn {
+      border: 1px solid var(--theme-pill-border);
+      background: var(--theme-pill-bg);
+      color: var(--theme-pill-text);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+    }
 
-#keyboard {
-  flex-shrink: 0;
-  width: 100%;
-  padding: 4px 6px 6px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--kb-gap);
-}
+    .theme-btn.active {
+      background: var(--theme-pill-active-bg);
+      color: var(--theme-pill-active-text);
+      border-color: var(--theme-pill-active-bg);
+    }
 
-.kb-row { display: flex; justify-content: center; gap: var(--kb-gap); }
+    .stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: #f0f0ed;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 10px 4px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
 
-.key {
-  height: var(--key-h);
-  flex: 1;
-  min-width: 0;
-  max-width: 43px;
-  border: none;
-  border-radius: 4px;
-  background: var(--key-bg);
-  color: var(--key-text);
-  font-family: 'Space Mono', monospace;
-  font-size: var(--key-font);
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-  touch-action: manipulation;
-  transition: background 0.18s, color 0.18s, transform 0.07s;
-  -webkit-tap-highlight-color: transparent;
-}
-.key.wide { max-width: 64px; font-size: calc(var(--key-font) - 1px); }
-.key:active { transform: scale(0.91); }
-.key::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.06); opacity: 0; transition: opacity 0.1s; }
-.key:hover::after { opacity: 1; }
-.key .ripple {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.09);
-  transform: scale(0);
-  animation: ripple 0.38s ease-out;
-  pointer-events: none;
-}
-@keyframes ripple { to { transform: scale(3.5); opacity: 0; } }
-.key.state-correct { background: var(--correct); color: #fff; }
-.key.state-present { background: var(--present); color: #fff; }
-.key.state-absent  { background: var(--absent); color: #fff; }
-.key.state-update  { animation: keyPop 0.3s ease; }
-.key.submitting-enter { background: var(--correct-dark); color: #fff; animation: keyPending 0.65s ease-in-out infinite; }
-@keyframes keyPop { 40% { transform: scale(1.13); } 100% { transform: scale(1); } }
-@keyframes keyPending { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.15); } }
+    .stat-chip svg {
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+    }
 
-#win-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  align-items: center;
-  justify-content: center;
-  background: rgba(249,249,246,0.86);
-  backdrop-filter: blur(6px);
-}
-#win-overlay.show { display: flex; }
+    .stat-chip .chip-label {
+      color: var(--muted);
+    }
 
-.win-card {
-  background: #fff;
-  border: 2px solid var(--border);
-  border-radius: 14px;
-  padding: 20px 22px;
-  text-align: center;
-  width: 90%;
-  max-width: 320px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-  animation: cardIn 0.36s cubic-bezier(0.34,1.56,0.64,1);
-}
-@keyframes cardIn { from { opacity:0; transform: scale(0.82) translateY(14px); } to { opacity:1; transform: scale(1) translateY(0); } }
+    .stat-chip .chip-val {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 11px;
+      font-weight: 900;
+    }
 
-.winner-avatar {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  margin: 0 auto 8px;
-  border: 2px solid #fff;
-  background: var(--correct);
-  background-size: cover;
-  background-position: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
-}
-.win-title { font-family: 'Unbounded', sans-serif; font-size: 19px; font-weight: 900; color: var(--text); margin-bottom: 5px; }
-.lose-title { color: #c0392b; }
-.win-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; margin-bottom: 4px; }
-.win-word { font-family: 'Unbounded', sans-serif; font-size: 24px; font-weight: 700; color: var(--correct-dark); letter-spacing: 0.13em; margin: 10px 0 14px; }
-#breakdown {
-  max-height: 120px;
-  overflow-y: auto;
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px;
-  margin-bottom: 12px;
-  font-size: 11px;
-}
-#breakdown.skeleton {
-  background: #f1f3f4;
-  border-color: #e1e4e8;
-}
-.skel-line {
-  height: 10px;
-  border-radius: 6px;
-  margin-bottom: 6px;
-  background: linear-gradient(90deg, #e6e9ee 25%, #f5f7fa 45%, #e6e9ee 65%);
-  background-size: 220% 100%;
-  animation: shimmer 1.05s ease-in-out infinite;
-}
-.skel-line:last-child { margin-bottom: 0; width: 70%; }
-@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
-.break-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-.break-row:last-child { margin-bottom: 0; }
+    .chip-wr .chip-val {
+      color: var(--correct-dark);
+    }
 
-.btn {
-  width: 100%;
-  background: var(--correct);
-  border: none;
-  border-radius: 6px;
-  color: #fff;
-  font-family: 'Unbounded', sans-serif;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 11px 0;
-  cursor: pointer;
-  transition: background 0.18s, transform 0.08s;
-}
-.btn:hover { background: var(--correct-dark); }
-.btn:active { transform: scale(0.97); }
-.btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+    #toast-container {
+      position: fixed;
+      top: calc(58px + var(--app-safe-top));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+    }
 
-#confetti-canvas { position: fixed; inset: 0; z-index: 149; pointer-events: none; }
-.particle {
-  position: fixed;
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  pointer-events: none;
-  z-index: 148;
-  animation: particleFly var(--dur) ease-out forwards;
-}
-@keyframes particleFly {
-  0% { transform: translate(0,0) scale(1) rotate(0deg); opacity:1; }
-  100% { transform: translate(var(--tx),var(--ty)) scale(0) rotate(200deg); opacity:0; }
-}
+    .toast {
+      background: #1a1a1b;
+      color: #fff;
+      font-family: 'Unbounded', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      padding: 8px 16px;
+      border-radius: 4px;
+      white-space: nowrap;
+      animation: toastIn 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
 
-#loading-mask {
-  display: flex;
-  position: fixed;
-  inset: 0;
-  z-index: 240;
-  align-items: center;
-  justify-content: center;
-  background: #f8f8f5;
-  transition: opacity 0.32s ease, visibility 0.32s ease;
-  opacity: 0;
-  visibility: hidden;
-}
-#loading-mask.show {
-  opacity: 1;
-  visibility: visible;
-}
-.entry-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 230;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.12), rgba(10, 10, 10, 0.88));
-  backdrop-filter: blur(6px);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 220ms ease;
-}
-.entry-screen.show {
-  opacity: 1;
-  pointer-events: auto;
-}
-.entry-card {
-  width: min(92vw, 420px);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 22px 20px;
-  text-align: center;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-}
-.entry-title {
-  font-family: 'Unbounded', sans-serif;
-  font-size: 20px;
-  letter-spacing: 0.04em;
-  margin-bottom: 6px;
-}
-.entry-sub {
-  color: var(--muted);
-  font-size: 12px;
-  margin-bottom: 16px;
-}
-.entry-btn {
-  width: 100%;
-  margin-top: 10px;
-  padding: 12px 14px;
-  font-size: 14px;
-}
-.entry-btn.secondary {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-.entry-hint {
-  color: var(--muted);
-  font-size: 11px;
-  margin-top: 12px;
-  line-height: 1.4;
-}
-.loading-card {
-  width: min(520px, 92vw);
-  height: min(520px, 78vh);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-family: 'Unbounded', sans-serif;
-  background: #f8f8f5;
-  border: none;
-  border-radius: 0;
-  padding: 28px 18px 24px;
-  box-shadow: none;
-}
-.loading-top {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-.loading-logo-wrap {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 20px rgba(26,26,27,0.07);
-}
-.loading-logo {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
-  display: block;
-}
-.loading-mode {
-  color: #111827;
-  font-weight: 800;
-  font-size: 16px;
-  letter-spacing: 0.06em;
-  text-align: center;
-  text-transform: uppercase;
-}
-.loading-bottom {
-  width: min(320px, 86vw);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.loading-status {
-  color: #6b7280;
-  font-family: 'Space Mono', monospace;
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.loading-progress {
-  width: 100%;
-  height: 4px;
-  border-radius: 999px;
-  background: #e5e7eb;
-  overflow: hidden;
-}
-.loading-progress > span {
-  display: block;
-  width: 0%;
-  height: 100%;
-  border-radius: 999px;
-  background: #111827;
-  transition: width 0.16s linear;
-}
+    .toast.out {
+      animation: toastOut 0.22s ease forwards;
+    }
 
-#disclaimer {
-  text-align: center;
-  color: var(--muted);
-  font-size: 10px;
-  padding-bottom: 8px;
-}
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.9);
+      }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  #confetti-canvas,
-  .particle {
-    display: none !important;
-  }
-}
-</style>
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes toastOut {
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0;
+        transform: translateY(-6px);
+      }
+    }
+
+    #grid-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 8px;
+      overflow: hidden;
+    }
+
+    #grid {
+      display: flex;
+      flex-direction: column;
+      gap: var(--tile-gap-y);
+      transform: translateX(0);
+      transition: transform 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    body.board-shifted #grid {
+      transform: translateX(8px);
+    }
+
+    body.pip-mode #grid {
+      transform: translateX(0) !important;
+    }
+
+    .row-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .row-user {
+      width: var(--side-col-left);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      opacity: 0;
+      transform: translateX(16px) scale(0.92);
+      transform-origin: right center;
+      transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.34s ease, transform 0.34s ease;
+    }
+
+    .row-user.visible {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+
+    body.board-shifted .row-user.visible {
+      animation: namePopLeft 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .user-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--correct);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Unbounded', sans-serif;
+      font-size: 8px;
+      font-weight: 900;
+      color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+      border: 2px solid #fff;
+      background-size: cover;
+      background-position: center;
+    }
+
+    .user-name {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+      max-width: var(--name-max);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+      line-height: 1;
+    }
+
+    .row-spacer {
+      width: var(--side-col-right);
+      flex-shrink: 0;
+      transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .tile-row {
+      display: flex;
+      gap: var(--tile-gap-x);
+    }
+
+    .tile-row.pristine .tile {
+      border-left-width: 1px;
+      border-right-width: 1px;
+      border-color: transparent;
+    }
+
+    .tile-row.pristine .tile:first-child {
+      border-left-width: 2px;
+    }
+
+    .tile-row.pristine .tile:last-child {
+      border-right-width: 2px;
+    }
+
+    .tile-row.pristine .tile:first-child {
+      border-left-color: var(--border);
+    }
+
+    .tile-row.pristine .tile:last-child {
+      border-right-color: var(--border);
+    }
+
+    .tile-row.live-input .tile {
+      border-left-width: 1px;
+      border-right-width: 1px;
+      border-color: var(--border);
+    }
+
+    .tile-row.live-input .tile.filled {
+      border-color: var(--border);
+    }
+
+    .tile-row.live-input .tile:first-child {
+      border-left-width: 2px;
+    }
+
+    .tile-row.live-input .tile:last-child {
+      border-right-width: 2px;
+    }
+
+    .tile-row.row-shake {
+      animation: rowShakeClean 0.34s ease;
+    }
+
+    .tile {
+      width: var(--tile-size);
+      height: var(--tile-size);
+      border: 2px solid var(--border);
+      border-radius: 0;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Unbounded', sans-serif;
+      font-weight: 700;
+      font-size: var(--tile-font);
+      color: var(--text);
+      transform-style: preserve-3d;
+      perspective: 600px;
+      will-change: transform;
+    }
+
+    .tile.filled {
+      border-color: var(--border-filled);
+    }
+
+    .tile.input-pop {
+      animation: popFromBelow 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    .tile.shake {
+      animation: shake 0.45s ease;
+    }
+
+    .tile.reveal {
+      animation: flip3d var(--flip-dur, 460ms) ease forwards;
+      animation-delay: var(--flip-delay, 0s);
+    }
+
+    .tile.bounce {
+      animation: bounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      animation-delay: var(--bounce-delay, 0s);
+    }
+
+    .tile.carry-in {
+      animation: carryDown 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation-delay: var(--carry-delay, 0s);
+    }
+
+    @keyframes flip3d {
+      0% {
+        transform: rotateX(0deg);
+      }
+
+      49% {
+        transform: rotateX(-90deg);
+      }
+
+      50% {
+        transform: rotateX(-90deg);
+        background: var(--tile-bg);
+        border-color: var(--tile-bg);
+        color: #fff;
+      }
+
+      100% {
+        transform: rotateX(0deg);
+        background: var(--tile-bg);
+        border-color: var(--tile-bg);
+        color: #fff;
+      }
+    }
+
+    @keyframes popFromBelow {
+      0% {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+
+      100% {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @keyframes namePopLeft {
+      0% {
+        opacity: 0;
+        transform: translateX(18px) scale(0.9);
+      }
+
+      65% {
+        opacity: 1;
+        transform: translateX(-2px) scale(1.02);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+      }
+    }
+
+    @keyframes shake {
+      15% {
+        transform: translateX(-5px) rotate(-0.8deg);
+      }
+
+      30% {
+        transform: translateX(5px) rotate(0.8deg);
+      }
+
+      50% {
+        transform: translateX(-4px);
+      }
+
+      70% {
+        transform: translateX(4px);
+      }
+
+      90% {
+        transform: translateX(-2px);
+      }
+    }
+
+    @keyframes rowShakeClean {
+      0% {
+        transform: translateX(0);
+      }
+
+      22% {
+        transform: translateX(-6px);
+      }
+
+      44% {
+        transform: translateX(6px);
+      }
+
+      66% {
+        transform: translateX(-4px);
+      }
+
+      88% {
+        transform: translateX(4px);
+      }
+
+      100% {
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes bounce {
+      25% {
+        transform: translateY(-11px) scale(1.07);
+      }
+
+      50% {
+        transform: translateY(0) scale(0.97);
+      }
+
+      75% {
+        transform: translateY(-4px) scale(1.02);
+      }
+
+      100% {
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes carryDown {
+      from {
+        transform: translateY(calc(-1 * (var(--tile-size) + var(--tile-gap-y)))) scale(0.98);
+        opacity: 0.35;
+      }
+
+      to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    #keyboard {
+      flex-shrink: 0;
+      width: 100%;
+      padding: 4px 6px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: var(--kb-gap);
+    }
+
+    .kb-row {
+      display: flex;
+      justify-content: center;
+      gap: var(--kb-gap);
+    }
+
+    .key {
+      height: var(--key-h);
+      flex: 1;
+      min-width: 0;
+      max-width: 43px;
+      border: none;
+      border-radius: 4px;
+      background: var(--key-bg);
+      color: var(--key-text);
+      font-family: 'Space Mono', monospace;
+      font-size: var(--key-font);
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+      transition: background 0.18s, color 0.18s, transform 0.07s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .key.wide {
+      max-width: 64px;
+      font-size: calc(var(--key-font) - 1px);
+    }
+
+    .key:active {
+      transform: scale(0.91);
+    }
+
+    .key::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.06);
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+
+    .key:hover::after {
+      opacity: 1;
+    }
+
+    .key .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.09);
+      transform: scale(0);
+      animation: ripple 0.38s ease-out;
+      pointer-events: none;
+    }
+
+    @keyframes ripple {
+      to {
+        transform: scale(3.5);
+        opacity: 0;
+      }
+    }
+
+    .key.state-correct {
+      background: var(--correct);
+      color: #fff;
+    }
+
+    .key.state-present {
+      background: var(--present);
+      color: #fff;
+    }
+
+    .key.state-absent {
+      background: var(--absent);
+      color: #fff;
+    }
+
+    .key.state-update {
+      animation: keyPop 0.3s ease;
+    }
+
+    .key.submitting-enter {
+      background: var(--correct-dark);
+      color: #fff;
+      animation: keyPending 0.65s ease-in-out infinite;
+    }
+
+    @keyframes keyPop {
+      40% {
+        transform: scale(1.13);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
+    @keyframes keyPending {
+
+      0%,
+      100% {
+        filter: brightness(1);
+      }
+
+      50% {
+        filter: brightness(1.15);
+      }
+    }
+
+    #win-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 150;
+      align-items: center;
+      justify-content: center;
+      background: rgba(249, 249, 246, 0.86);
+      backdrop-filter: blur(6px);
+    }
+
+    #win-overlay.show {
+      display: flex;
+    }
+
+    .win-card {
+      background: #fff;
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 22px;
+      text-align: center;
+      width: 90%;
+      max-width: 320px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      animation: cardIn 0.36s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: scale(0.82) translateY(14px);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .winner-avatar {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      margin: 0 auto 8px;
+      border: 2px solid #fff;
+      background: var(--correct);
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    }
+
+    .win-title {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 19px;
+      font-weight: 900;
+      color: var(--text);
+      margin-bottom: 5px;
+    }
+
+    .lose-title {
+      color: #c0392b;
+    }
+
+    .win-sub {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .win-word {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--correct-dark);
+      letter-spacing: 0.13em;
+      margin: 10px 0 14px;
+    }
+
+    #breakdown {
+      max-height: 120px;
+      overflow-y: auto;
+      text-align: left;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 12px;
+      font-size: 11px;
+    }
+
+    #breakdown.skeleton {
+      background: #f1f3f4;
+      border-color: #e1e4e8;
+    }
+
+    .skel-line {
+      height: 10px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: linear-gradient(90deg, #e6e9ee 25%, #f5f7fa 45%, #e6e9ee 65%);
+      background-size: 220% 100%;
+      animation: shimmer 1.05s ease-in-out infinite;
+    }
+
+    .skel-line:last-child {
+      margin-bottom: 0;
+      width: 70%;
+    }
+
+    @keyframes shimmer {
+      0% {
+        background-position: 100% 0;
+      }
+
+      100% {
+        background-position: 0 0;
+      }
+    }
+
+    .break-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .break-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .btn {
+      width: 100%;
+      background: var(--correct);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-family: 'Unbounded', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      padding: 11px 0;
+      cursor: pointer;
+      transition: background 0.18s, transform 0.08s;
+    }
+
+    .btn:hover {
+      background: var(--correct-dark);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn[disabled] {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 149;
+      pointer-events: none;
+    }
+
+    .particle {
+      position: fixed;
+      width: 7px;
+      height: 7px;
+      border-radius: 2px;
+      pointer-events: none;
+      z-index: 148;
+      animation: particleFly var(--dur) ease-out forwards;
+    }
+
+    @keyframes particleFly {
+      0% {
+        transform: translate(0, 0) scale(1) rotate(0deg);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translate(var(--tx), var(--ty)) scale(0) rotate(200deg);
+        opacity: 0;
+      }
+    }
+
+    #loading-mask {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      z-index: 240;
+      align-items: center;
+      justify-content: center;
+      background: #f8f8f5;
+      transition: opacity 0.32s ease, visibility 0.32s ease;
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    #loading-mask.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .entry-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 230;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.72);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms ease;
+    }
+
+    .entry-screen.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .entry-card {
+      width: min(92vw, 360px);
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 14px;
+      padding: 26px 22px 20px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .entry-title {
+      font-family: 'Unbounded', sans-serif;
+      font-size: 19px;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      margin-bottom: 5px;
+      color: var(--text);
+    }
+
+    .entry-sub {
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      margin-bottom: 18px;
+      letter-spacing: 0.02em;
+    }
+
+    .entry-btn {
+      width: 100%;
+      margin-top: 8px;
+      padding: 12px 14px;
+      font-size: 11px;
+      letter-spacing: 0.07em;
+      border-radius: 8px;
+    }
+
+    .entry-btn.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      transition: background 0.14s;
+    }
+    .entry-btn.secondary:hover { background: var(--bg); }
+
+    .entry-hint {
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    .loading-card {
+      width: min(520px, 92vw);
+      height: min(520px, 78vh);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-family: 'Unbounded', sans-serif;
+      background: var(--bg);
+      border: none;
+      border-radius: 0;
+      padding: 28px 18px 24px;
+      box-shadow: none;
+    }
+
+    .loading-top {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .loading-logo-wrap {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    }
+
+    .loading-logo {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .loading-mode {
+      color: var(--text);
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .loading-bottom {
+      width: min(320px, 86vw);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .loading-status {
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .loading-progress {
+      width: 100%;
+      height: 4px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+
+    .loading-progress>span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: 999px;
+      background: #111827;
+      transition: width 0.16s linear;
+    }
+
+    #disclaimer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 10px;
+      padding-bottom: 8px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+
+      #confetti-canvas,
+      .particle {
+        display: none !important;
+      }
+    }
+  </style>
 </head>
+
 <body>
-<div id="app">
-  <header>
-    <div class="logo-wrap">
-      <img class="logo-icon" id="logo-icon" src="/integration/static/icon.png?v=20260224b" alt="Logo" loading="eager" decoding="async">
-      <div class="logo" id="mode-title">CLASSIC</div>
-    </div>
-    <div class="header-stats">
-      <div class="stat-chip chip-wr">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#538d4e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 9H4a2 2 0 0 1-2-2V5h4"></path><path d="M18 9h2a2 2 0 0 0 2-2V5h-4"></path>
-          <path d="M12 17v4"></path><path d="M8 21h8"></path>
-          <path d="M6 5h12v7a6 6 0 0 1-12 0V5z"></path>
-        </svg>
-        <span class="chip-label">WR</span>
-        <span class="chip-val" id="wr-val">—</span>
+  <div id="app">
+    <header>
+      <div class="logo-wrap">
+        <img class="logo-icon" id="logo-icon" src="/integration/static/icon.png?v=20260224b" alt="Logo" loading="eager"
+          decoding="async">
+        <div class="logo" id="mode-title">CLASSIC</div>
       </div>
-      <div class="theme-controls">
-        <button class="theme-btn" id="theme-dark-btn" type="button">Dark</button>
-        <button class="theme-btn" id="theme-contrast-btn" type="button">High Contrast</button>
+      <div class="header-stats">
+        <div class="stat-chip chip-wr">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#538d4e" stroke-width="2.2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M6 9H4a2 2 0 0 1-2-2V5h4"></path>
+            <path d="M18 9h2a2 2 0 0 0 2-2V5h-4"></path>
+            <path d="M12 17v4"></path>
+            <path d="M8 21h8"></path>
+            <path d="M6 5h12v7a6 6 0 0 1-12 0V5z"></path>
+          </svg>
+          <span class="chip-label">WR</span>
+          <span class="chip-val" id="wr-val">—</span>
+        </div>
+        <div class="theme-controls">
+          <button class="theme-btn" id="theme-dark-btn" type="button">Dark</button>
+          <button class="theme-btn" id="theme-contrast-btn" type="button">High Contrast</button>
+        </div>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <div id="grid-wrap"><div id="grid"></div></div>
-  <div id="keyboard"></div>
-  <div id="disclaimer">Not affiliated with The New York Times.</div>
-</div>
-
-<div id="toast-container"></div>
-<canvas id="confetti-canvas"></canvas>
-<div id="loading-mask" class="show">
-  <div class="loading-card">
-    <div class="loading-top">
-      <div class="loading-logo-wrap">
-        <img class="loading-logo" id="loading-logo" src="/integration/static/icon.png?v=20260224b" alt="Wordle" loading="eager" decoding="async">
-      </div>
-      <div class="loading-mode" id="loading-mode">WORDLE</div>
+    <div id="grid-wrap">
+      <div id="grid"></div>
     </div>
-    <div class="loading-bottom">
-      <div class="loading-status">Connecting to Discord</div>
-      <div class="loading-progress" aria-hidden="true">
-        <span id="loading-progress-fill"></span>
+    <div id="keyboard"></div>
+    <div id="disclaimer">Not affiliated with The New York Times.</div>
+  </div>
+
+  <div id="toast-container"></div>
+  <canvas id="confetti-canvas"></canvas>
+  <div id="loading-mask" class="show">
+    <div class="loading-card">
+      <div class="loading-top">
+        <div class="loading-logo-wrap">
+          <img class="loading-logo" id="loading-logo" src="/integration/static/icon.png?v=20260224b" alt="Wordle"
+            loading="eager" decoding="async">
+        </div>
+        <div class="loading-mode" id="loading-mode">WORDLE</div>
+      </div>
+      <div class="loading-bottom">
+        <div class="loading-status">Connecting to Discord</div>
+        <div class="loading-progress" aria-hidden="true">
+          <span id="loading-progress-fill"></span>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-<div id="entry-screen" class="entry-screen">
-  <div class="entry-card">
-    <div class="entry-title">Play Wordle</div>
-    <div class="entry-sub">Choose where you want to play.</div>
-    <button class="btn entry-btn" id="entry-server" type="button">Server Game</button>
-    <button class="btn entry-btn secondary" id="entry-solo" type="button">Solo (Private)</button>
-    <div class="entry-hint">Server games post guesses in chat. Solo stays private and can be reopened with <code>/show_solo</code>.</div>
+  <div id="entry-screen" class="entry-screen">
+    <div class="entry-card">
+      <div class="entry-title">Play Wordle</div>
+      <div class="entry-sub">Choose where you want to play.</div>
+      <button class="btn entry-btn" id="entry-server" type="button">Server Game</button>
+      <button class="btn entry-btn secondary" id="entry-solo" type="button">Solo (Private)</button>
+      <div class="entry-hint">Server games post guesses in chat. Solo stays private and can be reopened with
+        <code>/show_solo</code>.</div>
+    </div>
   </div>
-</div>
 
-<div id="win-overlay">
-  <div class="win-card" id="win-card">
-    <div class="winner-avatar" id="winner-avatar"></div>
-    <div class="win-title" id="win-title">BRILLIANT!</div>
-    <div class="win-sub" id="win-sub">Solved in <strong id="win-attempts">?</strong> attempts</div>
-    <div class="win-word" id="win-word"></div>
-    <div id="breakdown"></div>
-    <button class="btn" id="retry-btn">PLAY AGAIN</button>
+  <div id="win-overlay">
+    <div class="win-card" id="win-card">
+      <div class="winner-avatar" id="winner-avatar"></div>
+      <div class="win-title" id="win-title">BRILLIANT!</div>
+      <div class="win-sub" id="win-sub">Solved in <strong id="win-attempts">?</strong> attempts</div>
+      <div class="win-word" id="win-word"></div>
+      <div id="breakdown"></div>
+      <button class="btn" id="retry-btn">PLAY AGAIN</button>
+    </div>
   </div>
-</div>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script>
-const INITIAL_TOKEN = {{ token|tojson }};
-const ACTIVITY_MODE = {{ activity_mode|tojson }};
-const ACTIVITY_CLIENT_ID = {{ activity_client_id|tojson }};
-const SESSION_KEY = "wordle_integration_session_token";
-const LOADER_MODE_KEY = "wordle_integration_loader_mode";
-const THEME_KEY = "wordle_integration_theme";
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const INITIAL_TOKEN = {{ token| tojson }};
+    const ACTIVITY_MODE = {{ activity_mode| tojson }};
+    const ACTIVITY_CLIENT_ID = {{ activity_client_id| tojson }};
+    const SESSION_KEY = "wordle_integration_session_token";
+    const LOADER_MODE_KEY = "wordle_integration_loader_mode";
+    const THEME_KEY = "wordle_integration_theme";
 
-function computeIntegrationBase() {
-  const p = window.location.pathname || "";
-  const marker = "/integration/";
-  const i = p.indexOf(marker);
-  if (i >= 0) return p.slice(0, i) + "/integration";
-  if (p.endsWith("/integration")) return p;
-  return "";
-}
-
-const INTEGRATION_BASE = computeIntegrationBase();
-const API_BASE = new URL("./../api", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
-const STATIC_BASE = new URL("./../static", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
-const API_BASE_CANDIDATES = Array.from(new Set([
-  API_BASE,
-  INTEGRATION_BASE ? `${INTEGRATION_BASE}/activity/api` : "/integration/activity/api",
-  "/integration/api",
-  "/activity/api",
-  "/api"
-]));
-const URL_PARAMS = new URLSearchParams(window.location.search);
-const IS_PHONE = /iphone|ipod|android|mobile/i.test(navigator.userAgent || "") || String(URL_PARAMS.get("platform") || "").toLowerCase() === "mobile";
-
-const DEFAULT_ROWS = 6;
-const MINI_VISIBLE_ROWS = 5;
-const COLS = 5;
-const REDUCE_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const LITE_MOTION = REDUCE_MOTION || IS_PHONE || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
-const FLIP_DUR = LITE_MOTION ? 360 : 460;
-const FLIP_STAGGER = LITE_MOTION ? 70 : 90;
-const PARTICLE_COUNT = LITE_MOTION ? 12 : 26;
-const COLORS = ['#6aaa64','#c9b458','#538d4e','#b59f3b','#4a90d9','#e67e22','#e74c3c'];
-const KB_ROWS = [
-  ['Q','W','E','R','T','Y','U','I','O','P'],
-  ['A','S','D','F','G','H','J','K','L'],
-  ['ENTER','Z','X','C','V','B','N','M','⌫']
-];
-
-let sessionToken = INITIAL_TOKEN || sessionStorage.getItem(SESSION_KEY) || "";
-let state = null;
-let localInput = [];
-let keyMap = {};
-let submitting = false;
-let preferredApiBase = null;
-let carryInputPending = false;
-let revealUserLockRow = -1;
-let noActiveNoticeShown = false;
-const ICON_VERSION = "20260224b";
-let rowRefs = [];
-let enterBtn = null;
-let socket = null;
-let socketConnected = false;
-let layoutModeValue = -1; // Discord SDK layout mode: 0 focused, 1 pip, 2 grid
-let recoveringActivitySession = false;
-let currentRows = DEFAULT_ROWS;
-let animatedInputAttempt = -1;
-let animatedInputLen = 0;
-const VALID_WORDS_KEY = "wordle_integration_valid_words_v2";
-let layoutPending = false;
-const modeTitleEl = document.getElementById('mode-title');
-const wrValEl = document.getElementById('wr-val');
-const confettiCanvas = document.getElementById('confetti-canvas');
-const entryScreenEl = document.getElementById('entry-screen');
-const entryServerBtn = document.getElementById('entry-server');
-const entrySoloBtn = document.getElementById('entry-solo');
-let activityScope = "channel";
-const VALID_WORDS_VERSION_KEY = "wordle_integration_valid_words_version_v2";
-let validWords = null;
-let validWordsReady = false;
-let validWordsPromise = null;
-
-const gridEl = document.getElementById('grid');
-const kbEl = document.getElementById('keyboard');
-const headerLogoEl = document.getElementById("logo-icon");
-const loadingLogoEl = document.getElementById("loading-logo");
-const loadingModeEl = document.getElementById('loading-mode');
-const darkBtn = document.getElementById('theme-dark-btn');
-const contrastBtn = document.getElementById('theme-contrast-btn');
-const loadingMaskEl = document.getElementById('loading-mask');
-const loadingProgressFillEl = document.getElementById('loading-progress-fill');
-let loaderProgress = 0;
-let loaderRampTimer = null;
-let loaderHideTimer = null;
-let loaderVisible = false;
-if (LITE_MOTION) document.body.classList.add('lite-motion');
-
-function bindLogoWithFallback(imgEl) {
-  if (!imgEl) return;
-  const fallbacks = [
-    `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`,
-    `/integration/static/icon.png?v=${ICON_VERSION}`,
-    `/integration/static/icon.png`,
-    `/static/icon.png`,
-  ];
-  let idx = 0;
-  imgEl.onerror = () => {
-    idx += 1;
-    if (idx < fallbacks.length) imgEl.src = fallbacks[idx];
-    else imgEl.onerror = null;
-  };
-  imgEl.src = fallbacks[idx];
-}
-bindLogoWithFallback(headerLogoEl);
-bindLogoWithFallback(loadingLogoEl);
-
-function deriveModeDisplay(nextState) {
-  if (!nextState) return "WORDLE";
-  const mode = String(nextState.mode_label || "").trim();
-  const customTitle = String(nextState.custom_title || "").trim();
-  if (customTitle) return customTitle.toUpperCase();
-  if (!mode) return "WORDLE";
-  return mode.toUpperCase();
-}
-
-function setLoadingModeFromState(nextState) {
-  const modeText = deriveModeDisplay(nextState);
-  if (loadingModeEl) loadingModeEl.textContent = modeText;
-  try { sessionStorage.setItem(LOADER_MODE_KEY, modeText); } catch (_) {}
-}
-
-try {
-  const lastMode = String(sessionStorage.getItem(LOADER_MODE_KEY) || "").trim();
-  if (lastMode && loadingModeEl) loadingModeEl.textContent = lastMode;
-} catch (_) {}
-
-function setLoading(on) {
-  const setProgress = (value) => {
-    loaderProgress = Math.max(0, Math.min(100, Number(value) || 0));
-    if (loadingProgressFillEl) loadingProgressFillEl.style.width = `${loaderProgress}%`;
-  };
-  const stopRamp = () => {
-    if (loaderRampTimer) {
-      clearInterval(loaderRampTimer);
-      loaderRampTimer = null;
+    function computeIntegrationBase() {
+      const p = window.location.pathname || "";
+      const marker = "/integration/";
+      const i = p.indexOf(marker);
+      if (i >= 0) return p.slice(0, i) + "/integration";
+      if (p.endsWith("/integration")) return p;
+      return "";
     }
-  };
-  const startRamp = () => {
-    stopRamp();
-    const startedAt = Date.now();
-    const cap = 88;
-    const durationMs = 4000;
-    loaderRampTimer = setInterval(() => {
-      const t = Math.min(1, (Date.now() - startedAt) / durationMs);
-      const eased = 1 - Math.pow(1 - t, 2);
-      setProgress(cap * eased);
-      if (t >= 1) stopRamp();
-    }, 50);
-  };
 
-  if (on) {
-    if (loaderHideTimer) {
-      clearTimeout(loaderHideTimer);
-      loaderHideTimer = null;
+    const INTEGRATION_BASE = computeIntegrationBase();
+    const API_BASE = new URL("./../api", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
+    const STATIC_BASE = new URL("./../static", window.location.origin + (window.location.pathname.endsWith("/") ? window.location.pathname : window.location.pathname + "/")).pathname.replace(/\/$/, "");
+    const API_BASE_CANDIDATES = Array.from(new Set([
+      API_BASE,
+      INTEGRATION_BASE ? `${INTEGRATION_BASE}/activity/api` : "/integration/activity/api",
+      "/integration/api",
+      "/activity/api",
+      "/api"
+    ]));
+    const URL_PARAMS = new URLSearchParams(window.location.search);
+    const IS_PHONE = /iphone|ipod|android|mobile/i.test(navigator.userAgent || "") || String(URL_PARAMS.get("platform") || "").toLowerCase() === "mobile";
+
+    const DEFAULT_ROWS = 6;
+    const MINI_VISIBLE_ROWS = 5;
+    const COLS = 5;
+    const REDUCE_MOTION = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const LITE_MOTION = REDUCE_MOTION || IS_PHONE || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+    const FLIP_DUR = LITE_MOTION ? 360 : 460;
+    const FLIP_STAGGER = LITE_MOTION ? 70 : 90;
+    const PARTICLE_COUNT = LITE_MOTION ? 12 : 26;
+    const COLORS = ['#6aaa64', '#c9b458', '#538d4e', '#b59f3b', '#4a90d9', '#e67e22', '#e74c3c'];
+    const KB_ROWS = [
+      ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+      ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+      ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '⌫']
+    ];
+
+    let sessionToken = INITIAL_TOKEN || sessionStorage.getItem(SESSION_KEY) || "";
+    let state = null;
+    let localInput = [];
+    let keyMap = {};
+    let submitting = false;
+    let preferredApiBase = null;
+    let carryInputPending = false;
+    let revealUserLockRow = -1;
+    let noActiveNoticeShown = false;
+    const ICON_VERSION = "20260224b";
+    let rowRefs = [];
+    let enterBtn = null;
+    let socket = null;
+    let socketConnected = false;
+    let layoutModeValue = -1; // Discord SDK layout mode: 0 focused, 1 pip, 2 grid
+    let recoveringActivitySession = false;
+    let currentRows = DEFAULT_ROWS;
+    let animatedInputAttempt = -1;
+    let animatedInputLen = 0;
+    const VALID_WORDS_KEY = "wordle_integration_valid_words_v2";
+    let layoutPending = false;
+    const modeTitleEl = document.getElementById('mode-title');
+    const wrValEl = document.getElementById('wr-val');
+    const confettiCanvas = document.getElementById('confetti-canvas');
+    const entryScreenEl = document.getElementById('entry-screen');
+    const entryServerBtn = document.getElementById('entry-server');
+    const entrySoloBtn = document.getElementById('entry-solo');
+    let activityScope = "channel";
+    const VALID_WORDS_VERSION_KEY = "wordle_integration_valid_words_version_v2";
+    let validWords = null;
+    let validWordsReady = false;
+    let validWordsPromise = null;
+
+    const gridEl = document.getElementById('grid');
+    const kbEl = document.getElementById('keyboard');
+    const headerLogoEl = document.getElementById("logo-icon");
+    const loadingLogoEl = document.getElementById("loading-logo");
+    const loadingModeEl = document.getElementById('loading-mode');
+    const darkBtn = document.getElementById('theme-dark-btn');
+    const contrastBtn = document.getElementById('theme-contrast-btn');
+    const loadingMaskEl = document.getElementById('loading-mask');
+    const loadingProgressFillEl = document.getElementById('loading-progress-fill');
+    let loaderProgress = 0;
+    let loaderRampTimer = null;
+    let loaderHideTimer = null;
+    let loaderVisible = false;
+    if (LITE_MOTION) document.body.classList.add('lite-motion');
+
+    function bindLogoWithFallback(imgEl) {
+      if (!imgEl) return;
+      const fallbacks = [
+        `${STATIC_BASE}/icon.png?v=${ICON_VERSION}`,
+        `/integration/static/icon.png?v=${ICON_VERSION}`,
+        `/integration/static/icon.png`,
+        `/static/icon.png`,
+      ];
+      let idx = 0;
+      imgEl.onerror = () => {
+        idx += 1;
+        if (idx < fallbacks.length) imgEl.src = fallbacks[idx];
+        else imgEl.onerror = null;
+      };
+      imgEl.src = fallbacks[idx];
     }
-    if (!loaderVisible) {
-      loaderVisible = true;
-      setProgress(0);
+    bindLogoWithFallback(headerLogoEl);
+    bindLogoWithFallback(loadingLogoEl);
+
+    function deriveModeDisplay(nextState) {
+      if (!nextState) return "WORDLE";
+      const mode = String(nextState.mode_label || "").trim();
+      const customTitle = String(nextState.custom_title || "").trim();
+      if (customTitle) return customTitle.toUpperCase();
+      if (!mode) return "WORDLE";
+      return mode.toUpperCase();
     }
-    if (loadingMaskEl) loadingMaskEl.classList.add('show');
-    startRamp();
-    return;
-  }
 
-  if (!loaderVisible) return;
-  stopRamp();
-  setProgress(100);
-  loaderHideTimer = setTimeout(() => {
-    if (loadingMaskEl) loadingMaskEl.classList.remove('show');
-    loaderVisible = false;
-    setProgress(0);
-    loaderHideTimer = null;
-  }, 180);
-}
-
-function isCustomMode(nextState) {
-  if (!nextState) return false;
-  const mode = String(nextState.mode_label || "").toLowerCase();
-  return mode.includes("custom");
-}
-
-function skeletonMarkup() {
-  return [
-    '<div class="skel-line" style="width: 86%"></div>',
-    '<div class="skel-line" style="width: 72%"></div>',
-    '<div class="skel-line" style="width: 64%"></div>',
-    '<div class="skel-line" style="width: 78%"></div>'
-  ].join('');
-}
-
-function setValidWordsFromPayload(version, payload) {
-  if (!payload) return;
-  const list = payload.split('\n').map(w => w.trim()).filter(Boolean);
-  validWords = new Set(list);
-  validWordsReady = true;
-  try {
-    localStorage.setItem(VALID_WORDS_KEY, payload);
-    localStorage.setItem(VALID_WORDS_VERSION_KEY, version || "");
-  } catch (_) {}
-}
-
-function loadValidWords() {
-  if (validWordsPromise) return validWordsPromise;
-  validWordsPromise = (async () => {
-    let cachedPayload = "";
-    let cachedVersion = "";
-    try {
-      cachedPayload = localStorage.getItem(VALID_WORDS_KEY) || "";
-      cachedVersion = localStorage.getItem(VALID_WORDS_VERSION_KEY) || "";
-    } catch (_) {}
-
-    if (cachedPayload) setValidWordsFromPayload(cachedVersion, cachedPayload);
+    function setLoadingModeFromState(nextState) {
+      const modeText = deriveModeDisplay(nextState);
+      if (loadingModeEl) loadingModeEl.textContent = modeText;
+      try { sessionStorage.setItem(LOADER_MODE_KEY, modeText); } catch (_) { }
+    }
 
     try {
-      const { data } = await fetchJsonWithFallback(`/valid-words`);
-      if (data && data.ok && typeof data.words === "string") {
-        if (!validWordsReady || String(data.version || "") !== cachedVersion) {
-          setValidWordsFromPayload(String(data.version || ""), data.words);
+      const lastMode = String(sessionStorage.getItem(LOADER_MODE_KEY) || "").trim();
+      if (lastMode && loadingModeEl) loadingModeEl.textContent = lastMode;
+    } catch (_) { }
+
+    function setLoading(on) {
+      const setProgress = (value) => {
+        loaderProgress = Math.max(0, Math.min(100, Number(value) || 0));
+        if (loadingProgressFillEl) loadingProgressFillEl.style.width = `${loaderProgress}%`;
+      };
+      const stopRamp = () => {
+        if (loaderRampTimer) {
+          clearInterval(loaderRampTimer);
+          loaderRampTimer = null;
         }
+      };
+      const startRamp = () => {
+        stopRamp();
+        const startedAt = Date.now();
+        const cap = 88;
+        const durationMs = 4000;
+        loaderRampTimer = setInterval(() => {
+          const t = Math.min(1, (Date.now() - startedAt) / durationMs);
+          const eased = 1 - Math.pow(1 - t, 2);
+          setProgress(cap * eased);
+          if (t >= 1) stopRamp();
+        }, 50);
+      };
+
+      if (on) {
+        if (loaderHideTimer) {
+          clearTimeout(loaderHideTimer);
+          loaderHideTimer = null;
+        }
+        if (!loaderVisible) {
+          loaderVisible = true;
+          setProgress(0);
+        }
+        if (loadingMaskEl) loadingMaskEl.classList.add('show');
+        startRamp();
+        return;
       }
-    } catch (_) {}
-    return validWords;
-  })();
-  return validWordsPromise;
-}
 
-function maybePrimeValidWords(nextState) {
-  if (!nextState || isCustomMode(nextState)) return;
-  if (!validWordsReady) loadValidWords();
-}
-
-function updateThemeButtons() {
-  if (!darkBtn || !contrastBtn) return;
-  darkBtn.classList.toggle('active', document.body.classList.contains('theme-dark'));
-  contrastBtn.classList.toggle('active', document.body.classList.contains('theme-contrast'));
-}
-
-function applyTheme(theme) {
-  document.body.classList.remove('theme-dark', 'theme-contrast');
-  if (theme === 'dark') document.body.classList.add('theme-dark');
-  if (theme === 'contrast') document.body.classList.add('theme-contrast');
-  try {
-    if (theme) localStorage.setItem(THEME_KEY, theme);
-    else localStorage.removeItem(THEME_KEY);
-  } catch (_) {}
-  updateThemeButtons();
-}
-
-try {
-  applyTheme(String(localStorage.getItem(THEME_KEY) || "").trim().toLowerCase());
-} catch (_) {
-  updateThemeButtons();
-}
-
-if (darkBtn) {
-  darkBtn.addEventListener('click', () => {
-    const isActive = document.body.classList.contains('theme-dark');
-    applyTheme(isActive ? '' : 'dark');
-  });
-}
-if (contrastBtn) {
-  contrastBtn.addEventListener('click', () => {
-    const isActive = document.body.classList.contains('theme-contrast');
-    applyTheme(isActive ? '' : 'contrast');
-  });
-}
-
-if (ACTIVITY_MODE && IS_PHONE) {
-  document.body.classList.add('activity-mobile');
-}
-
-function applyMobileTopInset() {
-  if (!ACTIVITY_MODE || !IS_PHONE) return;
-  const dynTop = Math.max(46, Math.round(window.innerHeight * 0.062));
-  document.documentElement.style.setProperty('--app-safe-top', `calc(env(safe-area-inset-top, 0px) + ${dynTop}px)`);
-}
-
-function applySurfaceMode() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const aspect = vh > 0 ? (vw / vh) : 1;
-  const sdkPip = Number(layoutModeValue) === 1;
-  const viewportLikelyPip = ACTIVITY_MODE && vw <= 640 && vh <= 420;
-  const pip = sdkPip || viewportLikelyPip;
-  const square = pip && aspect <= 1.15;
-  document.body.classList.toggle('pip-mode', pip);
-  document.body.classList.toggle('pip-square', square);
-  document.body.classList.toggle('pip-wide', pip && !square);
-}
-
-function showToast(msg, ms = 1400) {
-  const c = document.getElementById('toast-container');
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  c.appendChild(t);
-  setTimeout(() => {
-    t.classList.add('out');
-    setTimeout(() => t.remove(), 260);
-  }, ms);
-}
-
-function clearBoardAndKeyboard() {
-  document.body.classList.remove('board-shifted');
-  for (let r = 0; r < currentRows; r++) {
-    const rowRef = rowRefs[r];
-    if (!rowRef) continue;
-    const userDiv = rowRef.userDiv;
-    const nameEl = rowRef.nameEl;
-    const avatarEl = rowRef.avatarEl;
-    const tileRow = rowRef.tileRow;
-    if (userDiv) userDiv.classList.remove('visible');
-    if (nameEl) nameEl.textContent = '';
-    if (avatarEl) {
-      avatarEl.style.backgroundImage = '';
-      avatarEl.textContent = '';
+      if (!loaderVisible) return;
+      stopRamp();
+      setProgress(100);
+      loaderHideTimer = setTimeout(() => {
+        if (loadingMaskEl) loadingMaskEl.classList.remove('show');
+        loaderVisible = false;
+        setProgress(0);
+        loaderHideTimer = null;
+      }, 180);
     }
-    if (tileRow) tileRow.classList.add('pristine');
-    for (let c = 0; c < COLS; c++) {
-      const t = tileAt(r, c);
-      if (!t) continue;
-      t.className = 'tile';
-      t.textContent = '';
-      t.style.background = '';
-      t.style.borderColor = '';
-      t.style.color = '';
-      t.style.removeProperty('--tile-bg');
-      t.style.removeProperty('--flip-dur');
-      t.style.removeProperty('--flip-delay');
-      t.style.removeProperty('--bounce-delay');
-      t.style.removeProperty('--carry-delay');
-    }
-  }
-  Object.keys(keyMap).forEach(k => {
-    const btn = keyMap[k];
-    btn.className = 'key';
-  });
-  kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
-  document.getElementById('win-overlay').classList.remove('show');
-}
 
-async function fetchJsonWithFallback(path, options = {}) {
-  const errs = [];
-  const orderedBases = preferredApiBase
-    ? [preferredApiBase, ...API_BASE_CANDIDATES.filter(base => base !== preferredApiBase)]
-    : API_BASE_CANDIDATES;
-  for (const base of orderedBases) {
-    const url = `${base}${path}`;
-    try {
-      const timeoutMs = 9000;
-      const ac = new AbortController();
-      const tid = setTimeout(() => ac.abort(), timeoutMs);
-      let res = null;
+    function isCustomMode(nextState) {
+      if (!nextState) return false;
+      const mode = String(nextState.mode_label || "").toLowerCase();
+      return mode.includes("custom");
+    }
+
+    function skeletonMarkup() {
+      return [
+        '<div class="skel-line" style="width: 86%"></div>',
+        '<div class="skel-line" style="width: 72%"></div>',
+        '<div class="skel-line" style="width: 64%"></div>',
+        '<div class="skel-line" style="width: 78%"></div>'
+      ].join('');
+    }
+
+    function setValidWordsFromPayload(version, payload) {
+      if (!payload) return;
+      const list = payload.split('\n').map(w => w.trim()).filter(Boolean);
+      validWords = new Set(list);
+      validWordsReady = true;
       try {
-        const reqOptions = { ...options, signal: options.signal || ac.signal };
-        res = await fetch(url, reqOptions);
-      } finally {
-        clearTimeout(tid);
-      }
-      const raw = await res.text();
-      let data = null;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        errs.push(`${url} -> non-json: ${raw.slice(0, 60)}`);
-        continue;
-      }
-      preferredApiBase = base;
-      return { data, url, status: res.status };
-    } catch (e) {
-      errs.push(`${url} -> fetch error: ${String(e)}`);
-    }
-  }
-  throw new Error(`All API bases failed for ${path}: ${errs.join(" | ")}`);
-}
-
-function isAuthError(data, status) {
-  const statusNum = Number(status || 0);
-  if (statusNum === 401 || statusNum === 403) return true;
-  const errLower = String((data && data.error) || "").toLowerCase();
-  return errLower.includes("token") || errLower.includes("expired") || errLower.includes("invalid");
-}
-
-function showEntryScreen() {
-  if (entryScreenEl) entryScreenEl.classList.add('show');
-}
-
-function hideEntryScreen() {
-  if (entryScreenEl) entryScreenEl.classList.remove('show');
-}
-
-function calcLayout() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  applySurfaceMode();
-  const pipMode = document.body.classList.contains('pip-mode');
-  const pipSquare = document.body.classList.contains('pip-square');
-  const tileGapX = 0;
-  const tileGapY = 1;
-  const boardShifted = document.body.classList.contains('board-shifted');
-  const sideColLeft = pipSquare ? 0 : (boardShifted ? (IS_PHONE ? 92 : 84) : 0);
-  const sideColRight = pipSquare ? 0 : (boardShifted ? (IS_PHONE ? 38 : 34) : 0);
-  const nameMax = pipSquare ? 0 : (IS_PHONE ? 66 : 38);
-  const headerH = pipMode ? 0 : 52;
-  const kbRows = 3;
-  const kbGap = Math.min(6, Math.max(4, vh * 0.007));
-  const kbKeyH = Math.min(IS_PHONE ? 56 : 52, Math.max(IS_PHONE ? 40 : 36, vh * (IS_PHONE ? 0.072 : 0.067)));
-  const kbPad = 12;
-  const kbH = pipMode ? 0 : (kbKeyH * kbRows + kbGap * (kbRows - 1) + kbPad);
-  const gridPad = 10;
-  const gridH = vh - headerH - kbH - gridPad * 2;
-  const sideW = sideColLeft + sideColRight + 8 * 2;
-  const gridW = Math.min(vw, 500) - sideW - 16;
-  const layoutRows = pipMode ? Math.max(1, Math.min(currentRows, MINI_VISIBLE_ROWS)) : Math.max(1, currentRows);
-  const fromH = (gridH - tileGapY * (layoutRows - 1)) / layoutRows;
-  const fromW = (gridW - tileGapX * (COLS - 1)) / COLS;
-  const maxTile = pipSquare ? Math.min(64, Math.max(28, Math.floor(vw * 0.16))) : (IS_PHONE ? 70 : 64);
-  const tSize = Math.floor(Math.min(fromH, fromW, maxTile));
-
-  const root = document.documentElement;
-  root.style.setProperty('--side-col-left', sideColLeft + 'px');
-  root.style.setProperty('--side-col-right', sideColRight + 'px');
-  root.style.setProperty('--name-max', nameMax + 'px');
-  root.style.setProperty('--tile-size', tSize + 'px');
-  root.style.setProperty('--tile-gap-x', tileGapX + 'px');
-  root.style.setProperty('--tile-gap-y', tileGapY + 'px');
-  root.style.setProperty('--tile-font', Math.round(tSize * 0.45) + 'px');
-  root.style.setProperty('--key-h', Math.round(kbKeyH) + 'px');
-  root.style.setProperty('--key-font', Math.max(9, Math.round(kbKeyH * 0.26)) + 'px');
-  root.style.setProperty('--kb-gap', kbGap + 'px');
-  applyMobileTopInset();
-}
-
-function scheduleLayout() {
-  if (layoutPending) return;
-  layoutPending = true;
-  requestAnimationFrame(() => {
-    layoutPending = false;
-    calcLayout();
-  });
-}
-
-function initialsFrom(name) {
-  const n = String(name || 'P').trim();
-  return n.slice(0, 2).toUpperCase();
-}
-
-function breakdownMarkup(items) {
-  if (!Array.isArray(items) || !items.length) return '<div class="break-row"><span>No breakdown</span><span>—</span></div>';
-  return items.map(item => {
-    const status = item.solved ? 'Solved' : `${item.best_greens}/5 greens`;
-    return `<div class="break-row"><span>#${item.rank} ${escapeHtml(item.name)}</span><span>${status}</span></div>`;
-  }).join('');
-}
-
-function escapeHtml(value) {
-  return String(value || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-}
-
-function tileAt(r, c) {
-  const row = rowRefs[r];
-  if (!row) return null;
-  return row.tiles[c] || null;
-}
-
-function normalizeRows(value) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return DEFAULT_ROWS;
-  return Math.max(4, Math.min(64, Math.round(parsed)));
-}
-
-function syncRowsFromState(nextState) {
-  const nextRows = normalizeRows(nextState && nextState.max_attempts);
-  if (nextRows === currentRows) return false;
-  currentRows = nextRows;
-  buildGrid();
-  scheduleLayout();
-  return true;
-}
-
-function buildGrid() {
-  gridEl.innerHTML = '';
-  rowRefs = [];
-  for (let r = 0; r < currentRows; r++) {
-    const wrap = document.createElement('div');
-    wrap.className = 'row-wrap';
-
-    const userDiv = document.createElement('div');
-    userDiv.className = 'row-user';
-    const nameEl = document.createElement('div');
-    nameEl.className = 'user-name';
-    const avatarEl = document.createElement('div');
-    avatarEl.className = 'user-avatar';
-    userDiv.append(nameEl, avatarEl);
-    wrap.appendChild(userDiv);
-
-    const tileRow = document.createElement('div');
-    tileRow.className = 'tile-row';
-    tileRow.classList.add('pristine');
-    const tiles = [];
-    for (let c = 0; c < COLS; c++) {
-      const t = document.createElement('div');
-      t.className = 'tile';
-      tileRow.appendChild(t);
-      tiles.push(t);
-    }
-    wrap.appendChild(tileRow);
-
-    const spacer = document.createElement('div');
-    spacer.className = 'row-spacer';
-    wrap.appendChild(spacer);
-    gridEl.appendChild(wrap);
-    rowRefs.push({ wrap, userDiv, nameEl, avatarEl, tileRow, tiles });
-  }
-}
-
-function renderWinOverlay(nextState) {
-  const overlay = document.getElementById('win-overlay');
-  if (!nextState || !nextState.game_over) {
-    overlay.classList.remove('show');
-    return;
-  }
-  overlay.classList.add('show');
-  const isFinalizing = Boolean(nextState.finalizing);
-  const winCard = document.getElementById('win-card');
-  if (winCard) winCard.classList.toggle('loading', isFinalizing);
-
-  const winTitle = document.getElementById('win-title');
-  const winSub = document.getElementById('win-sub');
-  const winWord = document.getElementById('win-word');
-  const winAttempts = document.getElementById('win-attempts');
-  const winnerAvatar = document.getElementById('winner-avatar');
-  const retryBtn = document.getElementById('retry-btn');
-  const breakdown = document.getElementById('breakdown');
-
-  if (nextState.winner) {
-    winTitle.className = 'win-title';
-    winTitle.textContent = `${nextState.winner.name} WON!`;
-    winSub.innerHTML = `Solved in <strong id="win-attempts">${nextState.attempts_used}</strong> attempts`;
-    winWord.textContent = nextState.secret || '';
-    if (nextState.winner.avatar_url) winnerAvatar.style.backgroundImage = `url('${nextState.winner.avatar_url}')`;
-    if (nextState.winner.avatar_url) winnerAvatar.textContent = '';
-    else winnerAvatar.textContent = initialsFrom(nextState.winner.name);
-  } else {
-    winTitle.className = 'win-title lose-title';
-    winTitle.textContent = 'GAME OVER';
-    winSub.textContent = 'The word was:';
-    winWord.textContent = nextState.secret || '';
-    winnerAvatar.style.backgroundImage = '';
-    winnerAvatar.textContent = '💀';
-  }
-  if (winAttempts) winAttempts.textContent = String(nextState.attempts_used || '?');
-
-  if (breakdown) {
-    if (isFinalizing) {
-      breakdown.classList.add('skeleton');
-      breakdown.innerHTML = skeletonMarkup();
-    } else {
-      breakdown.classList.remove('skeleton');
-      breakdown.innerHTML = breakdownMarkup(nextState.breakdown);
-    }
-  }
-  if (retryBtn) {
-    retryBtn.disabled = !nextState.can_retry || isFinalizing;
-    retryBtn.textContent = isFinalizing ? 'FINALIZING...' : 'PLAY AGAIN';
-  }
-}
-
-function processState(data) {
-    if (!data || typeof data !== 'object') {
-      setLoading(false);
-      return false;
-    }
-    if (!data.ok) {
-      const errLower = String(data.error || "").toLowerCase();
-      if (errLower.includes("invalid or expired token") || errLower.includes("token")) {
-        sessionStorage.removeItem(SESSION_KEY);
-        if (ACTIVITY_MODE) void recoverActivitySession();
-        setLoading(false);
-        return false;
-      }
-      if (errLower.includes("no active channel game")) {
-        if (ACTIVITY_MODE) void recoverActivitySession();
-        localInput = [];
-        carryInputPending = false;
-        state = null;
-        clearBoardAndKeyboard();
-        if (!noActiveNoticeShown) showToast('Waiting for a game in this channel', 1200);
-        noActiveNoticeShown = true;
-        setLoading(false);
-        return false;
-      }
-      showToast(`${data.error || 'Failed to load'}`);
-      if ((data.error || "").toLowerCase().includes("token")) {
-        sessionStorage.removeItem(SESSION_KEY);
-      }
-      setLoading(false);
-      return false;
-    }
-    if (noActiveNoticeShown) {
-      showToast('New game started', 900);
-      noActiveNoticeShown = false;
-    }
-    const prevState = state;
-    if (!submitting && prevState && !prevState.game_over && localInput.length > 0) {
-      const prevAttempts = Number(prevState.attempts_used || 0);
-      const nextAttempts = Number((data.state && data.state.attempts_used) || 0);
-      if (nextAttempts > prevAttempts) {
-        const maxRows = normalizeRows(data.state && data.state.max_attempts);
-        if (nextAttempts >= maxRows) localInput = [];
-        else carryInputPending = true;
-      }
-    }
-    state = data.state;
-    if (state && state.game_over) localInput = [];
-    refreshFromState();
-    setLoading(false);
-    return true;
-}
-
-function refreshFromState() {
-  if (!state) return;
-  setLoadingModeFromState(state);
-  maybePrimeValidWords(state);
-  syncRowsFromState(state);
-  const activeAttempt = Number(state.attempts_used || 0);
-  if (activeAttempt !== animatedInputAttempt) {
-    animatedInputAttempt = activeAttempt;
-    animatedInputLen = 0;
-  }
-  if (localInput.length < animatedInputLen) animatedInputLen = localInput.length;
-  const submittedRows = Number(state.attempts_used || 0);
-  const hasSubmittedAny = submittedRows > 0;
-  document.body.classList.toggle('board-shifted', hasSubmittedAny);
-  scheduleLayout();
-  if (modeTitleEl) modeTitleEl.textContent = deriveModeDisplay(state);
-  if (wrValEl) wrValEl.textContent = state.wr ?? '—';
-
-  const keyPriority = { correct: 3, present: 2, absent: 1 };
-  const keyState = {};
-  const pipMode = document.body.classList.contains('pip-mode');
-  const visibleRows = pipMode ? Math.min(currentRows, MINI_VISIBLE_ROWS) : currentRows;
-  const attemptAnchor = state.game_over
-    ? Math.max(0, Number(state.attempts_used || 0) - 1)
-    : Number(state.attempts_used || 0);
-  const rowOffset = pipMode ? Math.max(0, attemptAnchor - visibleRows + 1) : 0;
-
-  for (let r = 0; r < currentRows; r++) {
-    const rowRef = rowRefs[r];
-    if (!rowRef) continue;
-    const rowVisible = !pipMode || (r >= rowOffset && r < rowOffset + visibleRows);
-    if (rowRef.wrap) rowRef.wrap.style.display = rowVisible ? '' : 'none';
-    if (!rowVisible) continue;
-    const userDiv = rowRef.userDiv;
-    const nameEl = rowRef.nameEl;
-    const avatarEl = rowRef.avatarEl;
-    const tileRow = rowRef.tileRow;
-
-    const rowData = state.rows && state.rows[r] ? state.rows[r] : null;
-    const word = rowData ? String(rowData.word || '').toUpperCase() : '';
-    const states = rowData ? (rowData.states || []) : [];
-    const isActiveInputRow = !rowData && !state.game_over && r === state.attempts_used && localInput.length > 0;
-    const isPristineRow = !rowData && !isActiveInputRow;
-    if (tileRow) tileRow.classList.toggle('pristine', isPristineRow);
-    if (tileRow) tileRow.classList.toggle('live-input', isActiveInputRow);
-
-    if (rowData && rowData.user) {
-      if (r === revealUserLockRow) userDiv.classList.remove('visible');
-      else userDiv.classList.add('visible');
-      nameEl.textContent = rowData.user.name || 'Player';
-      if (rowData.user.avatar_url) {
-        avatarEl.style.backgroundImage = `url('${rowData.user.avatar_url}')`;
-        avatarEl.textContent = '';
-      } else {
-        avatarEl.style.backgroundImage = '';
-        avatarEl.textContent = initialsFrom(rowData.user.name);
-      }
-    } else {
-      userDiv.classList.remove('visible');
-      nameEl.textContent = '';
-      avatarEl.style.backgroundImage = '';
-      avatarEl.textContent = '';
+        localStorage.setItem(VALID_WORDS_KEY, payload);
+        localStorage.setItem(VALID_WORDS_VERSION_KEY, version || "");
+      } catch (_) { }
     }
 
-    for (let c = 0; c < COLS; c++) {
-      const t = tileAt(r, c);
-      const ch = word[c] || '';
-      t.className = 'tile';
+    function loadValidWords() {
+      if (validWordsPromise) return validWordsPromise;
+      validWordsPromise = (async () => {
+        let cachedPayload = "";
+        let cachedVersion = "";
+        try {
+          cachedPayload = localStorage.getItem(VALID_WORDS_KEY) || "";
+          cachedVersion = localStorage.getItem(VALID_WORDS_VERSION_KEY) || "";
+        } catch (_) { }
 
-      if (rowData) {
-        t.textContent = ch;
-        if (ch) t.classList.add('filled');
-        const st = states[c] || '';
-        if (st) {
-          if (st === 'correct' || st === 'present' || st === 'absent') {
-            t.style.setProperty('--tile-bg', st === 'correct' ? '#6aaa64' : st === 'present' ? '#c9b458' : '#787c7e');
-            t.style.background = t.style.getPropertyValue('--tile-bg');
-            t.style.borderColor = t.style.getPropertyValue('--tile-bg');
-            t.style.color = '#fff';
+        if (cachedPayload) setValidWordsFromPayload(cachedVersion, cachedPayload);
+
+        try {
+          const { data } = await fetchJsonWithFallback(`/valid-words`);
+          if (data && data.ok && typeof data.words === "string") {
+            if (!validWordsReady || String(data.version || "") !== cachedVersion) {
+              setValidWordsFromPayload(String(data.version || ""), data.words);
+            }
           }
-          const old = keyState[ch] || '';
-          if (ch && (keyPriority[st] || 0) > (keyPriority[old] || 0)) keyState[ch] = st;
-        }
-      } else if (!state.game_over && r === state.attempts_used && c < localInput.length) {
-        t.textContent = localInput[c];
-        t.classList.add('filled');
-        if (c >= animatedInputLen) t.classList.add('input-pop');
-        if (carryInputPending) {
-          t.style.setProperty('--carry-delay', `${c * 35}ms`);
-          t.classList.add('carry-in');
-        }
-      } else {
-        t.textContent = '';
-      }
+        } catch (_) { }
+        return validWords;
+      })();
+      return validWordsPromise;
     }
-  }
 
-  Object.keys(keyMap).forEach(k => {
-    const btn = keyMap[k];
-    const ks = keyState[k] || '';
-    btn.className = 'key';
-    if (ks) btn.classList.add('state-' + ks);
-  });
-  if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
-
-  renderWinOverlay(state);
-  if (state.game_over) submitting = false;
-  if (!state.game_over) animatedInputLen = localInput.length;
-  carryInputPending = false;
-}
-
-function refreshLocalInput() {
-  if (!state || state.game_over) return;
-  const r = Number(state.attempts_used || 0);
-  if (state.rows && state.rows[r]) {
-    refreshFromState();
-    return;
-  }
-  const rowRef = rowRefs[r];
-  if (!rowRef || !rowRef.tileRow) {
-    refreshFromState();
-    return;
-  }
-  if (localInput.length < animatedInputLen) animatedInputLen = localInput.length;
-  rowRef.tileRow.classList.remove('pristine');
-  rowRef.tileRow.classList.add('live-input');
-  for (let c = 0; c < COLS; c++) {
-    const t = tileAt(r, c);
-    if (!t) continue;
-    t.className = 'tile';
-    if (c < localInput.length) {
-      t.textContent = localInput[c];
-      t.classList.add('filled');
-      if (c >= animatedInputLen) t.classList.add('input-pop');
-      if (carryInputPending) {
-        t.style.setProperty('--carry-delay', `${c * 35}ms`);
-        t.classList.add('carry-in');
-      }
-    } else {
-      t.textContent = '';
+    function maybePrimeValidWords(nextState) {
+      if (!nextState || isCustomMode(nextState)) return;
+      if (!validWordsReady) loadValidWords();
     }
-  }
-  if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
-  else if (enterBtn) enterBtn.classList.remove('submitting-enter');
-  animatedInputLen = localInput.length;
-  carryInputPending = false;
-}
 
-function buildKeyboard() {
-  kbEl.innerHTML = '';
-  keyMap = {};
-  enterBtn = null;
-  KB_ROWS.forEach(rowKeys => {
-    const row = document.createElement('div');
-    row.className = 'kb-row';
-    rowKeys.forEach(k => {
-      const btn = document.createElement('button');
-      btn.className = 'key' + (k.length > 1 ? ' wide' : '');
-      btn.textContent = k;
-      btn.addEventListener('pointerdown', e => {
-        e.preventDefault();
-        addRipple(btn, e);
-        handleKey(k);
+    function updateThemeButtons() {
+      if (!darkBtn || !contrastBtn) return;
+      darkBtn.classList.toggle('active', document.body.classList.contains('theme-dark'));
+      contrastBtn.classList.toggle('active', document.body.classList.contains('theme-contrast'));
+    }
+
+    function applyTheme(theme) {
+      document.body.classList.remove('theme-dark', 'theme-contrast');
+      if (theme === 'dark') document.body.classList.add('theme-dark');
+      if (theme === 'contrast') document.body.classList.add('theme-contrast');
+      try {
+        if (theme) localStorage.setItem(THEME_KEY, theme);
+        else localStorage.removeItem(THEME_KEY);
+      } catch (_) { }
+      updateThemeButtons();
+    }
+
+    try {
+      applyTheme(String(localStorage.getItem(THEME_KEY) || "").trim().toLowerCase());
+    } catch (_) {
+      updateThemeButtons();
+    }
+
+    if (darkBtn) {
+      darkBtn.addEventListener('click', () => {
+        const isActive = document.body.classList.contains('theme-dark');
+        applyTheme(isActive ? '' : 'dark');
       });
-      row.appendChild(btn);
-      if (k === 'ENTER') enterBtn = btn;
-      if (k.length === 1) keyMap[k] = btn;
-    });
-    kbEl.appendChild(row);
-  });
-}
-
-function addRipple(btn, e) {
-  const r = document.createElement('span');
-  r.className = 'ripple';
-  const rect = btn.getBoundingClientRect();
-  const sz = Math.max(rect.width, rect.height);
-  r.style.cssText = `width:${sz}px;height:${sz}px;left:${(e.clientX ?? rect.left+rect.width/2)-rect.left-sz/2}px;top:${(e.clientY ?? rect.top+rect.height/2)-rect.top-sz/2}px`;
-  btn.appendChild(r);
-  setTimeout(() => r.remove(), 420);
-}
-
-function shakeRow(row) {
-  const rowRef = rowRefs[row];
-  if (!rowRef || !rowRef.tileRow) return;
-  const rowEl = rowRef.tileRow;
-  rowEl.classList.remove('row-shake');
-  void rowEl.offsetWidth;
-  rowEl.classList.add('row-shake');
-}
-
-function bounceRow(row) {
-  for (let c = 0; c < COLS; c++) {
-    const t = tileAt(row, c);
-    if (!t) continue;
-    t.style.setProperty('--bounce-delay', `${c * 75}ms`);
-    t.classList.remove('bounce');
-    void t.offsetWidth;
-    t.classList.add('bounce');
-  }
-}
-
-async function revealRow(rowIndex, letters, states) {
-  const BG = { correct: '#6aaa64', present: '#c9b458', absent: '#787c7e' };
-  revealUserLockRow = rowIndex;
-  const rowRef = rowRefs[rowIndex];
-  if (rowRef && rowRef.userDiv) rowRef.userDiv.classList.remove('visible');
-  for (let c = 0; c < COLS; c++) {
-    const tile = tileAt(rowIndex, c);
-    if (!tile) continue;
-    tile.textContent = letters[c] || '';
-    tile.classList.add('filled');
-    tile.style.setProperty('--tile-bg', BG[states[c]] || '#787c7e');
-    tile.style.setProperty('--flip-dur', FLIP_DUR + 'ms');
-    tile.style.setProperty('--flip-delay', (c * FLIP_STAGGER) + 'ms');
-    tile.classList.add('reveal');
-  }
-  await new Promise(res => setTimeout(res, COLS * FLIP_STAGGER + FLIP_DUR + 40));
-  revealUserLockRow = -1;
-}
-
-function spawnParticles() {
-  if (REDUCE_MOTION) return;
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    const ang = Math.random() * 360;
-    const d = 70 + Math.random() * 160;
-    const dur = 0.55 + Math.random() * 0.4;
-    p.style.cssText = `left:${36+Math.random()*28}%;top:${28+Math.random()*18}%;background:${COLORS[Math.floor(Math.random()*COLORS.length)]};--tx:${Math.cos(ang*Math.PI/180)*d}px;--ty:${Math.sin(ang*Math.PI/180)*d-70}px;--dur:${dur}s`;
-    document.body.appendChild(p);
-    setTimeout(() => p.remove(), dur * 1000 + 80);
-  }
-}
-
-function launchConfetti() {
-  if (REDUCE_MOTION) return;
-  const cv = document.getElementById('confetti-canvas');
-  const ctx = cv.getContext('2d');
-  cv.width = window.innerWidth;
-  cv.height = window.innerHeight;
-  const count = LITE_MOTION ? 55 : 90;
-  const pp = Array.from({ length: count }, () => ({
-    x: Math.random()*cv.width, y: -10-Math.random()*80,
-    vx: (Math.random()-.5)*3.5, vy: 2+Math.random()*3.5,
-    rot: Math.random()*360, vrot: (Math.random()-.5)*7,
-    color: COLORS[Math.floor(Math.random()*COLORS.length)],
-    w: 6+Math.random()*7, h: 4+Math.random()*5
-  }));
-  (function draw() {
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    let alive = false;
-    pp.forEach(p => {
-      p.x+=p.vx; p.y+=p.vy; p.vy+=.07; p.rot+=p.vrot;
-      if (p.y < cv.height+20) alive = true;
-      ctx.save();
-      ctx.globalAlpha = Math.min(1, Math.max(0, 1-p.y/cv.height)*3);
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.rot*Math.PI/180);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
-      ctx.restore();
-    });
-    if (alive) requestAnimationFrame(draw);
-    else ctx.clearRect(0,0,cv.width,cv.height);
-  })();
-}
-
-async function fetchState(showMask = false, allowRecover = true) {
-  if (!sessionToken) return false;
-  if (showMask) setLoading(true);
-  try {
-    const { data, status } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
-    if (!data.ok && allowRecover && ACTIVITY_MODE && isAuthError(data, status)) {
-      const recovered = await recoverActivitySession();
-      if (recovered) {
-        return await fetchState(showMask, false);
-      }
     }
-    return processState(data);
-  } catch (err) {
-    if (showMask) showToast(`Network error: ${String(err && err.message ? err.message : err)}`);
-    return false;
-  } finally {
-    if (showMask) setLoading(false);
-  }
-}
+    if (contrastBtn) {
+      contrastBtn.addEventListener('click', () => {
+        const isActive = document.body.classList.contains('theme-contrast');
+        applyTheme(isActive ? '' : 'contrast');
+      });
+    }
 
-async function submitGuess(allowRecover = true) {
-  if (submitting || !state || state.game_over) return;
-  if (localInput.length < COLS) {
-    shakeRow(state.attempts_used);
-    showToast('Not enough letters');
-    return;
-  }
+    if (ACTIVITY_MODE && IS_PHONE) {
+      document.body.classList.add('activity-mobile');
+    }
 
-  submitting = true;
-  const rowIndex = state.attempts_used;
-  const guess = localInput.join('');
-  const guessLower = guess.toLowerCase();
-  if (!isCustomMode(state) && validWordsReady && validWords && !validWords.has(guessLower)) {
-    submitting = false;
-    shakeRow(rowIndex);
-    showToast(`${guess} is not in dictionary.`);
-    return;
-  }
-  if (!isCustomMode(state) && !validWordsReady) loadValidWords();
-  refreshFromState();
+    function applyMobileTopInset() {
+      if (!ACTIVITY_MODE || !IS_PHONE) return;
+      const dynTop = Math.max(46, Math.round(window.innerHeight * 0.062));
+      document.documentElement.style.setProperty('--app-safe-top', `calc(env(safe-area-inset-top, 0px) + ${dynTop}px)`);
+    }
 
-  try {
-    const { data, status } = await fetchJsonWithFallback(`/guess`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: sessionToken, word: guess })
-    });
-    if (!data.ok) {
-      if (allowRecover && ACTIVITY_MODE && isAuthError(data, status)) {
-        submitting = false;
-        const recovered = await recoverActivitySession();
-        if (recovered) {
-          return await submitGuess(false);
+    function applySurfaceMode() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const aspect = vh > 0 ? (vw / vh) : 1;
+      const sdkPip = Number(layoutModeValue) === 1;
+      const viewportLikelyPip = ACTIVITY_MODE && vw <= 640 && vh <= 420;
+      const pip = sdkPip || viewportLikelyPip;
+      const square = pip && aspect <= 1.15;
+      document.body.classList.toggle('pip-mode', pip);
+      document.body.classList.toggle('pip-square', square);
+      document.body.classList.toggle('pip-wide', pip && !square);
+    }
+
+    function showToast(msg, ms = 1400) {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => {
+        t.classList.add('out');
+        setTimeout(() => t.remove(), 260);
+      }, ms);
+    }
+
+    function clearBoardAndKeyboard() {
+      document.body.classList.remove('board-shifted');
+      for (let r = 0; r < currentRows; r++) {
+        const rowRef = rowRefs[r];
+        if (!rowRef) continue;
+        const userDiv = rowRef.userDiv;
+        const nameEl = rowRef.nameEl;
+        const avatarEl = rowRef.avatarEl;
+        const tileRow = rowRef.tileRow;
+        if (userDiv) userDiv.classList.remove('visible');
+        if (nameEl) nameEl.textContent = '';
+        if (avatarEl) {
+          avatarEl.style.backgroundImage = '';
+          avatarEl.textContent = '';
+        }
+        if (tileRow) tileRow.classList.add('pristine');
+        for (let c = 0; c < COLS; c++) {
+          const t = tileAt(r, c);
+          if (!t) continue;
+          t.className = 'tile';
+          t.textContent = '';
+          t.style.background = '';
+          t.style.borderColor = '';
+          t.style.color = '';
+          t.style.removeProperty('--tile-bg');
+          t.style.removeProperty('--flip-dur');
+          t.style.removeProperty('--flip-delay');
+          t.style.removeProperty('--bounce-delay');
+          t.style.removeProperty('--carry-delay');
         }
       }
-      shakeRow(rowIndex);
-      showToast(String(data.error || 'Guess rejected'));
-    } else {
-      localInput = [];
+      Object.keys(keyMap).forEach(k => {
+        const btn = keyMap[k];
+        btn.className = 'key';
+      });
+      kbEl.querySelectorAll('.key.wide').forEach(k => k.classList.add('wide'));
+      document.getElementById('win-overlay').classList.remove('show');
+    }
+
+    async function fetchJsonWithFallback(path, options = {}) {
+      const errs = [];
+      const orderedBases = preferredApiBase
+        ? [preferredApiBase, ...API_BASE_CANDIDATES.filter(base => base !== preferredApiBase)]
+        : API_BASE_CANDIDATES;
+      for (const base of orderedBases) {
+        const url = `${base}${path}`;
+        try {
+          const timeoutMs = 9000;
+          const ac = new AbortController();
+          const tid = setTimeout(() => ac.abort(), timeoutMs);
+          let res = null;
+          try {
+            const reqOptions = { ...options, signal: options.signal || ac.signal };
+            res = await fetch(url, reqOptions);
+          } finally {
+            clearTimeout(tid);
+          }
+          const raw = await res.text();
+          let data = null;
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            errs.push(`${url} -> non-json: ${raw.slice(0, 60)}`);
+            continue;
+          }
+          preferredApiBase = base;
+          return { data, url, status: res.status };
+        } catch (e) {
+          errs.push(`${url} -> fetch error: ${String(e)}`);
+        }
+      }
+      throw new Error(`All API bases failed for ${path}: ${errs.join(" | ")}`);
+    }
+
+    function isAuthError(data, status) {
+      const statusNum = Number(status || 0);
+      if (statusNum === 401 || statusNum === 403) return true;
+      const errLower = String((data && data.error) || "").toLowerCase();
+      return errLower.includes("token") || errLower.includes("expired") || errLower.includes("invalid");
+    }
+
+    function showEntryScreen() {
+      if (entryScreenEl) entryScreenEl.classList.add('show');
+    }
+
+    function hideEntryScreen() {
+      if (entryScreenEl) entryScreenEl.classList.remove('show');
+    }
+
+    function calcLayout() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      applySurfaceMode();
+      const pipMode = document.body.classList.contains('pip-mode');
+      const pipSquare = document.body.classList.contains('pip-square');
+      const tileGapX = 0;
+      const tileGapY = 1;
+      const boardShifted = document.body.classList.contains('board-shifted');
+      const sideColLeft = pipSquare ? 0 : (boardShifted ? (IS_PHONE ? 92 : 84) : 0);
+      const sideColRight = pipSquare ? 0 : (boardShifted ? (IS_PHONE ? 38 : 34) : 0);
+      const nameMax = pipSquare ? 0 : (IS_PHONE ? 66 : 38);
+      const headerH = pipMode ? 0 : 52;
+      const kbRows = 3;
+      const kbGap = Math.min(6, Math.max(4, vh * 0.007));
+      const kbKeyH = Math.min(IS_PHONE ? 56 : 52, Math.max(IS_PHONE ? 40 : 36, vh * (IS_PHONE ? 0.072 : 0.067)));
+      const kbPad = 12;
+      const kbH = pipMode ? 0 : (kbKeyH * kbRows + kbGap * (kbRows - 1) + kbPad);
+      const gridPad = 10;
+      const gridH = vh - headerH - kbH - gridPad * 2;
+      const sideW = sideColLeft + sideColRight + 8 * 2;
+      const gridW = Math.min(vw, 500) - sideW - 16;
+      const layoutRows = pipMode ? Math.max(1, Math.min(currentRows, MINI_VISIBLE_ROWS)) : Math.max(1, currentRows);
+      const fromH = (gridH - tileGapY * (layoutRows - 1)) / layoutRows;
+      const fromW = (gridW - tileGapX * (COLS - 1)) / COLS;
+      const maxTile = pipSquare ? Math.min(64, Math.max(28, Math.floor(vw * 0.16))) : (IS_PHONE ? 70 : 64);
+      const tSize = Math.floor(Math.min(fromH, fromW, maxTile));
+
+      const root = document.documentElement;
+      root.style.setProperty('--side-col-left', sideColLeft + 'px');
+      root.style.setProperty('--side-col-right', sideColRight + 'px');
+      root.style.setProperty('--name-max', nameMax + 'px');
+      root.style.setProperty('--tile-size', tSize + 'px');
+      root.style.setProperty('--tile-gap-x', tileGapX + 'px');
+      root.style.setProperty('--tile-gap-y', tileGapY + 'px');
+      root.style.setProperty('--tile-font', Math.round(tSize * 0.45) + 'px');
+      root.style.setProperty('--key-h', Math.round(kbKeyH) + 'px');
+      root.style.setProperty('--key-font', Math.max(9, Math.round(kbKeyH * 0.26)) + 'px');
+      root.style.setProperty('--kb-gap', kbGap + 'px');
+      applyMobileTopInset();
+    }
+
+    function scheduleLayout() {
+      if (layoutPending) return;
+      layoutPending = true;
+      requestAnimationFrame(() => {
+        layoutPending = false;
+        calcLayout();
+      });
+    }
+
+    function initialsFrom(name) {
+      const n = String(name || 'P').trim();
+      return n.slice(0, 2).toUpperCase();
+    }
+
+    function breakdownMarkup(items) {
+      if (!Array.isArray(items) || !items.length) return '<div class="break-row"><span>No breakdown</span><span>—</span></div>';
+      return items.map(item => {
+        const status = item.solved ? 'Solved' : `${item.best_greens}/5 greens`;
+        return `<div class="break-row"><span>#${item.rank} ${escapeHtml(item.name)}</span><span>${status}</span></div>`;
+      }).join('');
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+
+    function tileAt(r, c) {
+      const row = rowRefs[r];
+      if (!row) return null;
+      return row.tiles[c] || null;
+    }
+
+    function normalizeRows(value) {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return DEFAULT_ROWS;
+      return Math.max(4, Math.min(64, Math.round(parsed)));
+    }
+
+    function syncRowsFromState(nextState) {
+      const nextRows = normalizeRows(nextState && nextState.max_attempts);
+      if (nextRows === currentRows) return false;
+      currentRows = nextRows;
+      buildGrid();
+      scheduleLayout();
+      return true;
+    }
+
+    function buildGrid() {
+      gridEl.innerHTML = '';
+      rowRefs = [];
+      for (let r = 0; r < currentRows; r++) {
+        const wrap = document.createElement('div');
+        wrap.className = 'row-wrap';
+
+        const userDiv = document.createElement('div');
+        userDiv.className = 'row-user';
+        const nameEl = document.createElement('div');
+        nameEl.className = 'user-name';
+        const avatarEl = document.createElement('div');
+        avatarEl.className = 'user-avatar';
+        userDiv.append(nameEl, avatarEl);
+        wrap.appendChild(userDiv);
+
+        const tileRow = document.createElement('div');
+        tileRow.className = 'tile-row';
+        tileRow.classList.add('pristine');
+        const tiles = [];
+        for (let c = 0; c < COLS; c++) {
+          const t = document.createElement('div');
+          t.className = 'tile';
+          tileRow.appendChild(t);
+          tiles.push(t);
+        }
+        wrap.appendChild(tileRow);
+
+        const spacer = document.createElement('div');
+        spacer.className = 'row-spacer';
+        wrap.appendChild(spacer);
+        gridEl.appendChild(wrap);
+        rowRefs.push({ wrap, userDiv, nameEl, avatarEl, tileRow, tiles });
+      }
+    }
+
+    function renderWinOverlay(nextState) {
+      const overlay = document.getElementById('win-overlay');
+      if (!nextState || !nextState.game_over) {
+        overlay.classList.remove('show');
+        return;
+      }
+      overlay.classList.add('show');
+      const isFinalizing = Boolean(nextState.finalizing);
+      const winCard = document.getElementById('win-card');
+      if (winCard) winCard.classList.toggle('loading', isFinalizing);
+
+      const winTitle = document.getElementById('win-title');
+      const winSub = document.getElementById('win-sub');
+      const winWord = document.getElementById('win-word');
+      const winAttempts = document.getElementById('win-attempts');
+      const winnerAvatar = document.getElementById('winner-avatar');
+      const retryBtn = document.getElementById('retry-btn');
+      const breakdown = document.getElementById('breakdown');
+
+      if (nextState.winner) {
+        winTitle.className = 'win-title';
+        winTitle.textContent = `${nextState.winner.name} WON!`;
+        winSub.innerHTML = `Solved in <strong id="win-attempts">${nextState.attempts_used}</strong> attempts`;
+        winWord.textContent = nextState.secret || '';
+        if (nextState.winner.avatar_url) winnerAvatar.style.backgroundImage = `url('${nextState.winner.avatar_url}')`;
+        if (nextState.winner.avatar_url) winnerAvatar.textContent = '';
+        else winnerAvatar.textContent = initialsFrom(nextState.winner.name);
+      } else {
+        winTitle.className = 'win-title lose-title';
+        winTitle.textContent = 'GAME OVER';
+        winSub.textContent = 'The word was:';
+        winWord.textContent = nextState.secret || '';
+        winnerAvatar.style.backgroundImage = '';
+        winnerAvatar.textContent = '💀';
+      }
+      if (winAttempts) winAttempts.textContent = String(nextState.attempts_used || '?');
+
+      if (breakdown) {
+        if (isFinalizing) {
+          breakdown.classList.add('skeleton');
+          breakdown.innerHTML = skeletonMarkup();
+        } else {
+          breakdown.classList.remove('skeleton');
+          breakdown.innerHTML = breakdownMarkup(nextState.breakdown);
+        }
+      }
+      if (retryBtn) {
+        retryBtn.disabled = !nextState.can_retry || isFinalizing;
+        retryBtn.textContent = isFinalizing ? 'FINALIZING...' : 'PLAY AGAIN';
+      }
+    }
+
+    function processState(data) {
+      if (!data || typeof data !== 'object') {
+        setLoading(false);
+        return false;
+      }
+      if (!data.ok) {
+        const errLower = String(data.error || "").toLowerCase();
+        if (errLower.includes("invalid or expired token") || errLower.includes("token")) {
+          sessionStorage.removeItem(SESSION_KEY);
+          if (ACTIVITY_MODE) void recoverActivitySession();
+          setLoading(false);
+          return false;
+        }
+        if (errLower.includes("no active channel game")) {
+          if (ACTIVITY_MODE) void recoverActivitySession();
+          localInput = [];
+          carryInputPending = false;
+          state = null;
+          clearBoardAndKeyboard();
+          if (!noActiveNoticeShown) showToast('Waiting for a game in this channel', 1200);
+          noActiveNoticeShown = true;
+          setLoading(false);
+          return false;
+        }
+        showToast(`${data.error || 'Failed to load'}`);
+        if ((data.error || "").toLowerCase().includes("token")) {
+          sessionStorage.removeItem(SESSION_KEY);
+        }
+        setLoading(false);
+        return false;
+      }
+      if (noActiveNoticeShown) {
+        showToast('New game started', 900);
+        noActiveNoticeShown = false;
+      }
+      const prevState = state;
+      if (!submitting && prevState && !prevState.game_over && localInput.length > 0) {
+        const prevAttempts = Number(prevState.attempts_used || 0);
+        const nextAttempts = Number((data.state && data.state.attempts_used) || 0);
+        if (nextAttempts > prevAttempts) {
+          const maxRows = normalizeRows(data.state && data.state.max_attempts);
+          if (nextAttempts >= maxRows) localInput = [];
+          else carryInputPending = true;
+        }
+      }
+      state = data.state;
+      if (state && state.game_over) localInput = [];
+      refreshFromState();
+      setLoading(false);
+      return true;
+    }
+
+    function refreshFromState() {
+      if (!state) return;
+      setLoadingModeFromState(state);
+      maybePrimeValidWords(state);
+      syncRowsFromState(state);
+      const activeAttempt = Number(state.attempts_used || 0);
+      if (activeAttempt !== animatedInputAttempt) {
+        animatedInputAttempt = activeAttempt;
+        animatedInputLen = 0;
+      }
+      if (localInput.length < animatedInputLen) animatedInputLen = localInput.length;
+      const submittedRows = Number(state.attempts_used || 0);
+      const hasSubmittedAny = submittedRows > 0;
+      document.body.classList.toggle('board-shifted', hasSubmittedAny);
+      scheduleLayout();
+      if (modeTitleEl) modeTitleEl.textContent = deriveModeDisplay(state);
+      if (wrValEl) wrValEl.textContent = state.wr ?? '—';
+
+      const keyPriority = { correct: 3, present: 2, absent: 1 };
+      const keyState = {};
+      const pipMode = document.body.classList.contains('pip-mode');
+      const visibleRows = pipMode ? Math.min(currentRows, MINI_VISIBLE_ROWS) : currentRows;
+      const attemptAnchor = state.game_over
+        ? Math.max(0, Number(state.attempts_used || 0) - 1)
+        : Number(state.attempts_used || 0);
+      const rowOffset = pipMode ? Math.max(0, attemptAnchor - visibleRows + 1) : 0;
+
+      for (let r = 0; r < currentRows; r++) {
+        const rowRef = rowRefs[r];
+        if (!rowRef) continue;
+        const rowVisible = !pipMode || (r >= rowOffset && r < rowOffset + visibleRows);
+        if (rowRef.wrap) rowRef.wrap.style.display = rowVisible ? '' : 'none';
+        if (!rowVisible) continue;
+        const userDiv = rowRef.userDiv;
+        const nameEl = rowRef.nameEl;
+        const avatarEl = rowRef.avatarEl;
+        const tileRow = rowRef.tileRow;
+
+        const rowData = state.rows && state.rows[r] ? state.rows[r] : null;
+        const word = rowData ? String(rowData.word || '').toUpperCase() : '';
+        const states = rowData ? (rowData.states || []) : [];
+        const isActiveInputRow = !rowData && !state.game_over && r === state.attempts_used && localInput.length > 0;
+        const isPristineRow = !rowData && !isActiveInputRow;
+        if (tileRow) tileRow.classList.toggle('pristine', isPristineRow);
+        if (tileRow) tileRow.classList.toggle('live-input', isActiveInputRow);
+
+        if (rowData && rowData.user) {
+          if (r === revealUserLockRow) userDiv.classList.remove('visible');
+          else userDiv.classList.add('visible');
+          nameEl.textContent = rowData.user.name || 'Player';
+          if (rowData.user.avatar_url) {
+            avatarEl.style.backgroundImage = `url('${rowData.user.avatar_url}')`;
+            avatarEl.textContent = '';
+          } else {
+            avatarEl.style.backgroundImage = '';
+            avatarEl.textContent = initialsFrom(rowData.user.name);
+          }
+        } else {
+          userDiv.classList.remove('visible');
+          nameEl.textContent = '';
+          avatarEl.style.backgroundImage = '';
+          avatarEl.textContent = '';
+        }
+
+        for (let c = 0; c < COLS; c++) {
+          const t = tileAt(r, c);
+          const ch = word[c] || '';
+          t.className = 'tile';
+
+          if (rowData) {
+            t.textContent = ch;
+            if (ch) t.classList.add('filled');
+            const st = states[c] || '';
+            if (st) {
+              if (st === 'correct' || st === 'present' || st === 'absent') {
+                t.style.setProperty('--tile-bg', st === 'correct' ? '#6aaa64' : st === 'present' ? '#c9b458' : '#787c7e');
+                t.style.background = t.style.getPropertyValue('--tile-bg');
+                t.style.borderColor = t.style.getPropertyValue('--tile-bg');
+                t.style.color = '#fff';
+              }
+              const old = keyState[ch] || '';
+              if (ch && (keyPriority[st] || 0) > (keyPriority[old] || 0)) keyState[ch] = st;
+            }
+          } else if (!state.game_over && r === state.attempts_used && c < localInput.length) {
+            t.textContent = localInput[c];
+            t.classList.add('filled');
+            if (c >= animatedInputLen) t.classList.add('input-pop');
+            if (carryInputPending) {
+              t.style.setProperty('--carry-delay', `${c * 35}ms`);
+              t.classList.add('carry-in');
+            }
+          } else {
+            t.textContent = '';
+          }
+        }
+      }
+
+      Object.keys(keyMap).forEach(k => {
+        const btn = keyMap[k];
+        const ks = keyState[k] || '';
+        btn.className = 'key';
+        if (ks) btn.classList.add('state-' + ks);
+      });
+      if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
+
+      renderWinOverlay(state);
+      if (state.game_over) submitting = false;
+      if (!state.game_over) animatedInputLen = localInput.length;
       carryInputPending = false;
     }
-  } finally {
-    submitting = false;
-    refreshFromState();
-  }
-}
 
-function handleKey(key) {
-  if (!state || state.game_over || submitting) return;
-  if (key === '⌫' || key === 'BACKSPACE') {
-    if (localInput.length > 0) localInput.pop();
-    refreshLocalInput();
-    return;
-  }
-  if (key === 'ENTER') {
-    submitGuess();
-    return;
-  }
-  if (/^[A-Z]$/.test(key) && localInput.length < COLS) {
-    localInput.push(key);
-    refreshLocalInput();
-  }
-}
-
-async function retryGame(fromRecovery = false) {
-  if (submitting || !state || !state.game_over) return;
-  submitting = true;
-  setLoading(true);
-  try {
-    const { data, url, status } = await fetchJsonWithFallback(`/retry`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: sessionToken })
-    });
-    if (!data.ok) {
-      if (!fromRecovery && ACTIVITY_MODE && isAuthError(data, status)) {
-        sessionToken = "";
-        sessionStorage.removeItem(SESSION_KEY);
-        const rebound = await bootstrapActivitySession();
-        if (rebound && sessionToken) {
-          submitting = false;
-          setLoading(false);
-          await retryGame(true);
-          return;
+    function refreshLocalInput() {
+      if (!state || state.game_over) return;
+      const r = Number(state.attempts_used || 0);
+      if (state.rows && state.rows[r]) {
+        refreshFromState();
+        return;
+      }
+      const rowRef = rowRefs[r];
+      if (!rowRef || !rowRef.tileRow) {
+        refreshFromState();
+        return;
+      }
+      if (localInput.length < animatedInputLen) animatedInputLen = localInput.length;
+      rowRef.tileRow.classList.remove('pristine');
+      rowRef.tileRow.classList.add('live-input');
+      for (let c = 0; c < COLS; c++) {
+        const t = tileAt(r, c);
+        if (!t) continue;
+        t.className = 'tile';
+        if (c < localInput.length) {
+          t.textContent = localInput[c];
+          t.classList.add('filled');
+          if (c >= animatedInputLen) t.classList.add('input-pop');
+          if (carryInputPending) {
+            t.style.setProperty('--carry-delay', `${c * 35}ms`);
+            t.classList.add('carry-in');
+          }
+        } else {
+          t.textContent = '';
         }
       }
-      showToast(`${data.error || 'Retry failed'} (${url})`);
-      return;
+      if (enterBtn && submitting) enterBtn.classList.add('submitting-enter');
+      else if (enterBtn) enterBtn.classList.remove('submitting-enter');
+      animatedInputLen = localInput.length;
+      carryInputPending = false;
     }
-    if (data.token) {
-      sessionToken = String(data.token || "");
-      if (sessionToken) sessionStorage.setItem(SESSION_KEY, sessionToken);
-      initSocket();
-    }
-    localInput = [];
-    carryInputPending = false;
-    if (confettiCanvas) confettiCanvas.getContext('2d').clearRect(0, 0, window.innerWidth, window.innerHeight);
-  } finally {
-    setLoading(false);
-    submitting = false;
-  }
-}
 
-function detectChannelIdFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const direct = params.get('channel_id') || params.get('channelId') || params.get('cid');
-  if (direct) return String(direct);
-
-  const location = params.get('location_id') || '';
-  if (!location) return '';
-
-  // Accept raw snowflake or extract final snowflake token from compound values.
-  if (/^\d{16,22}$/.test(location)) return location;
-  const m = String(location).match(/\d{16,22}/g);
-  return m && m.length ? m[m.length - 1] : '';
-}
-
-async function bootstrapActivitySession(scope = "channel") {
-  if (!ACTIVITY_MODE) return Boolean(sessionToken);
-  if (sessionToken) {
-     return true;
-  }
-  if (!ACTIVITY_CLIENT_ID) {
-    showToast('Missing activity client id');
-    return false;
-  }
-  if (window.location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname || "")) {
-    showToast('Discord Activity requires HTTPS and a public redirect URL.');
-  }
-
-  setLoading(true);
-  try {
-    const sdkModule = await import('https://esm.sh/@discord/embedded-app-sdk');
-    const DiscordSDK = sdkModule.DiscordSDK || (sdkModule.default && sdkModule.default.DiscordSDK) || sdkModule.default;
-    if (!DiscordSDK) throw new Error('Discord SDK unavailable');
-
-    const discordSdk = new DiscordSDK(ACTIVITY_CLIENT_ID);
-    await discordSdk.ready();
-    try {
-      await discordSdk.subscribe('ACTIVITY_LAYOUT_MODE_UPDATE', (payload) => {
-        const nextMode = Number(payload && payload.layout_mode);
-        if (!Number.isNaN(nextMode)) {
-          layoutModeValue = nextMode;
-          calcLayout();
-          refreshFromState();
-        }
+    function buildKeyboard() {
+      kbEl.innerHTML = '';
+      keyMap = {};
+      enterBtn = null;
+      KB_ROWS.forEach(rowKeys => {
+        const row = document.createElement('div');
+        row.className = 'kb-row';
+        rowKeys.forEach(k => {
+          const btn = document.createElement('button');
+          btn.className = 'key' + (k.length > 1 ? ' wide' : '');
+          btn.textContent = k;
+          btn.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            addRipple(btn, e);
+            handleKey(k);
+          });
+          row.appendChild(btn);
+          if (k === 'ENTER') enterBtn = btn;
+          if (k.length === 1) keyMap[k] = btn;
+        });
+        kbEl.appendChild(row);
       });
-    } catch (_) {
-      // Some clients may not emit/allow this event; viewport heuristic remains as fallback.
     }
 
-    let channelId = String(discordSdk.channelId || '') || detectChannelIdFromUrl();
-    if (!channelId) {
+    function addRipple(btn, e) {
+      const r = document.createElement('span');
+      r.className = 'ripple';
+      const rect = btn.getBoundingClientRect();
+      const sz = Math.max(rect.width, rect.height);
+      r.style.cssText = `width:${sz}px;height:${sz}px;left:${(e.clientX ?? rect.left + rect.width / 2) - rect.left - sz / 2}px;top:${(e.clientY ?? rect.top + rect.height / 2) - rect.top - sz / 2}px`;
+      btn.appendChild(r);
+      setTimeout(() => r.remove(), 420);
+    }
+
+    function shakeRow(row) {
+      const rowRef = rowRefs[row];
+      if (!rowRef || !rowRef.tileRow) return;
+      const rowEl = rowRef.tileRow;
+      rowEl.classList.remove('row-shake');
+      void rowEl.offsetWidth;
+      rowEl.classList.add('row-shake');
+    }
+
+    function bounceRow(row) {
+      for (let c = 0; c < COLS; c++) {
+        const t = tileAt(row, c);
+        if (!t) continue;
+        t.style.setProperty('--bounce-delay', `${c * 75}ms`);
+        t.classList.remove('bounce');
+        void t.offsetWidth;
+        t.classList.add('bounce');
+      }
+    }
+
+    async function revealRow(rowIndex, letters, states) {
+      const BG = { correct: '#6aaa64', present: '#c9b458', absent: '#787c7e' };
+      revealUserLockRow = rowIndex;
+      const rowRef = rowRefs[rowIndex];
+      if (rowRef && rowRef.userDiv) rowRef.userDiv.classList.remove('visible');
+      for (let c = 0; c < COLS; c++) {
+        const tile = tileAt(rowIndex, c);
+        if (!tile) continue;
+        tile.textContent = letters[c] || '';
+        tile.classList.add('filled');
+        tile.style.setProperty('--tile-bg', BG[states[c]] || '#787c7e');
+        tile.style.setProperty('--flip-dur', FLIP_DUR + 'ms');
+        tile.style.setProperty('--flip-delay', (c * FLIP_STAGGER) + 'ms');
+        tile.classList.add('reveal');
+      }
+      await new Promise(res => setTimeout(res, COLS * FLIP_STAGGER + FLIP_DUR + 40));
+      revealUserLockRow = -1;
+    }
+
+    function spawnParticles() {
+      if (REDUCE_MOTION) return;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const p = document.createElement('div');
+        p.className = 'particle';
+        const ang = Math.random() * 360;
+        const d = 70 + Math.random() * 160;
+        const dur = 0.55 + Math.random() * 0.4;
+        p.style.cssText = `left:${36 + Math.random() * 28}%;top:${28 + Math.random() * 18}%;background:${COLORS[Math.floor(Math.random() * COLORS.length)]};--tx:${Math.cos(ang * Math.PI / 180) * d}px;--ty:${Math.sin(ang * Math.PI / 180) * d - 70}px;--dur:${dur}s`;
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), dur * 1000 + 80);
+      }
+    }
+
+    function launchConfetti() {
+      if (REDUCE_MOTION) return;
+      const cv = document.getElementById('confetti-canvas');
+      const ctx = cv.getContext('2d');
+      cv.width = window.innerWidth;
+      cv.height = window.innerHeight;
+      const count = LITE_MOTION ? 55 : 90;
+      const pp = Array.from({ length: count }, () => ({
+        x: Math.random() * cv.width, y: -10 - Math.random() * 80,
+        vx: (Math.random() - .5) * 3.5, vy: 2 + Math.random() * 3.5,
+        rot: Math.random() * 360, vrot: (Math.random() - .5) * 7,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        w: 6 + Math.random() * 7, h: 4 + Math.random() * 5
+      }));
+      (function draw() {
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        let alive = false;
+        pp.forEach(p => {
+          p.x += p.vx; p.y += p.vy; p.vy += .07; p.rot += p.vrot;
+          if (p.y < cv.height + 20) alive = true;
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, Math.max(0, 1 - p.y / cv.height) * 3);
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rot * Math.PI / 180);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+          ctx.restore();
+        });
+        if (alive) requestAnimationFrame(draw);
+        else ctx.clearRect(0, 0, cv.width, cv.height);
+      })();
+    }
+
+    async function fetchState(showMask = false, allowRecover = true) {
+      if (!sessionToken) return false;
+      if (showMask) setLoading(true);
       try {
-        const ch = await discordSdk.commands.getChannel({});
-        channelId = String(ch?.id || ch?.channel_id || '');
-      } catch (_) {}
+        const { data, status } = await fetchJsonWithFallback(`/state?token=${encodeURIComponent(sessionToken)}`);
+        if (!data.ok && allowRecover && ACTIVITY_MODE && isAuthError(data, status)) {
+          const recovered = await recoverActivitySession();
+          if (recovered) {
+            return await fetchState(showMask, false);
+          }
+        }
+        return processState(data);
+      } catch (err) {
+        if (showMask) showToast(`Network error: ${String(err && err.message ? err.message : err)}`);
+        return false;
+      } finally {
+        if (showMask) setLoading(false);
+      }
     }
 
-    const activityPath = INTEGRATION_BASE ? `${INTEGRATION_BASE}/activity` : "/activity";
-    const redirectUri = `${window.location.origin}${activityPath}`;
-    const authRes = await discordSdk.commands.authorize({
-      client_id: ACTIVITY_CLIENT_ID,
-      response_type: 'code',
-      state: 'wordle-activity',
-      prompt: 'none',
-      scope: ['identify']
-    });
+    async function submitGuess(allowRecover = true) {
+      if (submitting || !state || state.game_over) return;
+      if (localInput.length < COLS) {
+        shakeRow(state.attempts_used);
+        showToast('Not enough letters');
+        return;
+      }
 
-    const { data: oauthData, url: oauthUrl } = await fetchJsonWithFallback(`/activity/oauth-token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: authRes.code, redirect_uri: redirectUri })
-    });
-    if (!oauthData.ok) throw new Error(`${oauthData.error || 'OAuth exchange failed'} (${oauthUrl})`);
+      submitting = true;
+      const rowIndex = state.attempts_used;
+      const guess = localInput.join('');
+      const guessLower = guess.toLowerCase();
+      if (!isCustomMode(state) && validWordsReady && validWords && !validWords.has(guessLower)) {
+        submitting = false;
+        shakeRow(rowIndex);
+        showToast(`${guess} is not in dictionary.`);
+        return;
+      }
+      if (!isCustomMode(state) && !validWordsReady) loadValidWords();
+      refreshFromState();
 
-    await discordSdk.commands.authenticate({ access_token: oauthData.access_token });
-
-    const nextScope = scope || "channel";
-    const { data: sessData, url: sessUrl } = await fetchJsonWithFallback(`/activity/session-token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        access_token: oauthData.access_token,
-        channel_id: channelId || null,
-        location_id: new URLSearchParams(window.location.search).get('location_id') || null,
-        scope: nextScope
-      })
-    });
-    if (!sessData.ok) throw new Error(`${sessData.error || 'Session token failed'} (${sessUrl})`);
-    sessionToken = sessData.token;
-    sessionStorage.setItem(SESSION_KEY, sessionToken);
-    return true;
-  } catch (err) {
-    sessionToken = "";
-    sessionStorage.removeItem(SESSION_KEY);
-    showToast(String(err && err.message ? err.message : err));
-    return false;
-  } finally {
-    setLoading(false);
-  }
-}
-
-async function recoverActivitySession() {
-  if (!ACTIVITY_MODE || recoveringActivitySession) return false;
-  recoveringActivitySession = true;
-  try {
-    if (socket) {
-      socket.disconnect();
-      socket = null;
+      try {
+        const { data, status } = await fetchJsonWithFallback(`/guess`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: sessionToken, word: guess })
+        });
+        if (!data.ok) {
+          if (allowRecover && ACTIVITY_MODE && isAuthError(data, status)) {
+            submitting = false;
+            const recovered = await recoverActivitySession();
+            if (recovered) {
+              return await submitGuess(false);
+            }
+          }
+          shakeRow(rowIndex);
+          showToast(String(data.error || 'Guess rejected'));
+        } else {
+          localInput = [];
+          carryInputPending = false;
+        }
+      } finally {
+        submitting = false;
+        refreshFromState();
+      }
     }
-    socketConnected = false;
-    sessionToken = "";
-    sessionStorage.removeItem(SESSION_KEY);
-    const ok = await bootstrapActivitySession(activityScope);
-    if (!ok || !sessionToken) return false;
-    initSocket();
-    await fetchState(false, false);
-    return true;
-  } finally {
-    recoveringActivitySession = false;
-  }
-}
 
-async function startActivityFlow(scope = "channel") {
-  activityScope = scope || "channel";
-  hideEntryScreen();
-  const ok = await bootstrapActivitySession(activityScope);
-  if (!ok || !sessionToken) {
-    showEntryScreen();
-    return;
-  }
-  setLoading(true);
-  initSocket();
-  const loaded = await fetchState(false);
-  if (!loaded) setLoading(false);
-}
+    function handleKey(key) {
+      if (!state || state.game_over || submitting) return;
+      if (key === '⌫' || key === 'BACKSPACE') {
+        if (localInput.length > 0) localInput.pop();
+        refreshLocalInput();
+        return;
+      }
+      if (key === 'ENTER') {
+        submitGuess();
+        return;
+      }
+      if (/^[A-Z]$/.test(key) && localInput.length < COLS) {
+        localInput.push(key);
+        refreshLocalInput();
+      }
+    }
 
-function initSocket() {
-    if (!sessionToken) return;
-    if (typeof io !== 'function') {
+    async function retryGame(fromRecovery = false) {
+      if (submitting || !state || !state.game_over) return;
+      submitting = true;
+      setLoading(true);
+      try {
+        const { data, url, status } = await fetchJsonWithFallback(`/retry`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: sessionToken })
+        });
+        if (!data.ok) {
+          if (!fromRecovery && ACTIVITY_MODE && isAuthError(data, status)) {
+            sessionToken = "";
+            sessionStorage.removeItem(SESSION_KEY);
+            const rebound = await bootstrapActivitySession();
+            if (rebound && sessionToken) {
+              submitting = false;
+              setLoading(false);
+              await retryGame(true);
+              return;
+            }
+          }
+          showToast(`${data.error || 'Retry failed'} (${url})`);
+          return;
+        }
+        if (data.token) {
+          sessionToken = String(data.token || "");
+          if (sessionToken) sessionStorage.setItem(SESSION_KEY, sessionToken);
+          initSocket();
+        }
+        localInput = [];
+        carryInputPending = false;
+        if (confettiCanvas) confettiCanvas.getContext('2d').clearRect(0, 0, window.innerWidth, window.innerHeight);
+      } finally {
+        setLoading(false);
+        submitting = false;
+      }
+    }
+
+    function detectChannelIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const direct = params.get('channel_id') || params.get('channelId') || params.get('cid');
+      if (direct) return String(direct);
+
+      const location = params.get('location_id') || '';
+      if (!location) return '';
+
+      // Accept raw snowflake or extract final snowflake token from compound values.
+      if (/^\d{16,22}$/.test(location)) return location;
+      const m = String(location).match(/\d{16,22}/g);
+      return m && m.length ? m[m.length - 1] : '';
+    }
+
+    async function bootstrapActivitySession(scope = "channel") {
+      if (!ACTIVITY_MODE) return Boolean(sessionToken);
+      if (sessionToken) {
+        return true;
+      }
+      if (!ACTIVITY_CLIENT_ID) {
+        showToast('Missing activity client id');
+        return false;
+      }
+      if (window.location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname || "")) {
+        showToast('Discord Activity requires HTTPS and a public redirect URL.');
+      }
+
+      setLoading(true);
+      try {
+        const sdkModule = await import('https://esm.sh/@discord/embedded-app-sdk');
+        const DiscordSDK = sdkModule.DiscordSDK || (sdkModule.default && sdkModule.default.DiscordSDK) || sdkModule.default;
+        if (!DiscordSDK) throw new Error('Discord SDK unavailable');
+
+        const discordSdk = new DiscordSDK(ACTIVITY_CLIENT_ID);
+        await discordSdk.ready();
+        try {
+          await discordSdk.subscribe('ACTIVITY_LAYOUT_MODE_UPDATE', (payload) => {
+            const nextMode = Number(payload && payload.layout_mode);
+            if (!Number.isNaN(nextMode)) {
+              layoutModeValue = nextMode;
+              calcLayout();
+              refreshFromState();
+            }
+          });
+        } catch (_) {
+          // Some clients may not emit/allow this event; viewport heuristic remains as fallback.
+        }
+
+        let channelId = String(discordSdk.channelId || '') || detectChannelIdFromUrl();
+        if (!channelId) {
+          try {
+            const ch = await discordSdk.commands.getChannel({});
+            channelId = String(ch?.id || ch?.channel_id || '');
+          } catch (_) { }
+        }
+
+        const activityPath = INTEGRATION_BASE ? `${INTEGRATION_BASE}/activity` : "/activity";
+        const redirectUri = `${window.location.origin}${activityPath}`;
+        const authRes = await discordSdk.commands.authorize({
+          client_id: ACTIVITY_CLIENT_ID,
+          response_type: 'code',
+          state: 'wordle-activity',
+          prompt: 'none',
+          scope: ['identify']
+        });
+
+        const { data: oauthData, url: oauthUrl } = await fetchJsonWithFallback(`/activity/oauth-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: authRes.code, redirect_uri: redirectUri })
+        });
+        if (!oauthData.ok) throw new Error(`${oauthData.error || 'OAuth exchange failed'} (${oauthUrl})`);
+
+        await discordSdk.commands.authenticate({ access_token: oauthData.access_token });
+
+        const nextScope = scope || "channel";
+        const { data: sessData, url: sessUrl } = await fetchJsonWithFallback(`/activity/session-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            access_token: oauthData.access_token,
+            channel_id: channelId || null,
+            location_id: new URLSearchParams(window.location.search).get('location_id') || null,
+            scope: nextScope
+          })
+        });
+        if (!sessData.ok) throw new Error(`${sessData.error || 'Session token failed'} (${sessUrl})`);
+        sessionToken = sessData.token;
+        sessionStorage.setItem(SESSION_KEY, sessionToken);
+        return true;
+      } catch (err) {
+        sessionToken = "";
+        sessionStorage.removeItem(SESSION_KEY);
+        showToast(String(err && err.message ? err.message : err));
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    async function recoverActivitySession() {
+      if (!ACTIVITY_MODE || recoveringActivitySession) return false;
+      recoveringActivitySession = true;
+      try {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+        }
+        socketConnected = false;
+        sessionToken = "";
+        sessionStorage.removeItem(SESSION_KEY);
+        const ok = await bootstrapActivitySession(activityScope);
+        if (!ok || !sessionToken) return false;
+        initSocket();
+        await fetchState(false, false);
+        return true;
+      } finally {
+        recoveringActivitySession = false;
+      }
+    }
+
+    async function startActivityFlow(scope = "channel") {
+      activityScope = scope || "channel";
+      hideEntryScreen();
+      const ok = await bootstrapActivitySession(activityScope);
+      if (!ok || !sessionToken) {
+        showEntryScreen();
+        return;
+      }
+      setLoading(true);
+      initSocket();
+      const loaded = await fetchState(false);
+      if (!loaded) setLoading(false);
+    }
+
+    function initSocket() {
+      if (!sessionToken) return;
+      if (typeof io !== 'function') {
         socketConnected = false;
         setLoading(false);
         return;
-    }
-    if (socket) {
+      }
+      if (socket) {
         socket.disconnect();
-    }
-    socket = io({
+      }
+      socket = io({
         reconnection: true,
         reconnectionDelay: 1000,
-    });
+      });
 
-    socket.on('connect', () => {
+      socket.on('connect', () => {
         socketConnected = true;
         console.log('Connected to server');
         setLoading(true);
         let joinAcked = false;
         const joinAckTimeout = setTimeout(() => {
-            if (joinAcked) return;
-            fetchState(false).finally(() => setLoading(false));
+          if (joinAcked) return;
+          fetchState(false).finally(() => setLoading(false));
         }, 2500);
         socket.emit('join', { token: sessionToken }, (data) => {
-            joinAcked = true;
-            clearTimeout(joinAckTimeout);
-            const payload = data || { ok: false, error: 'Join acknowledgement missing.' };
-            if (!payload.ok && ACTIVITY_MODE && isAuthError(payload, 403)) {
-                recoverActivitySession();
-                return;
-            }
-            const ok = processState(payload);
-            if (!ok) setLoading(false);
+          joinAcked = true;
+          clearTimeout(joinAckTimeout);
+          const payload = data || { ok: false, error: 'Join acknowledgement missing.' };
+          if (!payload.ok && ACTIVITY_MODE && isAuthError(payload, 403)) {
+            recoverActivitySession();
+            return;
+          }
+          const ok = processState(payload);
+          if (!ok) setLoading(false);
         });
-    });
+      });
 
-    socket.on('disconnect', () => {
+      socket.on('disconnect', () => {
         socketConnected = false;
         console.log('Disconnected from server');
-    });
+      });
 
-    socket.on('connect_error', () => {
+      socket.on('connect_error', () => {
         socketConnected = false;
         setLoading(false);
-    });
+      });
 
-    socket.on('state_update', (data) => {
+      socket.on('state_update', (data) => {
         processState(data);
-    });
-}
-
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const k = e.key.toUpperCase();
-  if (k === 'BACKSPACE') handleKey('⌫');
-  else if (k === 'ENTER') handleKey('ENTER');
-  else if (/^[A-Z]$/.test(k)) handleKey(k);
-});
-
-document.getElementById('retry-btn').addEventListener('click', retryGame);
-if (entryServerBtn) entryServerBtn.addEventListener('click', () => startActivityFlow('channel'));
-if (entrySoloBtn) entrySoloBtn.addEventListener('click', () => startActivityFlow('solo'));
-window.addEventListener('resize', scheduleLayout);
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && !socketConnected) {
-    fetchState(false);
-  }
-});
-
-
-buildGrid();
-buildKeyboard();
-calcLayout();
-
-(async () => {
-  if (ACTIVITY_MODE && !sessionToken) {
-    setLoading(false);
-    showEntryScreen();
-    return;
-  }
-  const ok = await bootstrapActivitySession(activityScope);
-  if (!ok) {
-    setLoading(false);
-    if (!ACTIVITY_MODE && !sessionToken) {
-      showToast('Missing or invalid integration token');
+      });
     }
-    return;
-  }
-  setLoading(true);
-  initSocket();
-  const loaded = await fetchState(false);
-  if (!loaded) setLoading(false);
-  setInterval(() => {
-    if (document.hidden || submitting || !sessionToken || socketConnected) return;
-    fetchState(false);
-  }, 4000);
-})();
-</script>
+
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toUpperCase();
+      if (k === 'BACKSPACE') handleKey('⌫');
+      else if (k === 'ENTER') handleKey('ENTER');
+      else if (/^[A-Z]$/.test(k)) handleKey(k);
+    });
+
+    document.getElementById('retry-btn').addEventListener('click', retryGame);
+    if (entryServerBtn) entryServerBtn.addEventListener('click', () => startActivityFlow('channel'));
+    if (entrySoloBtn) entrySoloBtn.addEventListener('click', () => startActivityFlow('solo'));
+    window.addEventListener('resize', scheduleLayout);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !socketConnected) {
+        fetchState(false);
+      }
+    });
+
+
+    buildGrid();
+    buildKeyboard();
+    calcLayout();
+
+    (async () => {
+      if (ACTIVITY_MODE && !sessionToken) {
+        setLoading(false);
+        showEntryScreen();
+        return;
+      }
+      const ok = await bootstrapActivitySession(activityScope);
+      if (!ok) {
+        setLoading(false);
+        if (!ACTIVITY_MODE && !sessionToken) {
+          showToast('Missing or invalid integration token');
+        }
+        return;
+      }
+      setLoading(true);
+      initSocket();
+      const loaded = await fetchState(false);
+      if (!loaded) setLoading(false);
+      setInterval(() => {
+        if (document.hidden || submitting || !sessionToken || socketConnected) return;
+        fetchState(false);
+      }, 4000);
+    })();
+  </script>
 </body>
+
 </html>
